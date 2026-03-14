@@ -1,0 +1,18 @@
+version: v2
+plugins:
+  # Go: protobuf messages
+  - remote: buf.build/protocolbuffers/go
+    out: ../backend/gen
+    opt: paths=source_relative
+  # Go: Connect service stubs
+  - remote: buf.build/connectrpc/go
+    out: ../backend/gen
+    opt: paths=source_relative
+  # TypeScript: protobuf messages
+  - remote: buf.build/bufbuild/es
+    out: ../frontend/src/gen
+    opt: target=ts
+  # TypeScript: Connect service stubs
+  - remote: buf.build/connectrpc/es
+    out: ../frontend/src/gen
+    opt: target=ts

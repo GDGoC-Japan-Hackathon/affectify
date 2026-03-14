@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/siraiyuto/affectify/backend/gen/api/v1;apiv1";
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+}
+
+service HealthService {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
+}
