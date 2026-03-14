@@ -1,0 +1,257 @@
+import { User, Team, Project } from '@/types';
+
+export const mockUser: User = {
+  id: 'user-1',
+  name: '田中 太郎',
+  email: 'tanaka@example.com',
+  avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Tanaka',
+};
+
+export const mockTeams: Team[] = [
+  {
+    id: 'team-1',
+    name: 'デザインチーム',
+    description: 'UI/UX設計とフロントエンド開発',
+    createdBy: 'user-1',
+    members: [
+      mockUser,
+      {
+        id: 'user-2',
+        name: '佐藤 花子',
+        email: 'sato@example.com',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sato',
+      },
+      {
+        id: 'user-3',
+        name: '鈴木 一郎',
+        email: 'suzuki@example.com',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Suzuki',
+      },
+    ],
+    createdAt: new Date('2024-01-15'),
+  },
+  {
+    id: 'team-2',
+    name: '開発チーム',
+    description: 'バックエンド開発とインフラ',
+    createdBy: 'user-1',
+    members: [
+      mockUser,
+      {
+        id: 'user-4',
+        name: '山田 次郎',
+        email: 'yamada@example.com',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Yamada',
+      },
+    ],
+    createdAt: new Date('2024-02-01'),
+  },
+];
+
+export const mockProjects: Project[] = [
+  {
+    id: 'project-1',
+    name: 'Eコマースプラットフォーム',
+    description: '新しいEコマースサイトのアーキテクチャ設計',
+    ownerId: 'user-1',
+    createdAt: new Date('2024-03-01'),
+    updatedAt: new Date('2024-03-14'),
+    nodeCount: 24,
+    analysisScore: 85,
+
+    shareSettings: {
+      visibility: 'teams',
+      sharedWithTeams: ['team-1'],
+    },
+    variants: [
+      {
+        id: 'variant-1',
+        name: 'main',
+        description: 'メイン設計案',
+        createdBy: 'user-1',
+        createdAt: new Date('2024-03-01'),
+        updatedAt: new Date('2024-03-14'),
+        nodeCount: 24,
+        analysisScore: 85,
+        isMain: true,
+        designGuideId: 'guide-1',
+      },
+      {
+        id: 'variant-2',
+        name: 'モジュラー設計案',
+        description: 'マイクロフロントエンド化を検討',
+        createdBy: 'user-2',
+        createdAt: new Date('2024-03-10'),
+        updatedAt: new Date('2024-03-13'),
+        nodeCount: 32,
+        analysisScore: 92,
+        isMain: false,
+        parentVariantId: 'variant-1',
+        designGuideId: 'guide-4',
+      },
+      {
+        id: 'variant-3',
+        name: 'レガシー互換設計',
+        description: '既存システムとの統合を重視',
+        createdBy: 'user-3',
+        createdAt: new Date('2024-03-11'),
+        updatedAt: new Date('2024-03-12'),
+        nodeCount: 28,
+        analysisScore: 78,
+        isMain: false,
+        parentVariantId: 'variant-1',
+        designGuideId: 'guide-2',
+      },
+    ],
+  },
+  {
+    id: 'project-2',
+    name: 'ダッシュボード UI',
+    description: '管理画面のコンポーネント設計',
+    ownerId: 'user-2',
+    createdAt: new Date('2024-03-05'),
+    updatedAt: new Date('2024-03-13'),
+    nodeCount: 18,
+    analysisScore: 92,
+
+    shareSettings: {
+      visibility: 'teams',
+      sharedWithTeams: ['team-1'],
+    },
+    variants: [
+      {
+        id: 'variant-4',
+        name: 'main',
+        description: 'メイン設計案',
+        createdBy: 'user-2',
+        createdAt: new Date('2024-03-05'),
+        updatedAt: new Date('2024-03-13'),
+        nodeCount: 18,
+        analysisScore: 92,
+        isMain: true,
+      },
+      {
+        id: 'variant-5',
+        name: 'コンポーネント分割案',
+        description: 'Atomic Designベースの再設計',
+        createdBy: 'user-1',
+        createdAt: new Date('2024-03-12'),
+        updatedAt: new Date('2024-03-13'),
+        nodeCount: 25,
+        analysisScore: 95,
+        isMain: false,
+        parentVariantId: 'variant-4',
+      },
+    ],
+  },
+  {
+    id: 'project-3',
+    name: 'APIゲートウェイ',
+    description: 'マイクロサービスのAPI設計',
+    ownerId: 'user-1',
+    createdAt: new Date('2024-02-20'),
+    updatedAt: new Date('2024-03-12'),
+    nodeCount: 32,
+    analysisScore: 78,
+
+    shareSettings: {
+      visibility: 'private',
+    },
+    variants: [
+      {
+        id: 'variant-6',
+        name: 'main',
+        description: 'メイン設計案',
+        createdBy: 'user-1',
+        createdAt: new Date('2024-02-20'),
+        updatedAt: new Date('2024-03-12'),
+        nodeCount: 32,
+        analysisScore: 78,
+        isMain: true,
+      },
+    ],
+  },
+  {
+    id: 'project-4',
+    name: '認証システム',
+    description: 'ユーザー認証・認可の実装設計',
+    ownerId: 'user-4',
+    createdAt: new Date('2024-03-10'),
+    updatedAt: new Date('2024-03-14'),
+    nodeCount: 15,
+    analysisScore: 88,
+
+    shareSettings: {
+      visibility: 'teams',
+      sharedWithTeams: ['team-2'],
+    },
+    variants: [
+      {
+        id: 'variant-7',
+        name: 'main',
+        description: 'メイン設計案',
+        createdBy: 'user-4',
+        createdAt: new Date('2024-03-10'),
+        updatedAt: new Date('2024-03-14'),
+        nodeCount: 15,
+        analysisScore: 88,
+        isMain: true,
+      },
+    ],
+  },
+  {
+    id: 'project-5',
+    name: 'モバイルアプリ',
+    description: 'React Nativeアプリの設計',
+    ownerId: 'user-1',
+    createdAt: new Date('2024-03-08'),
+    updatedAt: new Date('2024-03-11'),
+    nodeCount: 21,
+    analysisScore: 95,
+
+    shareSettings: {
+      visibility: 'teams',
+      sharedWithTeams: ['team-1'],
+    },
+    variants: [
+      {
+        id: 'variant-8',
+        name: 'main',
+        description: 'メイン設計案',
+        createdBy: 'user-1',
+        createdAt: new Date('2024-03-08'),
+        updatedAt: new Date('2024-03-11'),
+        nodeCount: 21,
+        analysisScore: 95,
+        isMain: true,
+      },
+    ],
+  },
+  {
+    id: 'project-6',
+    name: 'データ分析基盤',
+    description: 'データパイプラインの設計',
+    ownerId: 'user-1',
+    createdAt: new Date('2024-02-28'),
+    updatedAt: new Date('2024-03-09'),
+    nodeCount: 28,
+    analysisScore: 72,
+
+    shareSettings: {
+      visibility: 'private',
+    },
+    variants: [
+      {
+        id: 'variant-9',
+        name: 'main',
+        description: 'メイン設計案',
+        createdBy: 'user-1',
+        createdAt: new Date('2024-02-28'),
+        updatedAt: new Date('2024-03-09'),
+        nodeCount: 28,
+        analysisScore: 72,
+        isMain: true,
+      },
+    ],
+  },
+];
