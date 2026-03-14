@@ -1,23 +1,28 @@
 name: Feature Report
 description: File a new feature report.
 title: "[Feature]: "
-labels: ["New Features"]
-projects: [""]
-assignees:
-  - 
+type: Feature
 body:
   - type: markdown
     attributes:
       value: |
-        新規機能開発に関するISSUE記載に協力ありがとうございます!
+        新規機能開発に関するISSUE記載
   - type: textarea
     id: about-feature
     attributes:
-      label: 新規機能の概要
-      description: 新規機能の概要を書いてください.
+      label: ISSUE概要
+      description: 機能概要を書いてください.
       placeholder: 〇〇の開発をする.
     validations:
       required: true
+  - type: textarea
+    id: todo-feature
+    attributes:
+      label: TODOs
+      description: TODOリストを書いてください.
+      placeholder: 〇〇を実装する.
+    validations:
+      required: false
   - type: textarea
     id: version
     attributes:
@@ -38,3 +43,11 @@ body:
         - Microsoft Edge
         - iOS
         - Android
+  - type: textarea
+    id: other-feature
+    attributes:
+      label: 備考
+      description: その他で記載すること.
+      placeholder: 特になし.
+    validations:
+      required: false

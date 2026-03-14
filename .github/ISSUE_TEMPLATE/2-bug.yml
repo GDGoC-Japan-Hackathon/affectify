@@ -1,23 +1,28 @@
 name: Bug Report
 description: File a bug report.
 title: "[Bug]: "
-labels: ["Bug"]
-projects: [""]
-assignees:
-  - 
+type: Bug
 body:
   - type: markdown
     attributes:
       value: |
-        改善内容の共有ありがとうございます!
+        改善内容に関するISSUE記載
   - type: textarea
-    id: what-happened
+    id: about-feature
     attributes:
-      label: 改善項目（バグ内容に関して）
-      description: バグの内容に関して詳細を記載してください.
+      label: ISSUE概要
+      description: バグの概要を書いてください.
       placeholder: 〇〇が発生.
     validations:
       required: true
+  - type: textarea
+    id: todo-feature
+    attributes:
+      label: TODOs
+      description: TODOリストを書いてください.
+      placeholder: 〇〇を実装する.
+    validations:
+      required: false
   - type: textarea
     id: version
     attributes:
@@ -38,9 +43,19 @@ body:
         - Microsoft Edge
         - iOS
         - Android
+    validations:
+      required: false
   - type: textarea
     id: logs
     attributes:
       label: エラーコードやログが分かれば共有してください.
       description: Copy and paste here.
       render: shell
+  - type: textarea
+    id: other-feature
+    attributes:
+      label: 備考
+      description: その他で記載すること.
+      placeholder: 特になし.
+    validations:
+      required: false
