@@ -23,6 +23,8 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@bufbuild/protoc-gen-es": "^2.11.0",
+    "@connectrpc/protoc-gen-connect-es": "^1.7.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
