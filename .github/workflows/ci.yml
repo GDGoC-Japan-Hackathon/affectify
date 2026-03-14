@@ -25,8 +25,13 @@ jobs:
         with:
           go-version-file: backend/go.mod
       - uses: bufbuild/buf-setup-action@v1
-      - name: Generate code
-        run: buf generate
+      - name: Install protoc plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
+      - name: Generate code (Go only)
+        run: |
+          buf generate --template buf.gen.go.yaml
         working-directory: proto
       - name: Build
         run: go build ./...
@@ -42,12 +47,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - uses: bufbuild/buf-setup-action@v1
-      - name: Generate code
-        run: buf generate
-        working-directory: proto
       - name: Install dependencies
         run: bun install --frozen-lockfile
         working-directory: frontend
+      - name: Generate code (TS only)
+        run: |
+          buf generate --template buf.gen.ts.yaml
+        working-directory: proto
       - name: Lint
         run: bun run lint
         working-directory: frontend
