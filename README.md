@@ -10,6 +10,24 @@
 - [Bun](https://bun.sh/)
 - [Buf CLI](https://buf.build/docs/installation)
 
+### protobuf プラグインのインストール
+
+`buf generate` で使うプラグインを各自のローカルにインストールする：
+
+**Go:**
+
+```bash
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
+```
+
+**TypeScript:**
+
+```bash
+cd frontend
+bun add -D @bufbuild/protoc-gen-es @connectrpc/protoc-gen-connect-es
+```
+
 ### コード生成
 
 proto を変更したら、必ず生成コードを更新する：
