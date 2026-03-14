@@ -6,11 +6,10 @@
 
 ```sql
 CREATE TABLE projects (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  tags TEXT[],
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -20,7 +19,6 @@ CREATE TABLE projects (
 
 ```sql
 CREATE INDEX idx_projects_owner_id ON projects(owner_id);
-CREATE INDEX idx_projects_tags ON projects USING GIN(tags);
 CREATE INDEX idx_projects_updated_at ON projects(updated_at DESC);
 ```
 
@@ -28,11 +26,10 @@ CREATE INDEX idx_projects_updated_at ON projects(updated_at DESC);
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | プロジェクトID |
+| id | SERIAL | プロジェクトID |
 | name | VARCHAR(255) | プロジェクト名 |
 | description | TEXT | プロジェクト説明 |
-| owner_id | UUID | プロジェクト所有者 (FK: users) |
-| tags | TEXT[] | タグ配列（技術スタック、分類など） |
+| owner_id | INTEGER | プロジェクト所有者 (FK: users) |
 | created_at | TIMESTAMPTZ | 作成日時 |
 | updated_at | TIMESTAMPTZ | 最終更新日時 |
 

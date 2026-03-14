@@ -6,15 +6,15 @@
 
 ```sql
 CREATE TABLE variants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   is_main BOOLEAN DEFAULT FALSE,
-  parent_variant_id UUID REFERENCES variants(id) ON DELETE SET NULL,
-  design_guide_id UUID REFERENCES design_guides(id) ON DELETE SET NULL,
+  parent_variant_id INTEGER REFERENCES variants(id) ON DELETE SET NULL,
+  design_guide_id INTEGER REFERENCES design_guides(id) ON DELETE SET NULL,
   analysis_score INTEGER,
-  created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -32,15 +32,15 @@ CREATE INDEX idx_variants_is_main ON variants(is_main);
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | バリエーションID |
-| project_id | UUID | プロジェクトID (FK: projects) |
+| id | SERIAL | バリエーションID |
+| project_id | INTEGER | プロジェクトID (FK: projects) |
 | name | VARCHAR(255) | バリエーション名（例: "main", "ddd-implementation"） |
 | description | TEXT | バリエーション説明 |
 | is_main | BOOLEAN | メインバリエーションフラグ |
-| parent_variant_id | UUID | 派生元バリエーションID (FK: variants, 自己参照) |
-| design_guide_id | UUID | 適用されている設計書ID (FK: design_guides) |
+| parent_variant_id | INTEGER | 派生元バリエーションID (FK: variants, 自己参照) |
+| design_guide_id | INTEGER | 適用されている設計書ID (FK: design_guides) |
 | analysis_score | INTEGER | AI分析スコア（0-100） |
-| created_by | UUID | 作成者 (FK: users) |
+| created_by | INTEGER | 作成者 (FK: users) |
 | created_at | TIMESTAMPTZ | 作成日時 |
 | updated_at | TIMESTAMPTZ | 最終更新日時 |
 

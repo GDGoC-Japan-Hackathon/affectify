@@ -6,11 +6,11 @@
 
 ```sql
 CREATE TABLE teams (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   avatar_url TEXT,
-  created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -26,10 +26,10 @@ CREATE INDEX idx_teams_created_by ON teams(created_by);
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | チームID |
+| id | SERIAL | チームID |
 | name | VARCHAR(255) | チーム名 |
 | description | TEXT | チーム説明 |
 | avatar_url | TEXT | チームアイコンURL |
-| created_by | UUID | チーム作成者 (FK: users) |
+| created_by | INTEGER | チーム作成者 (FK: users) |
 | created_at | TIMESTAMPTZ | 作成日時 |
 | updated_at | TIMESTAMPTZ | 最終更新日時 |

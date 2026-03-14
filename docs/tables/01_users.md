@@ -6,7 +6,7 @@
 
 ```sql
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id SERIAL PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
   avatar_url TEXT,
@@ -26,7 +26,7 @@ CREATE INDEX idx_users_email ON users(email);
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | ユーザーID |
+| id | SERIAL | ユーザーID |
 | email | VARCHAR(255) | メールアドレス（一意） |
 | name | VARCHAR(255) | 表示名 |
 | avatar_url | TEXT | プロフィール画像URL |

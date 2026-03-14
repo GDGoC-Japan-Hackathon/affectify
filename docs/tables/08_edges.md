@@ -6,10 +6,10 @@
 
 ```sql
 CREATE TABLE edges (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  variant_id UUID NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
-  from_node_id UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
-  to_node_id UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  variant_id INTEGER NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
+  from_node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+  to_node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
   kind VARCHAR(50) NOT NULL,
   style VARCHAR(20) NOT NULL DEFAULT 'solid',
   label TEXT,
@@ -31,10 +31,10 @@ CREATE INDEX idx_edges_to_node_id ON edges(to_node_id);
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | エッジID |
-| variant_id | UUID | 所属バリエーションID (FK: variants) |
-| from_node_id | UUID | 依存元ノードID (FK: nodes) |
-| to_node_id | UUID | 依存先ノードID (FK: nodes) |
+| id | SERIAL | エッジID |
+| variant_id | INTEGER | 所属バリエーションID (FK: variants) |
+| from_node_id | INTEGER | 依存元ノードID (FK: nodes) |
+| to_node_id | INTEGER | 依存先ノードID (FK: nodes) |
 | kind | VARCHAR(50) | エッジ種別: `call`, `import`, `implement` |
 | style | VARCHAR(20) | 線のスタイル: `solid`, `dashed` |
 | label | TEXT | エッジのラベル（オプション） |
