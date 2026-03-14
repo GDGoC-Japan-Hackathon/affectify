@@ -199,8 +199,6 @@ function MarkdownPreview({ content }: { content: string }) {
   const elements: React.ReactElement[] = [];
   let inCodeBlock = false;
   let codeBlockContent: string[] = [];
-  let codeBlockLang = '';
-
   lines.forEach((line, index) => {
     if (line.startsWith('```')) {
       if (inCodeBlock) {
@@ -214,7 +212,6 @@ function MarkdownPreview({ content }: { content: string }) {
         inCodeBlock = false;
       } else {
         // コードブロック開始
-        codeBlockLang = line.substring(3);
         inCodeBlock = true;
       }
     } else if (inCodeBlock) {

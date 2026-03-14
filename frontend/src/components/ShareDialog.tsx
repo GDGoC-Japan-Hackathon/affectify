@@ -21,7 +21,6 @@ import {
   Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { mockTeams } from '@/data/mockData';
 
 interface ShareDialogProps {
   open: boolean;
@@ -34,8 +33,6 @@ export function ShareDialog({ open, onOpenChange, project, onUpdateShareSettings
   const [visibility, setVisibility] = useState<ProjectVisibility>(project.shareSettings.visibility);
   const [copied, setCopied] = useState(false);
   const [emailToInvite, setEmailToInvite] = useState('');
-
-  const team = mockTeams.find(t => project.shareSettings.sharedWithTeams?.includes(t.id));
 
   const handleCopyLink = () => {
     const shareLink = `https://codedesign.app/share/${project.id}`;

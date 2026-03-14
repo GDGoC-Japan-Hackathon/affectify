@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Users, FolderOpen, Code2, FileCode } from 'lucide-react';
+import { Lock, Users, FolderOpen, Code2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -83,17 +83,6 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
 
     // インポートしたファイルデータをlocalStorageに一時保存
     // （実際にはバックエンドに送信するか、React Routerのstateで渡す）
-    const fileData = {
-      projectId: newProject.id,
-      folderName: importedFolder.name,
-      files: importedFolder.files.map(f => ({
-        name: f.name,
-        path: f.webkitRelativePath,
-        size: f.size,
-        type: f.type,
-      })),
-    };
-
     sessionStorage.setItem('pending-project-import', JSON.stringify({
       project: newProject,
       files: importedFolder.files,
@@ -294,7 +283,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
                   id="import-folder"
                   type="file"
                   className="hidden"
-                  /* @ts-ignore */
+                  /* @ts-expect-error webkitdirectory is not in the type definitions */
                   webkitdirectory=""
                   multiple
                   onChange={handleFolderImport}

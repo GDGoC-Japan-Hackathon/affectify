@@ -152,7 +152,7 @@ export default function BranchCompare() {
 
         {/* Branch Headers */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {branches.map((branch, index) => (
+          {branches.map((branch) => (
             <div
               key={branch.id}
               className="bg-white rounded-xl border-2 border-gray-200 p-6"
@@ -193,7 +193,7 @@ export default function BranchCompare() {
 
           <div className="space-y-6">
             {comparisonMetrics.map((metric, metricIndex) => {
-              const bestValue = getBestValue(metric.values, metric.higher as any);
+              const bestValue = getBestValue(metric.values, metric.higher as 'better' | 'worse' | 'neutral');
 
               return (
                 <div key={metricIndex} className="border-b border-gray-200 last:border-0 pb-6 last:pb-0">
@@ -215,7 +215,7 @@ export default function BranchCompare() {
                               {metric.unit}
                             </span>
                           </span>
-                          {getComparisonIcon(value, bestValue, metric.higher as any)}
+                          {getComparisonIcon(value, bestValue, metric.higher as 'better' | 'worse' | 'neutral')}
                         </div>
                         <div className="text-xs text-gray-500">
                           {branches[index]?.name}

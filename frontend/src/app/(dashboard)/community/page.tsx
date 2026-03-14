@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
 import { DesignGuide } from '@/types';
 import {
@@ -12,11 +11,11 @@ import {
   TrendingUp,
   BookOpen,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type SortType = 'popular' | 'trending' | 'newest';
 
 export default function Community() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortType>('popular');
 

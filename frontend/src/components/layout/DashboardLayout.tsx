@@ -14,11 +14,7 @@ import {
   Bell,
   LogOut,
   ChevronDown,
-  FileText,
   LayoutGrid,
-  Image,
-  Trash2,
-  Shield,
   BookOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

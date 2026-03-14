@@ -11,7 +11,6 @@ import { Variant } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -28,7 +27,6 @@ import {
   GitBranch,
   Plus,
   ArrowLeft,
-  TrendingUp,
   Calendar,
   Users,
   BarChart3,
@@ -36,14 +34,8 @@ import {
   Pencil,
   Trash2,
   ExternalLink,
-  GitMerge,
   CheckCircle2,
-  Share2,
-  Globe,
-  Lock,
   BookOpen,
-  Settings,
-  Info,
   FileText,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -61,10 +53,11 @@ export default function ProjectDetail() {
   const [newBranchDescription, setNewBranchDescription] = useState('');
   const [selectedBaseBranch, setSelectedBaseBranch] = useState('main');
   const [compareBranches, setCompareBranches] = useState<string[]>([]);
-  const [projectData, setProjectData] = useState(project);
-  const [isDesignGuideDialogOpen, setIsDesignGuideDialogOpen] = useState(false);
-  const [selectedBranchForGuide, setSelectedBranchForGuide] = useState<string>('');
-  const [tempSelectedGuide, setTempSelectedGuide] = useState<string>('');
+
+  const comparedBranches = useMemo(
+    () => branches.filter(b => compareBranches.includes(b.id)),
+    [branches, compareBranches]
+  );
 
   if (!project) {
     return (
@@ -124,23 +117,6 @@ export default function ProjectDetail() {
     if (score >= 90) return 'bg-green-100';
     if (score >= 70) return 'bg-yellow-100';
     return 'bg-red-100';
-  };
-
-  const comparedBranches = useMemo(
-    () => branches.filter(b => compareBranches.includes(b.id)),
-    [branches, compareBranches]
-  );
-
-  const appliedDesignGuide = mockDesignGuides.find(g => g.id === tempSelectedGuide);
-
-  const handleApplyDesignGuide = () => {
-    if (tempSelectedGuide) {
-      toast.success('設計書を適用しました');
-      setIsDesignGuideDialogOpen(false);
-      setProjectData(projectData);
-    } else {
-      toast.error('設計書を選択してください');
-    }
   };
 
   return (
@@ -290,7 +266,7 @@ export default function ProjectDetail() {
               その他の設計案 ({otherBranches.length})
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {otherBranches.map((branch, index) => (
+              {otherBranches.map((branch) => (
                 <BranchCard
                   key={branch.id}
                   branch={branch}
@@ -299,7 +275,6 @@ export default function ProjectDetail() {
                   isComparing={compareBranches.includes(branch.id)}
                   getScoreColor={getScoreColor}
                   getScoreBg={getScoreBg}
-                  delay={index * 0.05}
                 />
               ))}
             </div>
@@ -355,7 +330,6 @@ interface BranchCardProps {
   isComparing: boolean;
   getScoreColor: (score?: number) => string;
   getScoreBg: (score?: number) => string;
-  delay?: number;
 }
 
 function BranchCard({
@@ -365,7 +339,6 @@ function BranchCard({
   isComparing,
   getScoreColor,
   getScoreBg,
-  delay = 0,
 }: BranchCardProps) {
   const creator = mockUser; // In real app, find by branch.createdBy
   const branchGuide = mockDesignGuides.find(g => g.id === branch.designGuideId);

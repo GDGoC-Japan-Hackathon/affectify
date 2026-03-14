@@ -2,15 +2,13 @@
 
 import { useState } from 'react';
 import { mockTeams } from '@/data/mockData';
-import { Team, User } from '@/types';
+import { Team } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
   Plus,
   Users,
-  Crown,
-  Shield,
   User as UserIcon,
   MoreVertical,
   Mail,
@@ -27,9 +25,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
 export default function Teams() {
-  const [teams, setTeams] = useState<Team[]>(mockTeams);
+  const [teams] = useState<Team[]>(mockTeams);
 
-  const getRoleIcon = (_member: User) => {
+  const getRoleIcon = () => {
     return <UserIcon className="w-3.5 h-3.5 text-gray-600" />;
   };
 
@@ -51,7 +49,7 @@ export default function Teams() {
 
         {/* Teams Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {teams.map((team, index) => (
+          {teams.map((team) => (
             <div
               key={team.id}
               className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
@@ -119,7 +117,7 @@ export default function Teams() {
                             <p className="font-medium text-gray-900 truncate">
                               {member.name}
                             </p>
-                            {getRoleIcon(member)}
+                            {getRoleIcon()}
                           </div>
                           <p className="text-sm text-gray-500 truncate flex items-center gap-1">
                             <Mail className="w-3.5 h-3.5" />
