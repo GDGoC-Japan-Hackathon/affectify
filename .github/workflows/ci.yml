@@ -29,8 +29,9 @@ jobs:
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
-      - name: Generate code
-        run: buf generate
+      - name: Generate code (Go only)
+        run: |
+          buf generate --template buf.gen.go.yaml
         working-directory: proto
       - name: Build
         run: go build ./...
@@ -49,8 +50,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
         working-directory: frontend
-      - name: Generate code
-        run: buf generate
+      - name: Generate code (TS only)
+        run: |
+          buf generate --template buf.gen.ts.yaml
         working-directory: proto
       - name: Lint
         run: bun run lint
