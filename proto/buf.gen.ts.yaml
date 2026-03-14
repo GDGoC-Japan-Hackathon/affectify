@@ -1,10 +1,10 @@
 version: v2
 plugins:
   # TypeScript: protobuf messages
-  - local: protoc-gen-es
+  - local: ../frontend/node_modules/.bin/protoc-gen-es
     out: ../frontend/src/gen
     opt: target=ts
   # TypeScript: Connect service stubs
-  - local: protoc-gen-connect-es
+  - local: ../frontend/node_modules/.bin/protoc-gen-connect-es
     out: ../frontend/src/gen
     opt: target=ts
