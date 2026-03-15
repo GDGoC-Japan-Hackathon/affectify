@@ -1,4 +1,4 @@
-import { User, Team, Project } from '@/types/type';
+import { User, Project } from '@/types/type';
 
 export const mockUser: User = {
   id: 'user-1',
@@ -6,47 +6,6 @@ export const mockUser: User = {
   email: 'tanaka@example.com',
   avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Tanaka',
 };
-
-export const mockTeams: Team[] = [
-  {
-    id: 'team-1',
-    name: 'デザインチーム',
-    description: 'UI/UX設計とフロントエンド開発',
-    createdBy: 'user-1',
-    members: [
-      mockUser,
-      {
-        id: 'user-2',
-        name: '佐藤 花子',
-        email: 'sato@example.com',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sato',
-      },
-      {
-        id: 'user-3',
-        name: '鈴木 一郎',
-        email: 'suzuki@example.com',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Suzuki',
-      },
-    ],
-    createdAt: new Date('2024-01-15'),
-  },
-  {
-    id: 'team-2',
-    name: '開発チーム',
-    description: 'バックエンド開発とインフラ',
-    createdBy: 'user-1',
-    members: [
-      mockUser,
-      {
-        id: 'user-4',
-        name: '山田 次郎',
-        email: 'yamada@example.com',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Yamada',
-      },
-    ],
-    createdAt: new Date('2024-02-01'),
-  },
-];
 
 export const mockProjects: Project[] = [
   {
@@ -59,10 +18,7 @@ export const mockProjects: Project[] = [
     nodeCount: 24,
     analysisScore: 85,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-1'],
-    },
+    members: ['user-1', 'user-2', 'user-3'],
     variants: [
       {
         id: 'variant-1',
@@ -114,10 +70,7 @@ export const mockProjects: Project[] = [
     nodeCount: 18,
     analysisScore: 92,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-1'],
-    },
+    members: ['user-1', 'user-2'],
     variants: [
       {
         id: 'variant-4',
@@ -154,9 +107,7 @@ export const mockProjects: Project[] = [
     nodeCount: 32,
     analysisScore: 78,
 
-    shareSettings: {
-      visibility: 'private',
-    },
+    members: ['user-1'],
     variants: [
       {
         id: 'variant-6',
@@ -181,10 +132,7 @@ export const mockProjects: Project[] = [
     nodeCount: 15,
     analysisScore: 88,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-2'],
-    },
+    members: ['user-1', 'user-4'],
     variants: [
       {
         id: 'variant-7',
@@ -209,10 +157,7 @@ export const mockProjects: Project[] = [
     nodeCount: 21,
     analysisScore: 95,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-1'],
-    },
+    members: ['user-1', 'user-2'],
     variants: [
       {
         id: 'variant-8',
@@ -237,9 +182,7 @@ export const mockProjects: Project[] = [
     nodeCount: 28,
     analysisScore: 72,
 
-    shareSettings: {
-      visibility: 'private',
-    },
+    members: ['user-1'],
     variants: [
       {
         id: 'variant-9',

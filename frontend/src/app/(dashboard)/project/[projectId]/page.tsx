@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { DesignDocViewer } from '@/components/features/design-guide/DesignDocViewer';
-import { mockProjects, mockTeams, mockUser } from '@/data/mockData';
+import { mockProjects, mockUser } from '@/data/mockData';
 import { mockAnalysisReports } from '@/data/mockDesignDocs';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
 import { Variant } from '@/types/type';
@@ -45,7 +45,6 @@ import { toast } from 'sonner';
 export default function ProjectDetail() {
   const { projectId } = useParams();
   const project = mockProjects.find(p => p.id === projectId);
-  const team = mockTeams.find(t => project?.shareSettings.sharedWithTeams?.includes(t.id));
 
   const [branches, setBranches] = useState<Variant[]>(project?.variants || []);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -143,7 +142,7 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-6 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  <span>{team?.name}</span>
+                  <span>{project.members.length}人のメンバー</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
