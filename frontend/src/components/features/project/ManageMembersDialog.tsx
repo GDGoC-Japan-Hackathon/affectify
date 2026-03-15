@@ -76,12 +76,12 @@ export function ManageMembersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{isOwner ? 'メンバー管理' : 'メンバー'}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-2">
+        <div className="space-y-6 py-2 overflow-y-auto">
           {/* Invite Section */}
           <div>
             <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">

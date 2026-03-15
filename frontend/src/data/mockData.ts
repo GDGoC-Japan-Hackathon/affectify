@@ -27,6 +27,42 @@ export const mockUsers: User[] = [
     email: 'yamada@example.com',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Yamada',
   },
+  {
+    id: 'user-5',
+    name: '高橋 美咲',
+    email: 'takahashi@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Takahashi',
+  },
+  {
+    id: 'user-6',
+    name: '伊藤 健太',
+    email: 'ito@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ito',
+  },
+  {
+    id: 'user-7',
+    name: '渡辺 あかり',
+    email: 'watanabe@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Watanabe',
+  },
+  {
+    id: 'user-8',
+    name: '中村 大輔',
+    email: 'nakamura@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Nakamura',
+  },
+  {
+    id: 'user-9',
+    name: '小林 さくら',
+    email: 'kobayashi@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kobayashi',
+  },
+  {
+    id: 'user-10',
+    name: '加藤 翔太',
+    email: 'kato@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kato',
+  },
 ];
 
 export const mockProjects: Project[] = [
@@ -40,7 +76,7 @@ export const mockProjects: Project[] = [
     nodeCount: 24,
     analysisScore: 85,
 
-    members: ['user-1', 'user-2', 'user-3'],
+    members: ['user-1', 'user-2', 'user-3', 'user-4', 'user-5', 'user-6', 'user-7', 'user-8', 'user-9', 'user-10'],
     variants: [
       {
         id: 'variant-1',
