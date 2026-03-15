@@ -7,6 +7,28 @@ export const mockUser: User = {
   avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Tanaka',
 };
 
+export const mockUsers: User[] = [
+  mockUser,
+  {
+    id: 'user-2',
+    name: '佐藤 花子',
+    email: 'sato@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sato',
+  },
+  {
+    id: 'user-3',
+    name: '鈴木 一郎',
+    email: 'suzuki@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Suzuki',
+  },
+  {
+    id: 'user-4',
+    name: '山田 次郎',
+    email: 'yamada@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Yamada',
+  },
+];
+
 export const mockProjects: Project[] = [
   {
     id: 'project-1',

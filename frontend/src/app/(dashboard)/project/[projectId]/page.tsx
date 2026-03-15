@@ -7,6 +7,7 @@ import { mockProjects, mockUser } from '@/data/mockData';
 import { Variant } from '@/types/type';
 import { CreateBranchDialog } from '@/components/features/project/CreateBranchDialog';
 import { BranchCard, getScoreColor } from '@/components/features/project/BranchCard';
+import { ManageMembersDialog } from '@/components/features/project/ManageMembersDialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -29,6 +30,8 @@ export default function ProjectDetail() {
 
   const [branches, setBranches] = useState<Variant[]>(project?.variants || []);
   const [compareBranches, setCompareBranches] = useState<string[]>([]);
+  const [members, setMembers] = useState<string[]>(project?.members || []);
+  const [isManageOpen, setIsManageOpen] = useState(false);
 
   const comparedBranches = useMemo(
     () => branches.filter(b => compareBranches.includes(b.id)),
@@ -96,7 +99,7 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-6 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  <span>{project.members.length}人のメンバー</span>
+                  <span>{members.length}人のメンバー</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
@@ -119,23 +122,23 @@ export default function ProjectDetail() {
               {/* Member Avatars */}
               <div className="flex items-center">
                 <div className="flex -space-x-2">
-                  {project.members.slice(0, 3).map((memberId, i) => (
+                  {members.slice(0, 3).map((memberId, i) => (
                     <Avatar key={memberId} className="w-8 h-8 border-2 border-white" style={{ zIndex: 3 - i }}>
                       <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${memberId}`} />
                       <AvatarFallback className="text-xs">{memberId.slice(-1)}</AvatarFallback>
                     </Avatar>
                   ))}
                 </div>
-                {project.members.length > 3 && (
+                {members.length > 3 && (
                   <span className="ml-2 text-sm text-gray-500">
-                    +他{project.members.length - 3}名
+                    +他{members.length - 3}名
                   </span>
                 )}
               </div>
 
               {/* Manage Button (owner only) */}
               {project.ownerId === mockUser.id && (
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsManageOpen(true)}>
                   <Settings className="w-4 h-4" />
                   管理
                 </Button>
@@ -231,6 +234,13 @@ export default function ProjectDetail() {
             </Link>
           </div>
         )}
+
+        <ManageMembersDialog
+          open={isManageOpen}
+          onOpenChange={setIsManageOpen}
+          memberIds={members}
+          onMembersChange={setMembers}
+        />
       </div>
   );
 }
