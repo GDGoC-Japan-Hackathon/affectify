@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState, useMemo } from "react";
 import {
   ReactFlow,
   Background,
@@ -8,17 +8,22 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   type Node,
   type Edge,
-  type NodeMouseHandler,
   type NodeTypes,
+  type EdgeTypes,
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
 import { CodeCard } from "./CodeCard";
-import { CodeModal } from "./CodeModal";
+import { AnimatedEdge } from "./AnimatedEdge";
+import { FileTreePanel } from "./FileTreePanel";
+import { CodeViewerWindow } from "./CodeViewerWindow";
+import { FolderTree } from "lucide-react";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -27,6 +32,10 @@ interface WhiteboardProps {
 
 const nodeTypes: NodeTypes = {
   codeCard: CodeCard,
+};
+
+const edgeTypes: EdgeTypes = {
+  animated: AnimatedEdge,
 };
 
 function toFlowNodes(boardNodes: BoardNode[]): Node[] {
@@ -52,51 +61,65 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
       id: e.id,
       source: e.from_node_id,
       target: e.to_node_id,
+      type: "animated",
       style: {
         strokeDasharray: e.style === "dashed" ? "6 3" : undefined,
         stroke: edgeColors[e.kind] ?? "#94a3b8",
         strokeWidth: 2,
       },
-      markerEnd: hasArrow ? { type: MarkerType.ArrowClosed, color: edgeColors[e.kind] } : undefined,
-      label: e.kind,
-      labelStyle: { fontSize: 10, fill: "#64748b" },
-      labelBgStyle: { fill: "#f8fafc", stroke: "#e2e8f0", strokeWidth: 1 },
-      labelBgPadding: [4, 2] as [number, number],
+      markerEnd: hasArrow
+        ? { type: MarkerType.ArrowClosed, color: edgeColors[e.kind] }
+        : undefined,
     };
   });
 }
 
-export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
+function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
   const initialEdges = useMemo(() => toFlowEdges(boardEdges), [boardEdges]);
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const { fitView } = useReactFlow();
 
-  const [selectedNode, setSelectedNode] = useState<BoardNode | null>(null);
+  const [fileTreeOpen, setFileTreeOpen] = useState(false);
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
 
-  const onNodeDoubleClick: NodeMouseHandler = useCallback((_, node) => {
-    setSelectedNode(node.data as unknown as BoardNode);
-  }, []);
-
-  const onCodeChange = useCallback(
-    (nodeId: string, code: string) => {
-      setSelectedNode((prev) => (prev && prev.id === nodeId ? { ...prev, code_text: code } : prev));
-      onNodesChange([
-        {
-          type: "replace",
-          id: nodeId,
-          item: {
-            ...nodes.find((n) => n.id === nodeId)!,
-            data: {
-              ...nodes.find((n) => n.id === nodeId)!.data,
-              code_text: code,
-            },
-          },
-        },
-      ]);
+  // ハイライト状態を setNodes で直接更新
+  const handleNodeHover = useCallback(
+    (nodeId: string | null) => {
+      setNodes((nds) =>
+        nds.map((n) => ({
+          ...n,
+          data: { ...n.data, highlighted: n.id === nodeId },
+        }))
+      );
     },
-    [nodes, onNodesChange],
+    [setNodes]
+  );
+
+  // ファイル選択 → CodeViewerWindow を開く + そのファイルのノードにフィット
+  const handleFileSelect = useCallback(
+    (filePath: string) => {
+      setOpenFiles((prev) =>
+        prev.includes(filePath) ? prev : [...prev, filePath]
+      );
+      const ids = nodes
+        .filter((n) => (n.data as unknown as BoardNode).file_path === filePath)
+        .map((n) => n.id);
+      if (ids.length > 0) {
+        fitView({ nodes: ids.map((id) => ({ id })), padding: 0.3, duration: 500 });
+      }
+    },
+    [nodes, fitView]
+  );
+
+  // ファイルツリーからノードをクリック → フォーカス
+  const handleTreeNodeClick = useCallback(
+    (nodeId: string) => {
+      fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 500 });
+    },
+    [fitView]
   );
 
   const miniMapNodeColor = useCallback((node: Node) => {
@@ -113,14 +136,23 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
   }, []);
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
+      {/* ファイルツリー開閉ボタン */}
+      <button
+        onClick={() => setFileTreeOpen((prev) => !prev)}
+        className="absolute top-4 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+        title="ファイルツリー"
+      >
+        <FolderTree className="size-5 text-gray-700" />
+      </button>
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeDoubleClick={onNodeDoubleClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}
@@ -129,14 +161,45 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
       >
         <Background gap={20} size={1} />
         <Controls />
-        <MiniMap nodeColor={miniMapNodeColor} maskColor="rgba(0,0,0,0.08)" pannable zoomable />
+        <MiniMap
+          nodeColor={miniMapNodeColor}
+          maskColor="rgba(0,0,0,0.08)"
+          pannable
+          zoomable
+        />
       </ReactFlow>
 
-      <CodeModal
-        node={selectedNode}
-        onClose={() => setSelectedNode(null)}
-        onCodeChange={onCodeChange}
+      {/* ファイルツリーパネル */}
+      <FileTreePanel
+        nodes={boardNodes}
+        isOpen={fileTreeOpen}
+        onClose={() => setFileTreeOpen(false)}
+        onFileSelect={handleFileSelect}
+        onNodeHover={handleNodeHover}
+        onNodeClick={handleTreeNodeClick}
       />
+
+      {/* ファイル全体表示ウィンドウ（複数同時表示） */}
+      {openFiles.map((fp) => (
+        <CodeViewerWindow
+          key={fp}
+          filePath={fp}
+          nodes={boardNodes.filter((n) => n.file_path === fp)}
+          onClose={() =>
+            setOpenFiles((prev) => prev.filter((f) => f !== fp))
+          }
+          onNodeHover={handleNodeHover}
+        />
+      ))}
     </div>
+  );
+}
+
+// useReactFlow を使うために Provider でラップ
+export function Whiteboard(props: WhiteboardProps) {
+  return (
+    <ReactFlowProvider>
+      <WhiteboardInner {...props} />
+    </ReactFlowProvider>
   );
 }
