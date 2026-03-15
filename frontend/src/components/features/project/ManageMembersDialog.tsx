@@ -20,6 +20,7 @@ interface ManageMembersDialogProps {
   onOpenChange: (open: boolean) => void;
   memberIds: string[];
   onMembersChange: (memberIds: string[]) => void;
+  isOwner: boolean;
 }
 
 export function ManageMembersDialog({
@@ -27,6 +28,7 @@ export function ManageMembersDialog({
   onOpenChange,
   memberIds,
   onMembersChange,
+  isOwner,
 }: ManageMembersDialogProps) {
   const [email, setEmail] = useState('');
 
@@ -73,7 +75,7 @@ export function ManageMembersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>プロジェクト管理</DialogTitle>
+          <DialogTitle>{isOwner ? 'プロジェクト管理' : 'メンバー'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-2">
@@ -130,7 +132,7 @@ export function ManageMembersDialog({
                         {member.email}
                       </div>
                     </div>
-                    {!isMe && (
+                    {isOwner && !isMe && (
                       <Button
                         variant="ghost"
                         size="icon"

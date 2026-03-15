@@ -136,11 +136,15 @@ export default function ProjectDetail() {
                 )}
               </div>
 
-              {/* Manage Button (owner only) */}
-              {project.ownerId === mockUser.id && (
+              {project.ownerId === mockUser.id ? (
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsManageOpen(true)}>
                   <Settings className="w-4 h-4" />
                   管理
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsManageOpen(true)}>
+                  <Users className="w-4 h-4" />
+                  メンバー
                 </Button>
               )}
 
@@ -240,6 +244,7 @@ export default function ProjectDetail() {
           onOpenChange={setIsManageOpen}
           memberIds={members}
           onMembersChange={setMembers}
+          isOwner={project.ownerId === mockUser.id}
         />
       </div>
   );
