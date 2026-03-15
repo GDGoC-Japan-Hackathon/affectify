@@ -176,7 +176,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeClick={() => setViewerFile(null)}
+        onPaneClick={() => setViewerFile(null)}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
