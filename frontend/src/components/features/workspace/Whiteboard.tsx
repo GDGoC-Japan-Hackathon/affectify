@@ -99,11 +99,13 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const handleExpand = useCallback(
     (nodeId: string, isExpanded: boolean) => {
       setNodes((nds) =>
-        nds.map((n) =>
-          n.id === nodeId
-            ? { ...n, zIndex: isExpanded ? 1000 : 0 }
-            : n
-        )
+        nds.map((n) => {
+          if (n.id === nodeId) {
+            return { ...n, zIndex: isExpanded ? 1000 : 0 };
+          }
+          // 他の展開中ノードはzIndexを下げる
+          return n.zIndex === 1000 ? { ...n, zIndex: 999 } : n;
+        })
       );
       if (isExpanded) {
         setTimeout(() => {

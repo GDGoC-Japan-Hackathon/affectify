@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { ChevronDown, ChevronRight, Pencil, Eye } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import type { BoardNode } from "@/types/type";
@@ -91,43 +91,40 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
             className="overflow-hidden border-t"
             style={{ borderColor: colors.border }}
           >
-            {/* 編集/表示 切り替えボタン */}
-            <div className="flex justify-end px-2 pt-1">
-              <button
-                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors px-2 py-1 rounded hover:bg-gray-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (editing) handleSave();
-                  else setEditing(true);
-                }}
-              >
-                {editing ? <Eye size={14} /> : <Pencil size={14} />}
-                {editing ? "保存" : "編集"}
-              </button>
-            </div>
+            {/* 変更があるときだけ保存ボタン */}
+            {code !== (data.code_text ?? "") && (
+              <div className="flex justify-end px-2 pt-1">
+                <button
+                  className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 transition-colors px-2 py-1 rounded hover:bg-green-50 font-medium"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSave();
+                  }}
+                >
+                  保存
+                </button>
+              </div>
+            )}
 
-            {editing ? (
-              /* 編集モード */
-              <div
-                className="px-2 pb-2 nowheel nodrag"
-                onWheel={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-              >
+            {/* コード表示（クリックで編集モードに） */}
+            <div
+              className="max-h-[300px] overflow-auto nowheel nodrag"
+              onWheel={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!editing) setEditing(true);
+              }}
+            >
+              {editing ? (
                 <textarea
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  className="w-full min-w-[300px] min-h-[200px] font-mono text-xs leading-5 p-2 border border-gray-200 rounded resize-both outline-none overflow-auto"
+                  className="w-full min-h-[200px] font-mono text-xs leading-5 p-2 border-0 outline-none resize-both overflow-auto"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  autoFocus
                 />
-              </div>
-            ) : (
-              /* 表示モード */
-              <div
-                className="max-h-[300px] overflow-auto nowheel nodrag"
-                onWheel={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              >
+              ) : (
                 <div className="flex font-mono text-xs">
-                  {/* 行番号 */}
                   <div className="bg-gray-50 px-2 py-2 text-gray-400 select-none border-r border-gray-200 text-right">
                     {codeLines.map((_, i) => (
                       <div key={i} className="leading-5">
@@ -135,13 +132,12 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
                       </div>
                     ))}
                   </div>
-                  {/* コード */}
-                  <pre className="flex-1 px-3 py-2 overflow-x-auto leading-5 whitespace-pre m-0">
+                  <pre className="flex-1 px-3 py-2 overflow-x-auto leading-5 whitespace-pre m-0 cursor-text">
                     <code>{code}</code>
                   </pre>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
