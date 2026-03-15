@@ -105,7 +105,8 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
 
             {/* コードエディタ（常にMonaco） */}
             <div
-              className="h-[250px] nowheel nodrag"
+              className="nowheel nodrag"
+              style={{ height: Math.min(Math.max(code.split("\n").length * 20 + 20, 80), 400) }}
               onWheel={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
