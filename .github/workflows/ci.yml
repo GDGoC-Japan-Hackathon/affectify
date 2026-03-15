@@ -46,6 +46,11 @@ jobs:
         run: |
           buf generate --template buf.gen.go.yaml
         working-directory: proto
+      - name: Generate GORM query code
+        run: go run ./cmd/genorm
+        working-directory: backend
+      - name: Verify generated code is committed
+        run: git diff --exit-code
       - name: Build
         run: go build ./...
         working-directory: backend
