@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Editor from "@monaco-editor/react";
-import { X, FileCode, Copy, Check } from "lucide-react";
+import { X, FileCode, Copy, Check, ExternalLink, Maximize2 } from "lucide-react";
 import type { BoardNode } from "@/types/type";
 
 interface TabFile {
@@ -16,8 +16,12 @@ interface CodeViewerWindowProps {
   onTabChange: (filePath: string) => void;
   onTabClose: (filePath: string) => void;
   onCloseAll: () => void;
+  onDetachTab?: (filePath: string) => void;
   onNodeHover?: (nodeId: string | null) => void;
   onNodeClick?: (nodeId: string) => void;
+  initialPosition?: { x: number; y: number };
+  zIndex?: number;
+  onFocus?: () => void;
 }
 
 export function CodeViewerWindow({
@@ -26,15 +30,22 @@ export function CodeViewerWindow({
   onTabChange,
   onTabClose,
   onCloseAll,
+  onDetachTab,
   onNodeHover,
   onNodeClick,
+  initialPosition,
+  zIndex = 9999,
+  onFocus,
 }: CodeViewerWindowProps) {
   const [copied, setCopied] = useState(false);
   const [position, setPosition] = useState(() => {
+    if (initialPosition) return initialPosition;
     const x = typeof window !== "undefined" ? Math.max(100, window.innerWidth - 600) : 100;
     return { x, y: 80 };
   });
-  const [size, setSize] = useState({ width: 560, height: 460 });
+  const defaultSize = { width: 560, height: 460 };
+  const [size, setSize] = useState(defaultSize);
+  const [isSmall, setIsSmall] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -144,9 +155,10 @@ export function CodeViewerWindow({
         left: position.x,
         width: size.width,
         height: size.height,
-        zIndex: 9999,
+        zIndex,
       }}
       className="bg-white border-2 border-gray-300 rounded-lg shadow-2xl flex flex-col overflow-hidden"
+      onMouseDown={onFocus}
     >
       {/* ヘッダー（ドラッグハンドル） */}
       <div
@@ -160,6 +172,18 @@ export function CodeViewerWindow({
             {nodes.length} 関数 / {codeLines.length} 行
           </span>
           <div className="flex items-center gap-1">
+            {isSmall && (
+              <button
+                onClick={() => {
+                  setSize(defaultSize);
+                  setIsSmall(false);
+                }}
+                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                title="元のサイズに戻す"
+              >
+                <Maximize2 className="size-3.5 text-gray-500" />
+              </button>
+            )}
             <button
               onClick={handleCopy}
               className="p-1 hover:bg-gray-200 rounded transition-colors"
@@ -197,8 +221,20 @@ export function CodeViewerWindow({
               >
                 <FileCode className="size-3 text-green-600 shrink-0" />
                 <span className="truncate max-w-[120px]">{name}</span>
+                {onDetachTab && tabs.length > 1 && (
+                  <button
+                    className="ml-0.5 p-0.5 rounded hover:bg-gray-300/50 transition-colors"
+                    title="新しいウィンドウに移動"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDetachTab(tab.filePath);
+                    }}
+                  >
+                    <ExternalLink className="size-3" />
+                  </button>
+                )}
                 <button
-                  className="ml-1 p-0.5 rounded hover:bg-gray-300/50 transition-colors"
+                  className="ml-0.5 p-0.5 rounded hover:bg-gray-300/50 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     onTabClose(tab.filePath);
@@ -215,6 +251,7 @@ export function CodeViewerWindow({
       {/* コード表示部分（Monaco Editor） */}
       <div className="flex-1 overflow-hidden">
         <Editor
+          key={activeTab}
           language="go"
           value={fileContent}
           theme="vs"
@@ -238,6 +275,8 @@ export function CodeViewerWindow({
                 const node = lineNodeMap[lineNumber - 1];
                 if (node) {
                   onNodeClick?.(node.id);
+                  setSize({ width: 360, height: 250 });
+                  setIsSmall(true);
                 }
               }
             });
@@ -259,7 +298,7 @@ export function CodeViewerWindow({
             readOnly: true,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
-            fontSize: 12,
+            fontSize: 14,
             lineNumbers: "on",
             scrollbar: { verticalScrollbarSize: 6 },
             automaticLayout: true,

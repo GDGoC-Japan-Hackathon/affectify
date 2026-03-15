@@ -82,8 +82,17 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const zMax = useRef(0);
 
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
-  const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<string>("");
+  const windowZMax = useRef(9999);
+  const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
+
+  // 複数ウィンドウ管理: 各ウィンドウが独自のタブ配列とactiveTabを持つ
+  interface ViewerWindow {
+    id: number;
+    tabs: string[];
+    activeTab: string;
+  }
+  const windowIdCounter = useRef(0);
+  const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
 
   // コード編集時にノードデータを更新
@@ -175,13 +184,26 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes]
   );
 
-  // ファイル選択 → CodeViewerWindow を開く（1つだけ）+ そのファイルのノードにフィット
+  // ファイル選択 → 最初のウィンドウにタブ追加（なければ新規ウィンドウ作成）
   const handleFileSelect = useCallback(
     (filePath: string) => {
-      setOpenTabs((prev) =>
-        prev.includes(filePath) ? prev : [...prev, filePath]
-      );
-      setActiveTab(filePath);
+      setViewerWindows((prev) => {
+        if (prev.length === 0) {
+          windowIdCounter.current += 1;
+          return [{ id: windowIdCounter.current, tabs: [filePath], activeTab: filePath }];
+        }
+        // 既にどこかのウィンドウに開いていたらそこをアクティブに
+        const existing = prev.find((w) => w.tabs.includes(filePath));
+        if (existing) {
+          return prev.map((w) =>
+            w.id === existing.id ? { ...w, activeTab: filePath } : w
+          );
+        }
+        // 最初のウィンドウにタブ追加
+        return prev.map((w, i) =>
+          i === 0 ? { ...w, tabs: [...w.tabs, filePath], activeTab: filePath } : w
+        );
+      });
       const ids = nodes
         .filter((n) => (n.data as unknown as BoardNode).file_path === filePath)
         .map((n) => n.id);
@@ -248,35 +270,66 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         onFileSelect={handleFileSelect}
       />
 
-      {/* ファイル全体表示ウィンドウ（タブ式） */}
-      {openTabs.length > 0 && (
+      {/* ファイル全体表示ウィンドウ（複数ウィンドウ対応） */}
+      {viewerWindows.map((win, idx) => (
         <CodeViewerWindow
-          tabs={openTabs.map((fp) => ({
+          key={win.id}
+          zIndex={windowZIndexes[win.id] ?? 9999}
+          onFocus={() => {
+            windowZMax.current += 1;
+            setWindowZIndexes((prev) => ({ ...prev, [win.id]: windowZMax.current }));
+          }}
+          tabs={win.tabs.map((fp) => ({
             filePath: fp,
             nodes: nodes
               .map((n) => n.data as unknown as BoardNode)
               .filter((n) => n.file_path === fp),
           }))}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
+          activeTab={win.activeTab}
+          initialPosition={{
+            x: typeof window !== "undefined" ? Math.max(100, window.innerWidth - 600 - idx * 40) : 100,
+            y: 80 + idx * 40,
+          }}
+          onTabChange={(fp) => {
+            setViewerWindows((prev) =>
+              prev.map((w) => (w.id === win.id ? { ...w, activeTab: fp } : w))
+            );
+          }}
           onTabClose={(fp) => {
-            setOpenTabs((prev) => {
-              const next = prev.filter((f) => f !== fp);
-              if (activeTab === fp) {
-                setActiveTab(next[next.length - 1] ?? "");
-              }
-              return next;
+            setViewerWindows((prev) => {
+              const updated = prev.map((w) => {
+                if (w.id !== win.id) return w;
+                const next = w.tabs.filter((t) => t !== fp);
+                const nextActive = w.activeTab === fp ? (next[next.length - 1] ?? "") : w.activeTab;
+                return { ...w, tabs: next, activeTab: nextActive };
+              });
+              return updated.filter((w) => w.tabs.length > 0);
             });
           }}
           onCloseAll={() => {
-            setOpenTabs([]);
-            setActiveTab("");
+            setViewerWindows((prev) => prev.filter((w) => w.id !== win.id));
+          }}
+          onDetachTab={(fp) => {
+            setViewerWindows((prev) => {
+              windowIdCounter.current += 1;
+              const newWin: ViewerWindow = {
+                id: windowIdCounter.current,
+                tabs: [fp],
+                activeTab: fp,
+              };
+              const updated = prev.map((w) => {
+                if (w.id !== win.id) return w;
+                const next = w.tabs.filter((t) => t !== fp);
+                const nextActive = w.activeTab === fp ? (next[next.length - 1] ?? "") : w.activeTab;
+                return { ...w, tabs: next, activeTab: nextActive };
+              });
+              return [...updated.filter((w) => w.tabs.length > 0), newWin];
+            });
           }}
           onNodeHover={handleNodeHover}
           onNodeClick={(nodeId) => {
             zMax.current += 1;
             const z = zMax.current;
-            // ホバー中の仮zIndexをクリック後の値に更新
             if (hoverPrevZ.current?.id === nodeId) {
               hoverPrevZ.current.z = z;
             }
@@ -286,7 +339,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500 });
           }}
         />
-      )}
+      ))}
     </div>
   );
 }
