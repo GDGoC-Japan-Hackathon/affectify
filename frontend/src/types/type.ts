@@ -31,16 +31,6 @@ export interface User {
   avatar?: string;
 }
 
-export interface Team {
-  id: string;
-  name: string;
-  description?: string;
-  avatar?: string;
-  members: User[];
-  createdBy: string;
-  createdAt: Date;
-}
-
 export interface Variant {
   id: string;
   name: string;
