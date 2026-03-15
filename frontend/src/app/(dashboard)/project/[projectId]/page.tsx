@@ -124,7 +124,7 @@ export default function ProjectDetail() {
         {/* Header */}
         <div className="mb-6">
           <Link
-            href="/"
+            href="/projects"
             className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeft className="w-4 h-4" />

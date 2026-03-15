@@ -16,14 +16,6 @@ import {
 import { mockDesignGuides } from '@/data/mockDesignGuides';
 import { DesignGuide, DesignGuideVisibility } from '@/types';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -38,6 +30,7 @@ export default function DesignGuides() {
   const [activeTab, setActiveTab] = useState<TabType>('templates');
   const [searchQuery, setSearchQuery] = useState('');
   const [showLikedDialog, setShowLikedDialog] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
 
   const currentUserId = 'user-1';
   const currentTeamId = 'team-1';
@@ -96,45 +89,53 @@ export default function DesignGuides() {
                 <p className="text-sm text-slate-600">AIが理解する設計指針を管理</p>
               </div>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700">
-                  <Plus className="size-4" />
-                  新規作成
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>設計書を作成</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/design-guides/new')}>
-                  <FileText className="mr-2 size-4" />
-                  <div className="flex flex-col">
-                    <span className="font-medium">ゼロから作成</span>
-                    <span className="text-xs text-slate-500">空白の設計書を作成</span>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowLikedDialog(true)}>
-                  <Heart className="mr-2 size-4" />
-                  <div className="flex flex-col">
-                    <span className="font-medium">お気に入りから作成</span>
-                    <span className="text-xs text-slate-500">いいねした設計書を選択</span>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <label className="cursor-pointer">
-                    <Upload className="mr-2 size-4" />
-                    <div className="flex flex-col">
+            <div className="relative">
+              <button
+                onClick={() => setCreateMenuOpen(!createMenuOpen)}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700"
+              >
+                <Plus className="size-4" />
+                新規作成
+              </button>
+              {createMenuOpen && (
+                <div className="absolute right-0 mt-1 z-50 w-64 rounded-lg border border-gray-200 bg-white shadow-lg p-1">
+                  <div className="px-2 py-1.5 text-xs font-medium text-gray-500">設計書を作成</div>
+                  <button
+                    onClick={() => { setCreateMenuOpen(false); router.push('/design-guides/new'); }}
+                    className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50"
+                  >
+                    <FileText className="size-4 shrink-0" />
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">ゼロから作成</span>
+                      <span className="text-xs text-slate-500">空白の設計書を作成</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setCreateMenuOpen(false); setShowLikedDialog(true); }}
+                    className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50"
+                  >
+                    <Heart className="size-4 shrink-0" />
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">お気に入りから作成</span>
+                      <span className="text-xs text-slate-500">いいねした設計書を選択</span>
+                    </div>
+                  </button>
+                  <label className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50 cursor-pointer">
+                    <Upload className="size-4 shrink-0" />
+                    <div className="flex flex-col text-left">
                       <span className="font-medium">ファイルをアップロード</span>
                       <span className="text-xs text-slate-500">Markdownファイル (.md)</span>
                     </div>
                     <input
                       type="file"
                       accept=".md"
-                      onChange={handleFileUpload}
+                      onChange={(e) => { setCreateMenuOpen(false); handleFileUpload(e); }}
                       className="hidden"
                     />
                   </label>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

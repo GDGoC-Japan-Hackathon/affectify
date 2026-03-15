@@ -13,19 +13,11 @@ import {
   Filter,
   Folder,
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
-
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>(mockProjects);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'score'>('recent');
+  const [sortOpen, setSortOpen] = useState(false);
 
   // Filter and sort projects - only show MY projects
   const filteredProjects = useMemo(() => {
@@ -68,28 +60,29 @@ export default function Dashboard() {
 
           {/* View & Sort Controls */}
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
-                  <Filter className="w-4 h-4 mr-2" />
-                  並び替え
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>並び替え</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSortBy('recent')}>
-                  <Clock className="w-4 h-4 mr-2" />
-                  最終更新日
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('name')}>
-                  <Folder className="w-4 h-4 mr-2" />
-                  名前順
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('score')}>
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  スコア順
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="relative">
+              <button
+                onClick={() => setSortOpen(!sortOpen)}
+                className="inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-3 h-8 text-sm font-medium hover:bg-gray-50"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                {sortBy === 'recent' ? '最終更新日' : sortBy === 'name' ? '名前順' : 'スコア順'}
+              </button>
+              {sortOpen && (
+                <div className="absolute right-0 mt-1 z-50 w-40 rounded-lg border border-gray-200 bg-white shadow-lg p-1">
+                  {([['recent', '最終更新日', Clock], ['name', '名前順', Folder], ['score', 'スコア順', TrendingUp]] as const).map(([key, label, Icon]) => (
+                    <button
+                      key={key}
+                      onClick={() => { setSortBy(key); setSortOpen(false); }}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm ${sortBy === key ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="border-l border-gray-200 pl-2 ml-2 flex gap-1">
               <Button

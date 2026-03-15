@@ -10,6 +10,7 @@ import {
   Mail,
   MoreVertical,
   Search,
+  LogOut,
 } from 'lucide-react';
 import { useState } from 'react';
 import {
@@ -38,6 +39,11 @@ export default function TeamMembers() {
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleLeaveTeam = () => {
+    // TODO: LeaveTeam RPC呼び出し
+    console.log('Leaving team:', currentTeam.id);
+  };
 
   const handleInvite = () => {
     // Handle invite logic
@@ -132,16 +138,23 @@ export default function TeamMembers() {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {!isCurrentUser && (
+                        {isCurrentUser ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-1.5"
+                            onClick={handleLeaveTeam}
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            脱退
+                          </Button>
+                        ) : (
                           <DropdownMenu>
                             <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                                 <MoreVertical className="w-4 h-4" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem>プロフィールを表示</DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
-                                チームから削除
-                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}

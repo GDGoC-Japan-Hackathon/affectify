@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Project } from '@/types';
 import {
@@ -12,13 +13,6 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -29,6 +23,8 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project, onDelete }: ProjectCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <Card className="group hover:shadow-lg transition-shadow cursor-pointer">
       <Link href={`/project/${project.id}`}>
@@ -51,26 +47,44 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
                 {project.description}
               </p>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger onClick={(e) => e.preventDefault()} className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <MoreVertical className="w-4 h-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem>複製</DropdownMenuItem>
-                <DropdownMenuItem>名前を変更</DropdownMenuItem>
-                <DropdownMenuItem>共有</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-red-600"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onDelete(project.id);
-                  }}
-                >
-                  削除
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="relative shrink-0">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  setMenuOpen(!menuOpen);
+                }}
+                className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 mt-1 z-50 w-36 rounded-lg border border-gray-200 bg-white shadow-lg p-1">
+                  <button
+                    onClick={(e) => { e.preventDefault(); setMenuOpen(false); }}
+                    className="w-full text-left px-2 py-1.5 rounded-md text-sm hover:bg-gray-50"
+                  >
+                    名前を変更
+                  </button>
+                  <button
+                    onClick={(e) => { e.preventDefault(); setMenuOpen(false); }}
+                    className="w-full text-left px-2 py-1.5 rounded-md text-sm hover:bg-gray-50"
+                  >
+                    共有
+                  </button>
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setMenuOpen(false);
+                      onDelete(project.id);
+                    }}
+                    className="w-full text-left px-2 py-1.5 rounded-md text-sm text-red-600 hover:bg-red-50"
+                  >
+                    削除
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-between text-xs text-gray-500">

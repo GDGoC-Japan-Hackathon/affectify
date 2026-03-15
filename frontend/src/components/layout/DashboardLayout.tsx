@@ -39,6 +39,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeam, setSelectedTeam] = useState(mockTeams[0]);
+  const [teamSelectorOpen, setTeamSelectorOpen] = useState(false);
   const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false);
 
   const personalNavigation = [
@@ -110,45 +111,53 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="my-4 border-t border-gray-200" />
 
           {/* Team Selector */}
-          <div className="mb-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback className="bg-blue-100 text-blue-700">
-                      {selectedTeam.name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
-                      {selectedTeam.name}
-                    </div>
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel>チームを切り替え</DropdownMenuLabel>
-                <DropdownMenuSeparator />
+          <div className="mb-4 relative">
+            <button
+              onClick={() => setTeamSelectorOpen(!teamSelectorOpen)}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+            >
+              <Avatar className="w-8 h-8">
+                <AvatarFallback className="bg-blue-100 text-blue-700">
+                  {selectedTeam.name[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {selectedTeam.name}
+                </div>
+              </div>
+              <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${teamSelectorOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {teamSelectorOpen && (
+              <div className="absolute left-0 right-0 mt-1 z-50 rounded-lg border border-gray-200 bg-white shadow-lg p-1">
+                <div className="px-2 py-1.5 text-xs font-medium text-gray-500">チームを切り替え</div>
                 {mockTeams.map((team) => (
-                  <DropdownMenuItem
+                  <button
                     key={team.id}
-                    onClick={() => setSelectedTeam(team)}
-                    className={selectedTeam.id === team.id ? 'bg-blue-50' : ''}
+                    onClick={() => {
+                      setSelectedTeam(team);
+                      setTeamSelectorOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                      selectedTeam.id === team.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'
+                    }`}
                   >
-                    <Avatar className="w-6 h-6 mr-2">
+                    <Avatar className="w-6 h-6">
                       <AvatarFallback className="bg-blue-100 text-blue-700 text-xs">
                         {team.name[0]}
                       </AvatarFallback>
                     </Avatar>
                     {team.name}
-                  </DropdownMenuItem>
+                  </button>
                 ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <Plus className="w-4 h-4 mr-2" />
-                  新しいチームを作成
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <div className="border-t border-gray-100 mt-1 pt-1">
+                  <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-gray-50">
+                    <Plus className="w-4 h-4" />
+                    新しいチームを作成
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Team Navigation */}
