@@ -1,103 +1,89 @@
-// Package repository はDBアクセスを担当する。
 package repository
 
 import (
 	"context"
 	"fmt"
+	"strconv"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
-	"github.com/siraiyuto/affectify/backend/internal/layout"
+	"github.com/siraiyuto/affectify/backend/internal/entity"
+	repoEntity "github.com/siraiyuto/affectify/backend/internal/repository/entity"
 )
 
-// BoardNodeRow は board_nodes テーブルの1行。
-type BoardNodeRow struct {
-	ID        string
-	Kind      string
-	Title     string
-	FilePath  string
-	Signature string
-	Receiver  string
-	CodeText  string
-}
-
-// BoardEdgeRow は board_edges テーブルの1行。
-type BoardEdgeRow struct {
-	ID         string
-	FromNodeID string
-	ToNodeID   string
-	Kind       string
-	Style      string
-}
-
-// BoardRepository はボード関連のDBアクセスをまとめる。
 type BoardRepository struct {
-	db *pgxpool.Pool
+	db *gorm.DB
 }
 
-// NewBoardRepository はリポジトリを生成する。
-func NewBoardRepository(db *pgxpool.Pool) *BoardRepository {
+func NewBoardRepository(db *gorm.DB) *BoardRepository {
 	return &BoardRepository{db: db}
 }
 
-// GetNodesAndEdges は指定ボードのノードとエッジを取得する。
-func (r *BoardRepository) GetNodesAndEdges(ctx context.Context, boardID string) ([]BoardNodeRow, []BoardEdgeRow, error) {
-	// ノード取得
-	nodeRows, err := r.db.Query(ctx, `
-		SELECT id, kind, title,
-		       COALESCE(file_path, ''),
-		       COALESCE(signature, ''),
-		       COALESCE(receiver, ''),
-		       COALESCE(code_text, '')
-		FROM board_nodes
-		WHERE board_id = $1
-	`, boardID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("board_nodes 取得失敗: %w", err)
+// GetNodesAndEdges は variant_id に紐づくノードとエッジを取得し、
+// 業務型に変換して返す。
+func (r *BoardRepository) GetNodesAndEdges(ctx context.Context, variantID int64) ([]entity.BoardNode, []entity.BoardEdge, error) {
+	var dbNodes []repoEntity.Node
+	if err := r.db.WithContext(ctx).Where("variant_id = ?", variantID).Find(&dbNodes).Error; err != nil {
+		return nil, nil, fmt.Errorf("nodes 取得失敗: %w", err)
 	}
-	defer nodeRows.Close()
 
-	var nodes []BoardNodeRow
-	for nodeRows.Next() {
-		var n BoardNodeRow
-		if err := nodeRows.Scan(&n.ID, &n.Kind, &n.Title, &n.FilePath, &n.Signature, &n.Receiver, &n.CodeText); err != nil {
-			return nil, nil, fmt.Errorf("board_nodes スキャン失敗: %w", err)
+	var dbEdges []repoEntity.Edge
+	if err := r.db.WithContext(ctx).Where("variant_id = ?", variantID).Find(&dbEdges).Error; err != nil {
+		return nil, nil, fmt.Errorf("edges 取得失敗: %w", err)
+	}
+
+	nodes := make([]entity.BoardNode, len(dbNodes))
+	for i, n := range dbNodes {
+		nodes[i] = entity.BoardNode{
+			ID:        strconv.FormatInt(n.ID, 10),
+			Kind:      string(n.Kind),
+			Title:     n.Title,
+			FilePath:  ptrToStr(n.FilePath),
+			Signature: ptrToStr(n.Signature),
+			Receiver:  ptrToStr(n.Receiver),
+			CodeText:  ptrToStr(n.CodeText),
+			X:         n.PositionX,
+			Y:         n.PositionY,
 		}
-		nodes = append(nodes, n)
 	}
 
-	// エッジ取得
-	edgeRows, err := r.db.Query(ctx, `
-		SELECT id, from_node_id, to_node_id, kind, COALESCE(style, 'solid')
-		FROM board_edges
-		WHERE board_id = $1
-	`, boardID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("board_edges 取得失敗: %w", err)
-	}
-	defer edgeRows.Close()
-
-	var edges []BoardEdgeRow
-	for edgeRows.Next() {
-		var e BoardEdgeRow
-		if err := edgeRows.Scan(&e.ID, &e.FromNodeID, &e.ToNodeID, &e.Kind, &e.Style); err != nil {
-			return nil, nil, fmt.Errorf("board_edges スキャン失敗: %w", err)
+	edges := make([]entity.BoardEdge, len(dbEdges))
+	for i, e := range dbEdges {
+		edges[i] = entity.BoardEdge{
+			ID:         strconv.FormatInt(e.ID, 10),
+			FromNodeID: strconv.FormatInt(e.FromNodeID, 10),
+			ToNodeID:   strconv.FormatInt(e.ToNodeID, 10),
+			Kind:       string(e.Kind),
+			Style:      string(e.Style),
 		}
-		edges = append(edges, e)
 	}
 
 	return nodes, edges, nil
 }
 
-// UpdateNodePositions は計算済みの x, y を board_nodes に一括書き込む。
-func (r *BoardRepository) UpdateNodePositions(ctx context.Context, positions map[string]layout.Position) error {
-	for nodeID, pos := range positions {
-		_, err := r.db.Exec(ctx, `
-			UPDATE board_nodes SET x = $1, y = $2 WHERE id = $3
-		`, pos.X, pos.Y, nodeID)
+// UpdateNodePositions は各ノードの position_x, position_y を更新する。
+func (r *BoardRepository) UpdateNodePositions(ctx context.Context, positions map[string]entity.Position) error {
+	for idStr, pos := range positions {
+		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			return fmt.Errorf("node %s の座標更新失敗: %w", nodeID, err)
+			return fmt.Errorf("ID変換失敗 %s: %w", idStr, err)
+		}
+		if err := r.db.WithContext(ctx).
+			Model(&repoEntity.Node{}).
+			Where("id = ?", id).
+			Updates(map[string]interface{}{
+				"position_x": pos.X,
+				"position_y": pos.Y,
+			}).Error; err != nil {
+			return fmt.Errorf("node %d の座標更新失敗: %w", id, err)
 		}
 	}
 	return nil
+}
+
+func ptrToStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

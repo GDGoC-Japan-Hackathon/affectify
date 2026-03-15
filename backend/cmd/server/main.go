@@ -1,36 +1,40 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"github.com/siraiyuto/affectify/backend/gen/api/v1/apiv1connect"
 	"github.com/siraiyuto/affectify/backend/internal/handler"
 	"github.com/siraiyuto/affectify/backend/internal/repository"
+	"github.com/siraiyuto/affectify/backend/internal/service"
 )
 
 func main() {
-	// DB接続（環境変数 DATABASE_URL から取得）
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
+	// DB接続
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
 		log.Fatal("DATABASE_URL が設定されていません")
 	}
-	db, err := pgxpool.New(context.Background(), dbURL)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("DB接続失敗: %v", err)
 	}
-	defer db.Close()
 
-	// ハンドラの初期化
-	healthHandler := &handler.HealthServiceHandler{}
-	boardHandler := handler.NewBoardServiceHandler(repository.NewBoardRepository(db))
+	// 依存関係の組み立て
+	healthService := service.NewHealthService()
+	healthHandler := handler.NewHealthServiceHandler(healthService)
+
+	boardRepo := repository.NewBoardRepository(db)
+	layoutService := service.NewLayoutService(boardRepo)
+	boardHandler := handler.NewBoardServiceHandler(layoutService)
 
 	mux := http.NewServeMux()
 

@@ -1,0 +1,10 @@
+version: v2
+plugins:
+  # Go: protobuf messages
+  - local: protoc-gen-go
+    out: ../backend/gen
+    opt: paths=source_relative
+  # Go: Connect service stubs
+  - local: protoc-gen-connect-go
+    out: ../backend/gen
+    opt: paths=source_relative
