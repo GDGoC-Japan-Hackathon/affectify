@@ -23,11 +23,17 @@ import { CodeCard } from "./CodeCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree } from "lucide-react";
+import { FolderTree, Focus } from "lucide-react";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
   boardEdges: BoardEdge[];
+}
+
+interface ViewerWindow {
+  id: number;
+  tabs: string[];
+  activeTab: string;
 }
 
 const nodeTypes: NodeTypes = {
@@ -76,7 +82,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialEdges = useMemo(() => toFlowEdges(boardEdges), [boardEdges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { fitView } = useReactFlow();
 
   const zMax = useRef(0);
@@ -85,15 +91,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const windowZMax = useRef(9999);
   const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
 
-  // 複数ウィンドウ管理: 各ウィンドウが独自のタブ配列とactiveTabを持つ
-  interface ViewerWindow {
-    id: number;
-    tabs: string[];
-    activeTab: string;
-  }
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
+  const [focusMode, setFocusMode] = useState(false);
 
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
@@ -109,10 +110,14 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes]
   );
 
+  // 展開中のノードIDを記録
+  const expandedNodes = useRef<Set<string>>(new Set());
+
   // ノード展開時にzIndexを上げる + フィットして全体表示
   const handleExpand = useCallback(
     (nodeId: string, isExpanded: boolean) => {
       if (isExpanded) {
+        expandedNodes.current.add(nodeId);
         zMax.current += 1;
         const z = zMax.current;
         setNodes((nds) =>
@@ -122,6 +127,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 300 });
         }, 50);
       } else {
+        expandedNodes.current.delete(nodeId);
         setNodes((nds) =>
           nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n))
         );
@@ -150,10 +156,33 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [nodes, handleCodeChange, handleExpand, edgeCounts]
   );
 
-  // ハイライト状態を setNodes で直接更新 + ホバー中は仮にzMax+1
+  // ハイライト状態を setNodes で直接更新 + ホバー中は仮にzMax+1 + 関連ノード以外を半透明
   const hoverPrevZ = useRef<{ id: string; z: number } | null>(null);
   const handleNodeHover = useCallback(
     (nodeId: string | null) => {
+      // 関連ノードIDを取得
+      const connectedIds = new Set<string>();
+      if (nodeId) {
+        connectedIds.add(nodeId);
+        edges.forEach((e) => {
+          if (e.source === nodeId) connectedIds.add(e.target);
+          if (e.target === nodeId) connectedIds.add(e.source);
+        });
+      }
+
+      // エッジの透明度を更新
+      setEdges((eds) =>
+        eds.map((e) => ({
+          ...e,
+          style: {
+            ...e.style,
+            opacity: focusMode && nodeId
+              ? (e.source === nodeId || e.target === nodeId ? 1 : 0.15)
+              : 1,
+          },
+        }))
+      );
+
       setNodes((nds) => {
         // 前回ホバーしていたノードのzIndexを復元
         let restored = nds;
@@ -169,19 +198,21 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           hoverPrevZ.current = { id: nodeId, z: target?.zIndex ?? 0 };
           return restored.map((n) => ({
             ...n,
-            data: { ...n.data, highlighted: n.id === nodeId },
+            data: { ...n.data, highlighted: n.id === nodeId, dimmed: focusMode && !connectedIds.has(n.id) && !expandedNodes.current.has(n.id) },
+            style: { ...n.style, opacity: focusMode && !connectedIds.has(n.id) && !expandedNodes.current.has(n.id) ? 0.15 : 1 },
             zIndex: n.id === nodeId ? zMax.current + 1 : n.zIndex,
           }));
         } else {
           hoverPrevZ.current = null;
           return restored.map((n) => ({
             ...n,
-            data: { ...n.data, highlighted: false },
+            data: { ...n.data, highlighted: false, dimmed: false },
+            style: { ...n.style, opacity: 1 },
           }));
         }
       });
     },
-    [setNodes]
+    [setNodes, setEdges, edges, focusMode]
   );
 
   // ファイル選択 → 最初のウィンドウにタブ追加（なければ新規ウィンドウ作成）
@@ -239,11 +270,23 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         <FolderTree className="size-5 text-gray-700" />
       </button>
 
+      <button
+        onClick={() => setFocusMode((prev) => !prev)}
+        className={`absolute top-4 left-16 z-40 border rounded-lg p-2 shadow-md transition-colors ${
+          focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+        }`}
+        title="フォーカスモード"
+      >
+        <Focus className="size-5" />
+      </button>
+
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeMouseEnter={(_, node) => handleNodeHover(node.id)}
+        onNodeMouseLeave={() => handleNodeHover(null)}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
