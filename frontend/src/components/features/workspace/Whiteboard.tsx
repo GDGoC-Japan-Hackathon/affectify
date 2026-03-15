@@ -23,7 +23,7 @@ import { CodeCard } from "./CodeCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree } from "lucide-react";
+import { FolderTree, Focus } from "lucide-react";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -76,9 +76,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialEdges = useMemo(() => toFlowEdges(boardEdges), [boardEdges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { fitView } = useReactFlow();
 
+  const [focusMode, setFocusMode] = useState(false);
   const zMax = useRef(100);
   const hoverNodeId = useRef<string | null>(null);
   const hoverSavedZ = useRef<number>(0);
@@ -100,10 +101,36 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   );
 
   // ホバー時：zMaxは変えず仮に最前面にする。ホバー解除で元に戻す
+  // フォーカスモードON時は関連しないノード/エッジを半透明にする
   const handleNodeHover = useCallback(
     (nodeId: string | null) => {
       const prevHoverId = hoverNodeId.current;
       const prevSavedZ = hoverSavedZ.current;
+
+      // フォーカスモード: 関連ノードIDを取得
+      const connectedIds = new Set<string>();
+      if (focusMode && nodeId) {
+        connectedIds.add(nodeId);
+        edges.forEach((e) => {
+          if (e.source === nodeId) connectedIds.add(e.target);
+          if (e.target === nodeId) connectedIds.add(e.source);
+        });
+      }
+
+      // フォーカスモード: エッジのopacity更新
+      if (focusMode) {
+        setEdges((eds) =>
+          eds.map((e) => ({
+            ...e,
+            style: {
+              ...e.style,
+              opacity: nodeId
+                ? (e.source === nodeId || e.target === nodeId ? 1 : 0.1)
+                : 1,
+            },
+          }))
+        );
+      }
 
       setNodes((nds) => {
         // 新しいホバー先のzIndexをnds（最新state）から保存
@@ -117,23 +144,24 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
         return nds.map((n) => {
           if (nodeId) {
+            const isDimmed = focusMode && !connectedIds.has(n.id);
             if (n.id === nodeId) {
-              return { ...n, data: { ...n.data, highlighted: true }, zIndex: 9999999 };
+              return { ...n, data: { ...n.data, highlighted: true }, style: { ...n.style, opacity: 1 }, zIndex: 9999999 };
             }
             if (n.id === prevHoverId && prevHoverId !== nodeId) {
-              return { ...n, data: { ...n.data, highlighted: false }, zIndex: prevSavedZ };
+              return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: isDimmed ? 0.15 : 1 }, zIndex: prevSavedZ };
             }
-            return { ...n, data: { ...n.data, highlighted: false } };
+            return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: isDimmed ? 0.15 : 1 } };
           } else {
             if (n.id === prevHoverId) {
-              return { ...n, data: { ...n.data, highlighted: false }, zIndex: prevSavedZ };
+              return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: 1 }, zIndex: prevSavedZ };
             }
-            return { ...n, data: { ...n.data, highlighted: false } };
+            return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: 1 } };
           }
         });
       });
     },
-    [setNodes]
+    [setNodes, setEdges, edges, focusMode]
   );
 
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
@@ -250,6 +278,16 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         title="ファイルツリー"
       >
         <FolderTree className="size-5 text-gray-700" />
+      </button>
+
+      <button
+        onClick={() => setFocusMode((prev) => !prev)}
+        className={`absolute top-4 left-16 z-40 border rounded-lg p-2 shadow-md transition-colors ${
+          focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+        }`}
+        title="フォーカスモード"
+      >
+        <Focus className="size-5" />
       </button>
 
       <ReactFlow
