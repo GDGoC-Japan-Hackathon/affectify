@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import {
   Home,
   Folder,
-  Globe,
   Users,
   Settings,
   Search,
@@ -46,10 +45,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: '設計書ライブラリ', href: '/design-guides', icon: BookOpen },
   ];
 
-  const communityNavigation = [
-    { name: 'コミュニティ', href: '/community', icon: Globe },
-  ];
-
   const settingsNavigation = [
     { name: '設定', href: '/settings', icon: Settings },
   ];
@@ -78,34 +73,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Personal Navigation */}
           <div className="space-y-1 mb-4">
             {personalNavigation.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`
-                    flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                    ${
-                      active
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }
-                  `}
-                >
-                  <Icon className="w-5 h-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* Separator */}
-          <div className="my-4 border-t border-gray-200" />
-
-          {/* Community Navigation */}
-          <div className="space-y-1">
-            {communityNavigation.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
               return (
