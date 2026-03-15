@@ -32,7 +32,7 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
       initial={{ scale: 0.8, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       className={`
-        ${expanded ? "min-w-[300px] max-w-[600px]" : "min-w-[220px] max-w-[320px]"}
+        ${expanded ? "w-[500px]" : "min-w-[220px] max-w-[320px]"}
         rounded-lg border-2 shadow-lg backdrop-blur-sm cursor-pointer
         ${highlighted ? "ring-4 ring-yellow-400 shadow-yellow-400/50" : ""}
       `}
