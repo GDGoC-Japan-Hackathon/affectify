@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Users, FolderOpen, Code2 } from 'lucide-react';
+import { FolderOpen, Code2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,10 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { mockTeams } from '@/data/mockData';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import type { ProjectVisibility } from '@/types';
 import { toast } from 'sonner';
 
 interface CreateProjectDialogProps {
@@ -42,19 +39,9 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const router = useRouter();
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState<ProjectVisibility>('private');
-  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [designGuideId, setDesignGuideId] = useState<string>('none');
   const [importedFolder, setImportedFolder] = useState<ImportedFolder | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-
-  const handleTeamToggle = (teamId: string) => {
-    setSelectedTeams((prev) =>
-      prev.includes(teamId)
-        ? prev.filter((id) => id !== teamId)
-        : [...prev, teamId]
-    );
-  };
 
   const handleCreate = () => {
     if (!importedFolder) {
@@ -62,16 +49,12 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
       return;
     }
 
-    // プロジェクト作成処理
     const newProject = {
       id: `project-${Date.now()}`,
       name: projectName || importedFolder.name,
       description,
       ownerId: 'user-1',
-      shareSettings: {
-        visibility,
-        sharedWithTeams: visibility === 'teams' ? selectedTeams : undefined,
-      },
+      members: ['user-1'],
       designGuideId: designGuideId !== 'none' ? designGuideId : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -81,8 +64,6 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
 
     console.log('Creating project:', newProject);
 
-    // インポートしたファイルデータをlocalStorageに一時保存
-    // （実際にはバックエンドに送信するか、React Routerのstateで渡す）
     sessionStorage.setItem('pending-project-import', JSON.stringify({
       project: newProject,
       files: importedFolder.files,
@@ -90,15 +71,11 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
 
     toast.success(`プロジェクト「${newProject.name}」を作成しました`);
 
-    // CodeDesignEditorに遷移
     router.push(`/editor/${newProject.id}`);
     onOpenChange(false);
 
-    // フォームをリセット
     setProjectName('');
     setDescription('');
-    setVisibility('private');
-    setSelectedTeams([]);
     setDesignGuideId('none');
     setImportedFolder(null);
     setIsImporting(false);
@@ -115,7 +92,6 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
       const folderName = files[0].webkitRelativePath.split('/')[0];
       const folderFiles = Array.from(files);
 
-      // プロジェクト名が未設定の場合、フォルダ名を設定
       if (!projectName) {
         setProjectName(folderName);
       }
@@ -136,7 +112,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
         <DialogHeader>
           <DialogTitle>新規プロジェクト作成</DialogTitle>
           <DialogDescription>
-            プロジェクトの基本情報と共有設定を入力してください
+            プロジェクトの基本情報を入力してください
           </DialogDescription>
         </DialogHeader>
 
@@ -164,70 +140,6 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
             />
-          </div>
-
-          {/* 共有設定 */}
-          <div className="space-y-3">
-            <Label>共有設定</Label>
-            <div className="space-y-2">
-              <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer hover:bg-slate-50 transition-colors">
-                <input
-                  type="radio"
-                  name="visibility"
-                  value="private"
-                  checked={visibility === 'private'}
-                  onChange={(e) => setVisibility(e.target.value as ProjectVisibility)}
-                  className="mt-0.5"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 font-medium text-slate-900">
-                    <Lock className="size-4" />
-                    非公開（自分のみ）
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    自分だけがアクセスできます
-                  </p>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer hover:bg-slate-50 transition-colors">
-                <input
-                  type="radio"
-                  name="visibility"
-                  value="teams"
-                  checked={visibility === 'teams'}
-                  onChange={(e) => setVisibility(e.target.value as ProjectVisibility)}
-                  className="mt-0.5"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 font-medium text-slate-900">
-                    <Users className="size-4" />
-                    チームと共有
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    選択したチームのメンバーがアクセスできます
-                  </p>
-                </div>
-              </label>
-
-              {visibility === 'teams' && (
-                <div className="ml-6 mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-medium text-slate-700">共有するチームを選択</p>
-                  {mockTeams.map((team) => (
-                    <label
-                      key={team.id}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <Checkbox
-                        checked={selectedTeams.includes(team.id)}
-                        onCheckedChange={() => handleTeamToggle(team.id)}
-                      />
-                      <span className="text-sm text-slate-700">{team.name}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* 設計書選択 */}

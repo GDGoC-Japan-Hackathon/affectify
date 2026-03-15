@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Project } from '@/types';
+import { Project } from '@/types/type';
 import {
   MoreVertical,
   Users,
@@ -19,7 +19,7 @@ import { ja } from 'date-fns/locale';
 interface ProjectCardProps {
   project: Project;
   onToggleStar?: (id: string) => void;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
 export function ProjectCard({ project, onDelete }: ProjectCardProps) {
@@ -35,11 +35,11 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
                 <h3 className="font-semibold text-gray-900 truncate">
                   {project.name}
                 </h3>
-                <div className="flex-shrink-0" title={project.shareSettings.visibility === 'private' ? '非公開' : 'チーム共有'}>
-                  {project.shareSettings.visibility === 'private' ? (
-                    <Lock className="w-3.5 h-3.5 text-gray-400" />
-                  ) : (
+                <div className="flex-shrink-0" title={project.members.length > 1 ? '共有中' : '非公開'}>
+                  {project.members.length > 1 ? (
                     <Users className="w-3.5 h-3.5 text-blue-500" />
+                  ) : (
+                    <Lock className="w-3.5 h-3.5 text-gray-400" />
                   )}
                 </div>
               </div>
@@ -71,17 +71,21 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
                   >
                     共有
                   </button>
-                  <div className="border-t border-gray-100 my-1" />
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setMenuOpen(false);
-                      onDelete(project.id);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-md text-sm text-red-600 hover:bg-red-50"
-                  >
-                    削除
-                  </button>
+                  {onDelete && (
+                    <>
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMenuOpen(false);
+                          onDelete(project.id);
+                        }}
+                        className="w-full text-left px-2 py-1.5 rounded-md text-sm text-red-600 hover:bg-red-50"
+                      >
+                        削除
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

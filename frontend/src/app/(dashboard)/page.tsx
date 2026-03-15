@@ -1,6 +1,6 @@
 "use client";
 
-import { mockProjects, mockUser, mockTeams } from '@/data/mockData';
+import { mockProjects, mockUser } from '@/data/mockData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,62 +26,6 @@ export default function Home() {
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, 3);
 
-  const myTeam = mockTeams[0];
-  const teamActivity = [
-    {
-      id: '1',
-      user: 'user-2',
-      userName: '田中太郎',
-      action: '設計案を作成',
-      target: 'モジュラー設計案',
-      project: 'Eコマースプラットフォーム',
-      time: new Date('2024-03-14T10:30:00'),
-      type: 'branch',
-    },
-    {
-      id: '2',
-      user: 'user-3',
-      userName: '佐藤花子',
-      action: 'コメントを追加',
-      target: 'レガシー互換設計',
-      project: 'Eコマースプラットフォーム',
-      time: new Date('2024-03-14T09:15:00'),
-      type: 'comment',
-    },
-    {
-      id: '3',
-      user: 'user-2',
-      userName: '田中太郎',
-      action: 'プロジェクトを作成',
-      target: 'ダッシュボード UI',
-      time: new Date('2024-03-13T16:45:00'),
-      type: 'create',
-    },
-    {
-      id: '4',
-      user: 'user-1',
-      userName: mockUser.name,
-      action: 'AI分析を実行',
-      target: 'APIゲートウェイ',
-      time: new Date('2024-03-13T14:20:00'),
-      type: 'analysis',
-    },
-  ];
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'branch':
-        return GitBranch;
-      case 'comment':
-        return MessageSquare;
-      case 'create':
-        return Plus;
-      case 'analysis':
-        return Activity;
-      default:
-        return CheckCircle2;
-    }
-  };
 
   return (
       <div className="p-6 max-w-7xl mx-auto">
@@ -167,58 +111,6 @@ export default function Home() {
             </Card>
           </div>
 
-          {/* Team Activity */}
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5" />
-                  チームアクティビティ
-                </CardTitle>
-                <CardDescription>{myTeam.name}の最近の活動</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {teamActivity.map((activity) => {
-                    const Icon = getActivityIcon(activity.type);
-                    return (
-                      <div key={activity.id} className="flex gap-3">
-                        <Avatar className="w-8 h-8 shrink-0">
-                          <AvatarImage
-                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activity.user}`}
-                          />
-                          <AvatarFallback>
-                            {activity.userName[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Icon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                            <span className="text-sm text-gray-900 font-medium truncate">
-                              {activity.userName}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-1">
-                            {activity.action}{' '}
-                            <span className="font-medium">{activity.target}</span>
-                            {activity.project && (
-                              <>
-                                {' '}in{' '}
-                                <span className="font-medium">{activity.project}</span>
-                              </>
-                            )}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatDistanceToNow(activity.time, { locale: ja, addSuffix: true })}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </div>
 
         {/* Quick Actions */}
@@ -241,29 +133,6 @@ export default function Home() {
                   </Button>
                 </Link>
 
-                <Link href="/community">
-                  <Button variant="outline" className="w-full justify-start gap-3 h-auto py-4">
-                    <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-                      <Users className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <div className="text-left">
-                      <div className="font-medium">コミュニティを探索</div>
-                      <div className="text-xs text-gray-500">公開プロジェクトを見る</div>
-                    </div>
-                  </Button>
-                </Link>
-
-                <Link href="/teams">
-                  <Button variant="outline" className="w-full justify-start gap-3 h-auto py-4">
-                    <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-                      <Users className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div className="text-left">
-                      <div className="font-medium">チーム管理</div>
-                      <div className="text-xs text-gray-500">メンバーを招待</div>
-                    </div>
-                  </Button>
-                </Link>
               </div>
             </CardContent>
           </Card>

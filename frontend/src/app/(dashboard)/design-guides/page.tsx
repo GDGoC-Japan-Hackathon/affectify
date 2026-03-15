@@ -14,7 +14,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import { DesignGuide, DesignGuideVisibility } from '@/types';
+import { DesignGuide, DesignGuideVisibility } from '@/types/type';
 import {
   Dialog,
   DialogContent,
