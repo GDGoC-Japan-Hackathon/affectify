@@ -3,7 +3,7 @@
 import { memo, useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, FunctionSquare, Cog, Puzzle, Folder, StickyNote, Image } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import type { BoardNode } from "@/types/type";
@@ -19,6 +19,18 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   const highlighted = extra.highlighted as boolean | undefined;
   const onCodeChange = extra.onCodeChange as ((nodeId: string, code: string) => void) | undefined;
   const onExpand = extra.onExpand as ((nodeId: string, expanded: boolean) => void) | undefined;
+  const edgeCount = (extra.edgeCount as number) ?? 0;
+
+  const lineCount = (data.code_text ?? "").split("\n").length;
+
+  const kindIcons: Record<string, React.ReactNode> = {
+    function: <FunctionSquare className="size-4" />,
+    method: <Cog className="size-4" />,
+    interface: <Puzzle className="size-4" />,
+    group: <Folder className="size-4" />,
+    note: <StickyNote className="size-4" />,
+    image: <Image className="size-4" />,
+  };
 
   const handleSave = useCallback(() => {
     onCodeChange?.(data.id, code);
@@ -67,8 +79,19 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
             >
               {data.kind}
             </Badge>
+            {lineCount > 0 && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">
+                {lineCount} 行
+              </Badge>
+            )}
+            {edgeCount > 0 && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">
+                依存 {edgeCount}
+              </Badge>
+            )}
           </div>
-          <h3 className="font-mono font-semibold truncate text-sm">
+          <h3 className="font-mono font-semibold truncate text-sm flex items-center gap-1.5">
+            <span className="text-gray-500">{kindIcons[data.kind]}</span>
             {data.receiver ? `(${data.receiver}).` : ""}
             {data.title}
           </h3>

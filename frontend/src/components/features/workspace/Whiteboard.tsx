@@ -118,14 +118,24 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes, fitView]
   );
 
-  // コールバックをノードデータに注入
+  // 各ノードのエッジ数を計算
+  const edgeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    edges.forEach((e) => {
+      counts[e.source] = (counts[e.source] ?? 0) + 1;
+      counts[e.target] = (counts[e.target] ?? 0) + 1;
+    });
+    return counts;
+  }, [edges]);
+
+  // コールバック・エッジ数をノードデータに注入
   const nodesWithCallbacks = useMemo(
     () =>
       nodes.map((n) => ({
         ...n,
-        data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand },
+        data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand, edgeCount: edgeCounts[n.id] ?? 0 },
       })),
-    [nodes, handleCodeChange, handleExpand]
+    [nodes, handleCodeChange, handleExpand, edgeCounts]
   );
 
   // ハイライト状態を setNodes で直接更新
