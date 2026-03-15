@@ -239,6 +239,11 @@ export function CodeViewerWindow({
                   onClick={() => {
                     if (node) {
                       onNodeClick?.(node.id);
+                      setSize({ width: 360, height: 250 });
+                      setPosition({
+                        x: typeof window !== "undefined" ? window.innerWidth - 380 : 100,
+                        y: 20,
+                      });
                     }
                   }}
                 >
