@@ -10,8 +10,8 @@ import (
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1/apiv1connect"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/config"
-	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/database"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/handler"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/postgres"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/service"
 )
 
@@ -22,7 +22,7 @@ func main() {
 
 	dbConfig := config.LoadDatabaseConfig()
 
-	db, err := database.OpenPostgres(dbConfig)
+	db, err := postgres.OpenPostgres(dbConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
