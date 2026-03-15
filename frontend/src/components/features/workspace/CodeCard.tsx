@@ -49,11 +49,9 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
         className="p-3 flex items-start gap-2 cursor-pointer hover:bg-black/5 rounded-t-lg"
         onClick={(e) => {
           e.stopPropagation();
-          setExpanded((prev) => {
-            const next = !prev;
-            onExpand?.(data.id, next);
-            return next;
-          });
+          const next = !expanded;
+          setExpanded(next);
+          setTimeout(() => onExpand?.(data.id, next), 0);
         }}
       >
         <div className="shrink-0 pt-0.5">
