@@ -10,10 +10,12 @@ import (
 
 	"github.com/siraiyuto/affectify/backend/gen/api/v1/apiv1connect"
 	"github.com/siraiyuto/affectify/backend/internal/handler"
+	"github.com/siraiyuto/affectify/backend/internal/service"
 )
 
 func main() {
-	healthHandler := &handler.HealthServiceHandler{}
+	healthService := service.NewHealthService()
+	healthHandler := handler.NewHealthServiceHandler(healthService)
 
 	mux := http.NewServeMux()
 	path, h := apiv1connect.NewHealthServiceHandler(healthHandler)
