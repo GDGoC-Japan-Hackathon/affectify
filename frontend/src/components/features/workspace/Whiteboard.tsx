@@ -51,11 +51,7 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
   return boardEdges.map((e) => {
     const hasArrow = e.kind === "call" || e.kind === "import";
 
-    const edgeColors: Record<string, string> = {
-      call: "#3b82f6",
-      import: "#a855f7",
-      implement: "#f59e0b",
-    };
+    const edgeColor = "#94a3b8";
 
     return {
       id: e.id,
@@ -64,11 +60,11 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
       type: "animated",
       style: {
         strokeDasharray: e.style === "dashed" ? "6 3" : undefined,
-        stroke: edgeColors[e.kind] ?? "#94a3b8",
+        stroke: edgeColor,
         strokeWidth: 2,
       },
       markerEnd: hasArrow
-        ? { type: MarkerType.ArrowClosed, color: edgeColors[e.kind] }
+        ? { type: MarkerType.ArrowClosed, color: edgeColor }
         : undefined,
     };
   });
@@ -83,7 +79,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const { fitView } = useReactFlow();
 
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
-  const [openFiles, setOpenFiles] = useState<string[]>([]);
+  const [viewerFile, setViewerFile] = useState<string | null>(null);
 
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
@@ -91,7 +87,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       setNodes((nds) =>
         nds.map((n) =>
           n.id === nodeId
-            ? { ...n, data: { ...n.data, code_text: code, onCodeChange: handleCodeChange } }
+            ? { ...n, data: { ...n.data, code_text: code } }
             : n
         )
       );
@@ -99,12 +95,26 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes]
   );
 
-  // onCodeChange をノードデータに注入
+  // ノード展開時にzIndexを上げる
+  const handleExpand = useCallback(
+    (nodeId: string, isExpanded: boolean) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId
+            ? { ...n, zIndex: isExpanded ? 1000 : 0 }
+            : n
+        )
+      );
+    },
+    [setNodes]
+  );
+
+  // コールバックをノードデータに注入
   const nodesWithCallbacks = useMemo(
     () =>
       nodes.map((n) => ({
         ...n,
-        data: { ...n.data, onCodeChange: handleCodeChange },
+        data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand },
       })),
     [nodes, handleCodeChange]
   );
@@ -122,12 +132,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes]
   );
 
-  // ファイル選択 → CodeViewerWindow を開く + そのファイルのノードにフィット
+  // ファイル選択 → CodeViewerWindow を開く（1つだけ）+ そのファイルのノードにフィット
   const handleFileSelect = useCallback(
     (filePath: string) => {
-      setOpenFiles((prev) =>
-        prev.includes(filePath) ? prev : [...prev, filePath]
-      );
+      setViewerFile(filePath);
       const ids = nodes
         .filter((n) => (n.data as unknown as BoardNode).file_path === filePath)
         .map((n) => n.id);
@@ -136,14 +144,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       }
     },
     [nodes, fitView]
-  );
-
-  // ファイルツリーからノードをクリック → フォーカス
-  const handleTreeNodeClick = useCallback(
-    (nodeId: string) => {
-      fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 500 });
-    },
-    [fitView]
   );
 
   const miniMapNodeColor = useCallback((node: Node) => {
@@ -176,6 +176,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={() => setViewerFile(null)}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
@@ -200,28 +201,22 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         isOpen={fileTreeOpen}
         onClose={() => setFileTreeOpen(false)}
         onFileSelect={handleFileSelect}
-        onNodeHover={handleNodeHover}
-        onNodeClick={handleTreeNodeClick}
       />
 
-      {/* ファイル全体表示ウィンドウ（複数同時表示） */}
-      {openFiles.map((fp, i) => (
+      {/* ファイル全体表示ウィンドウ（1つのみ） */}
+      {viewerFile && (
         <CodeViewerWindow
-          key={fp}
-          filePath={fp}
+          filePath={viewerFile}
           nodes={nodes
             .map((n) => n.data as unknown as BoardNode)
-            .filter((n) => n.file_path === fp)}
-          index={i}
-          onClose={() =>
-            setOpenFiles((prev) => prev.filter((f) => f !== fp))
-          }
+            .filter((n) => n.file_path === viewerFile)}
+          onClose={() => setViewerFile(null)}
           onNodeHover={handleNodeHover}
           onNodeClick={(nodeId) =>
             fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 500 })
           }
         />
-      ))}
+      )}
     </div>
   );
 }

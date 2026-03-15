@@ -23,22 +23,17 @@ export function CodeViewerWindow({
 }: CodeViewerWindowProps) {
   const [copied, setCopied] = useState(false);
   const [minimized, setMinimized] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 80 });
+  const [position, setPosition] = useState(() => {
+    const offset = index * 30;
+    const x = typeof window !== "undefined" ? Math.max(100, window.innerWidth - 600 - offset) : 100;
+    return { x, y: 80 + offset };
+  });
   const [size, setSize] = useState({ width: 560, height: 460 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
   const headerRef = useRef<HTMLDivElement>(null);
-
-  // 初期位置をウィンドウ右寄り + indexでずらす
-  useEffect(() => {
-    const offset = index * 30;
-    setPosition({
-      x: Math.max(100, window.innerWidth - 600 - offset),
-      y: 80 + offset,
-    });
-  }, [index]);
 
   // ファイル内の全ノードのコードを結合しつつ、各行がどのノードに属するか記録
   const codeLines: string[] = [];

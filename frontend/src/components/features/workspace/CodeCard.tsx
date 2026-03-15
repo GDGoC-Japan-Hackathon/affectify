@@ -2,8 +2,9 @@
 
 import { memo, useState, useCallback } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { Card, CardContent, Chip, Typography, Box, Collapse, Button } from "@mui/material";
 import { ChevronDown, ChevronRight, Pencil, Eye } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Badge } from "@/components/ui/badge";
 import type { BoardNode } from "@/types/type";
 import { nodeColors } from "@/lib/node-colors";
 
@@ -14,10 +15,10 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [code, setCode] = useState(data.code_text ?? "");
-  const highlighted = (data as Record<string, unknown>).highlighted;
-  const onCodeChange = (data as Record<string, unknown>).onCodeChange as
-    | ((nodeId: string, code: string) => void)
-    | undefined;
+  const extra = data as Record<string, unknown>;
+  const highlighted = extra.highlighted as boolean | undefined;
+  const onCodeChange = extra.onCodeChange as ((nodeId: string, code: string) => void) | undefined;
+  const onExpand = extra.onExpand as ((nodeId: string, expanded: boolean) => void) | undefined;
 
   const codeLines = code.split("\n");
 
@@ -27,161 +28,128 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   }, [data.id, code, onCodeChange]);
 
   return (
-    <>
-      <Handle type="target" position={Position.Left} className="!w-2 !h-2" />
-      <Card
-        sx={{
-          minWidth: 220,
-          maxWidth: expanded ? "none" : 280,
-          width: expanded ? 500 : undefined,
-          backgroundColor: colors.bg,
-          border: `2px solid ${highlighted ? "#facc15" : colors.border}`,
-          cursor: "pointer",
-          userSelect: "none",
-          boxShadow: highlighted
-            ? "0 0 12px 4px rgba(250, 204, 21, 0.5)"
-            : 1,
-          transition: "box-shadow 0.2s, border-color 0.2s, max-width 0.3s",
+    <motion.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      className={`
+        ${expanded ? "min-w-[300px] max-w-[600px]" : "min-w-[220px] max-w-[320px]"}
+        rounded-lg border-2 shadow-lg backdrop-blur-sm cursor-pointer
+        ${highlighted ? "ring-4 ring-yellow-400 shadow-yellow-400/50" : ""}
+      `}
+      style={{
+        backgroundColor: "rgba(255, 255, 255, 0.85)",
+        borderColor: highlighted ? "#facc15" : colors.border,
+        transition: "box-shadow 0.2s, border-color 0.2s",
+      }}
+    >
+      <Handle type="target" position={Position.Left} className="!bg-gray-400 !w-3 !h-3" />
+
+      {/* ヘッダー */}
+      <div
+        className="p-3 flex items-start gap-2 cursor-pointer hover:bg-black/5 rounded-t-lg"
+        onClick={(e) => {
+          e.stopPropagation();
+          setExpanded((prev) => {
+            const next = !prev;
+            onExpand?.(data.id, next);
+            return next;
+          });
         }}
       >
-        {/* ヘッダー部分（クリックで展開） */}
-        <CardContent
-          sx={{ p: 1.5, "&:last-child": { pb: 1.5 }, cursor: "pointer" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((prev) => !prev);
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            {expanded ? (
-              <ChevronDown className="size-4 shrink-0" />
-            ) : (
-              <ChevronRight className="size-4 shrink-0" />
-            )}
-            <Chip
-              label={data.kind}
-              size="small"
-              sx={{
-                backgroundColor: colors.badge,
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: 10,
-                textTransform: "uppercase",
-                height: 20,
-              }}
-            />
-          </Box>
-          <Typography
-            variant="subtitle2"
-            noWrap={!expanded}
-            sx={{ fontWeight: 600, color: "grey.900", mt: 0.5 }}
-          >
+        <div className="shrink-0 pt-0.5">
+          {expanded ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge
+              className="text-[10px] font-bold uppercase px-1.5 py-0 text-white"
+              style={{ backgroundColor: colors.badge }}
+            >
+              {data.kind}
+            </Badge>
+          </div>
+          <h3 className="font-mono font-semibold truncate text-sm">
             {data.receiver ? `(${data.receiver}).` : ""}
             {data.title}
-          </Typography>
+          </h3>
           {data.file_path && (
-            <Typography variant="caption" noWrap sx={{ color: "grey.500" }}>
-              {data.file_path}
-            </Typography>
+            <p className="text-xs text-gray-500 truncate">{data.file_path}</p>
           )}
-        </CardContent>
+        </div>
+      </div>
 
-        {/* 展開部分（コード表示/編集） */}
-        <Collapse in={expanded}>
-          <Box
-            sx={{ borderTop: `1px solid ${colors.border}` }}
+      {/* 展開部分 */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t"
+            style={{ borderColor: colors.border }}
           >
-            {/* 表示/編集切り替えボタン */}
-            <Box sx={{ display: "flex", justifyContent: "flex-end", px: 1, pt: 0.5 }}>
-              <Button
-                size="small"
-                startIcon={editing ? <Eye size={14} /> : <Pencil size={14} />}
+            {/* 編集/表示 切り替えボタン */}
+            <div className="flex justify-end px-2 pt-1">
+              <button
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors px-2 py-1 rounded hover:bg-gray-100"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (editing) handleSave();
                   else setEditing(true);
                 }}
-                sx={{ fontSize: 11, textTransform: "none" }}
               >
+                {editing ? <Eye size={14} /> : <Pencil size={14} />}
                 {editing ? "保存" : "編集"}
-              </Button>
-            </Box>
+              </button>
+            </div>
 
             {editing ? (
               /* 編集モード */
-              <Box
-                className="nowheel nodrag"
+              <div
+                className="px-2 pb-2 nowheel nodrag"
                 onWheel={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
-                sx={{ px: 1, pb: 1 }}
               >
                 <textarea
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  style={{
-                    width: "100%",
-                    minWidth: 300,
-                    minHeight: 200,
-                    fontFamily: "monospace",
-                    fontSize: 12,
-                    lineHeight: "20px",
-                    padding: 8,
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 4,
-                    resize: "both",
-                    outline: "none",
-                    overflow: "auto",
-                  }}
+                  className="w-full min-w-[300px] min-h-[200px] font-mono text-xs leading-5 p-2 border border-gray-200 rounded resize-both outline-none overflow-auto"
                 />
-              </Box>
+              </div>
             ) : (
               /* 表示モード */
-              <Box
-                sx={{ maxHeight: 300, overflow: "auto" }}
-                className="nowheel nodrag"
+              <div
+                className="max-h-[300px] overflow-auto nowheel nodrag"
                 onWheel={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
               >
-                <Box sx={{ display: "flex", fontFamily: "monospace", fontSize: 12 }}>
-                  <Box
-                    sx={{
-                      px: 1,
-                      py: 1,
-                      backgroundColor: "rgba(0,0,0,0.04)",
-                      color: "grey.500",
-                      userSelect: "none",
-                      borderRight: "1px solid",
-                      borderColor: "grey.200",
-                      textAlign: "right",
-                    }}
-                  >
+                <div className="flex font-mono text-xs">
+                  {/* 行番号 */}
+                  <div className="bg-gray-50 px-2 py-2 text-gray-400 select-none border-r border-gray-200 text-right">
                     {codeLines.map((_, i) => (
-                      <Box key={i} sx={{ lineHeight: "20px" }}>
+                      <div key={i} className="leading-5">
                         {i + 1}
-                      </Box>
+                      </div>
                     ))}
-                  </Box>
-                  <Box
-                    component="pre"
-                    sx={{
-                      flex: 1,
-                      px: 1.5,
-                      py: 1,
-                      m: 0,
-                      overflowX: "auto",
-                      lineHeight: "20px",
-                      whiteSpace: "pre",
-                    }}
-                  >
+                  </div>
+                  {/* コード */}
+                  <pre className="flex-1 px-3 py-2 overflow-x-auto leading-5 whitespace-pre m-0">
                     <code>{code}</code>
-                  </Box>
-                </Box>
-              </Box>
+                  </pre>
+                </div>
+              </div>
             )}
-          </Box>
-        </Collapse>
-      </Card>
-      <Handle type="source" position={Position.Right} className="!w-2 !h-2" />
-    </>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Handle type="source" position={Position.Right} className="!bg-gray-400 !w-3 !h-3" />
+    </motion.div>
   );
 }
 

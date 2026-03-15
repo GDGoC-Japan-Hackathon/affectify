@@ -20,8 +20,6 @@ interface FileTreePanelProps {
   isOpen: boolean;
   onClose: () => void;
   onFileSelect: (filePath: string) => void;
-  onNodeHover: (nodeId: string | null) => void;
-  onNodeClick: (nodeId: string) => void;
 }
 
 interface FolderNode {
@@ -83,8 +81,6 @@ export function FileTreePanel({
   isOpen,
   onClose,
   onFileSelect,
-  onNodeHover,
-  onNodeClick,
 }: FileTreePanelProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(["/"])
