@@ -59,7 +59,8 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
       target: e.to_node_id,
       type: "animated",
       style: {
-        strokeDasharray: e.style === "dashed" ? "6 3" : undefined,
+        strokeDasharray:
+          e.kind === "import" ? "6 3" : e.kind === "implement" ? "2 2" : undefined,
         stroke: edgeColor,
         strokeWidth: 2,
       },
@@ -81,6 +82,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
+
 
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
@@ -104,7 +106,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           if (n.id === nodeId) {
             return { ...n, zIndex: isExpanded ? 1000 : 0 };
           }
-          // 他の展開中ノードはzIndexを下げる
           return n.zIndex === 1000 ? { ...n, zIndex: 999 } : n;
         })
       );
@@ -239,7 +240,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           }}
           onNodeHover={handleNodeHover}
           onNodeClick={(nodeId) =>
-            fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 500 })
+            fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500 })
           }
         />
       )}
