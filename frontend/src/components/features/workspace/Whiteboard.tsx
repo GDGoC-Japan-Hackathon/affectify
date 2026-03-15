@@ -95,7 +95,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes]
   );
 
-  // ノード展開時にzIndexを上げる
+  // ノード展開時にzIndexを上げる + フィットして全体表示
   const handleExpand = useCallback(
     (nodeId: string, isExpanded: boolean) => {
       setNodes((nds) =>
@@ -105,8 +105,13 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             : n
         )
       );
+      if (isExpanded) {
+        setTimeout(() => {
+          fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 300 });
+        }, 50);
+      }
     },
-    [setNodes]
+    [setNodes, fitView]
   );
 
   // コールバックをノードデータに注入
@@ -176,7 +181,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onPaneClick={() => setViewerFile(null)}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
