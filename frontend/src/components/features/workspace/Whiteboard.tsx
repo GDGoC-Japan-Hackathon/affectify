@@ -23,7 +23,7 @@ import { CodeCard } from "./CodeCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus } from "lucide-react";
+import { FolderTree, Focus, FoldVertical } from "lucide-react";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -80,6 +80,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const { fitView } = useReactFlow();
 
   const [focusMode, setFocusMode] = useState(false);
+  const [closeAllCounter, setCloseAllCounter] = useState(0);
   const zMax = useRef(100);
   const hoverNodeId = useRef<string | null>(null);
   const hoverSavedZ = useRef<number>(0);
@@ -192,8 +193,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       if (isExpanded) {
         bringToFront(nodeId);
         setTimeout(() => {
-          fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 300 });
-        }, 50);
+          fitView({ nodes: [{ id: nodeId }], padding: 1.5, duration: 300, maxZoom: 1 });
+        }, 200);
       } else {
         setNodes((nds) =>
           nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n))
@@ -218,9 +219,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     () =>
       nodes.map((n) => ({
         ...n,
-        data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand, edgeCount: edgeCounts[n.id] ?? 0 },
+        data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand, edgeCount: edgeCounts[n.id] ?? 0, closeAllCounter },
       })),
-    [nodes, handleCodeChange, handleExpand, edgeCounts]
+    [nodes, handleCodeChange, handleExpand, edgeCounts, closeAllCounter]
   );
 
 
@@ -288,6 +289,14 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         title="フォーカスモード"
       >
         <Focus className="size-5" />
+      </button>
+
+      <button
+        onClick={() => setCloseAllCounter((c) => c + 1)}
+        className="absolute top-4 left-28 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+        title="すべてのノードを閉じる"
+      >
+        <FoldVertical className="size-5 text-gray-700" />
       </button>
 
       <ReactFlow

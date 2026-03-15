@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { ChevronDown, ChevronRight, FunctionSquare, Cog, Puzzle, Folder, StickyNote, Image } from "lucide-react";
@@ -20,6 +20,16 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   const onCodeChange = extra.onCodeChange as ((nodeId: string, code: string) => void) | undefined;
   const onExpand = extra.onExpand as ((nodeId: string, expanded: boolean) => void) | undefined;
   const edgeCount = (extra.edgeCount as number) ?? 0;
+  const closeAllCounter = (extra.closeAllCounter as number) ?? 0;
+
+  // closeAllCounterが変わったら閉じる
+  const prevCloseAll = useRef(closeAllCounter);
+  useEffect(() => {
+    if (closeAllCounter !== prevCloseAll.current) {
+      prevCloseAll.current = closeAllCounter;
+      setExpanded(false);
+    }
+  }, [closeAllCounter]);
 
   const lineCount = (data.code_text ?? "").split("\n").length;
 
@@ -74,8 +84,8 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <Badge
-              className="text-[10px] font-bold uppercase px-1.5 py-0 text-white"
-              style={{ backgroundColor: colors.badge }}
+              className="text-[10px] font-bold uppercase px-1.5 py-0 bg-transparent border"
+              style={{ color: colors.badge, borderColor: colors.badge }}
             >
               {data.kind}
             </Badge>
