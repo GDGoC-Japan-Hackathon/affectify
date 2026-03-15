@@ -23,6 +23,13 @@
 
 `DATABASE_URL` を設定した上で実行します。
 
+### `cmd/atlasschema`
+
+Atlas の program mode 用コマンドです。
+
+- `internal/repository/entity` から PostgreSQL schema を出力する
+- Atlas が migration diff を作る時の schema source になる
+
 ### `gen`
 
 `buf generate` で生成されたコードです。
@@ -59,9 +66,9 @@ protobuf 依存は基本的にここで止めます。
 - `DATABASE_URL` の優先利用
 - `DB_HOST` など個別設定からの DSN 構築
 
-### `internal/database`
+### `internal/repository/postgres`
 
-DB 接続の初期化を行います。
+PostgreSQL 接続の初期化を行います。
 
 - PostgreSQL への接続
 - GORM の初期設定
@@ -93,6 +100,10 @@ DB テーブルやクエリ結果に対応する struct を置く場所です。
 - ORM や `db` tag を持つ struct
 
 この層の型は repository の外へ漏らしすぎない方針です。
+
+### `migrations`
+
+Atlas で管理する migration ファイルを置く場所です。
 
 ## Dependency Rules
 
@@ -162,4 +173,34 @@ cd backend && go run ./cmd/server
 
 ```bash
 cd backend && go run ./cmd/genorm
+```
+
+Atlas schema 出力確認:
+
+```bash
+cd backend && go run ./cmd/atlasschema
+```
+
+Atlas migration 生成:
+
+```bash
+cd backend && atlas migrate diff <migration_name> --env local
+```
+
+`data.external_schema` を使っているため、Atlas CLI は公式版を前提にします。
+
+最初の migration を切る時は、開発用 PostgreSQL が空に近い状態で実行すると initial schema が生成されます。
+
+その後の流れは次の通りです。
+
+1. `internal/repository/entity` を更新する
+2. `go run ./cmd/genorm` で query code を再生成する
+3. `atlas migrate diff <migration_name> --env local` で差分 migration を生成する
+4. 生成された SQL をレビューする
+5. `atlas migrate apply --env local` で適用する
+
+Atlas migration 適用:
+
+```bash
+cd backend && atlas migrate apply --env local
 ```
