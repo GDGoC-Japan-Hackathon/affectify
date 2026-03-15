@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState, useCallback } from "react";
+import Editor from "@monaco-editor/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -116,13 +117,27 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
               }}
             >
               {editing ? (
-                <textarea
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  className="w-full min-h-[200px] font-mono text-xs leading-5 p-2 border-0 outline-none resize-both overflow-auto"
+                <div
+                  className="h-[250px]"
                   onMouseDown={(e) => e.stopPropagation()}
-                  autoFocus
-                />
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <Editor
+                    height="100%"
+                    language="go"
+                    value={code}
+                    onChange={(v) => setCode(v ?? "")}
+                    theme="vs"
+                    options={{
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 12,
+                      lineNumbers: "on",
+                      scrollbar: { verticalScrollbarSize: 6 },
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
               ) : (
                 <div className="flex font-mono text-xs">
                   <div className="bg-gray-50 px-2 py-2 text-gray-400 select-none border-r border-gray-200 text-right">
