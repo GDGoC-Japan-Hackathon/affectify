@@ -213,7 +213,7 @@ export function CodeViewerWindow({
                     onClick={() => {
                       if (node) {
                         onNodeClick?.(node.id);
-                        setMinimized(true);
+                        setSize({ width: 360, height: 250 });
                       }
                     }}
                   >
