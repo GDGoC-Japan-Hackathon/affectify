@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Editor from "@monaco-editor/react";
-import { X, FileCode, Copy, Check, ExternalLink, Maximize2 } from "lucide-react";
+import { X, FileCode, Copy, Check, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import type { BoardNode } from "@/types/type";
 
 interface TabFile {
@@ -177,7 +177,7 @@ export function CodeViewerWindow({
             {nodes.length} 関数 / {codeLines.length} 行
           </span>
           <div className="flex items-center gap-1">
-            {isSmall && (
+            {isSmall ? (
               <button
                 onClick={() => {
                   setSize(defaultSize);
@@ -187,6 +187,17 @@ export function CodeViewerWindow({
                 title="元のサイズに戻す"
               >
                 <Maximize2 className="size-3.5 text-gray-500" />
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setSize({ width: 360, height: 250 });
+                  setIsSmall(true);
+                }}
+                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                title="小さくする"
+              >
+                <Minimize2 className="size-3.5 text-gray-500" />
               </button>
             )}
             <button
