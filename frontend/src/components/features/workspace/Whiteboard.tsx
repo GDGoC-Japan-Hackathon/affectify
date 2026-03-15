@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
-  Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   type Node,
   type Edge,
   type NodeMouseHandler,
@@ -19,6 +20,7 @@ import "@xyflow/react/dist/style.css";
 import type { BoardNode, BoardEdge } from "@/types/type";
 import { CodeCard } from "./CodeCard";
 import { CodeModal } from "./CodeModal";
+import { Toolbar, type ToolType } from "@/components/layout/Toolbar";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -66,14 +68,29 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
   });
 }
 
-export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
+function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
   const initialEdges = useMemo(() => toFlowEdges(boardEdges), [boardEdges]);
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, , onEdgesChange] = useEdgesState(initialEdges);
 
+  const { screenToFlowPosition } = useReactFlow();
+  const noteCountRef = useRef(0);
+
+  const [activeTool, setActiveTool] = useState<ToolType>("select");
   const [selectedNode, setSelectedNode] = useState<BoardNode | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "v" || e.key === "V") setActiveTool("select");
+      if (e.key === "h" || e.key === "H") setActiveTool("hand");
+      if (e.key === "n" || e.key === "N") setActiveTool("note");
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback((_, node) => {
     setSelectedNode(node.data as unknown as BoardNode);
@@ -112,15 +129,56 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
     return colorMap[kind] ?? "#94a3b8";
   }, []);
 
+  const onPaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (activeTool !== "note") return;
+
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      noteCountRef.current += 1;
+
+      const newNote: BoardNode = {
+        id: `note-${Date.now()}`,
+        kind: "note",
+        title: `Note ${noteCountRef.current}`,
+        file_path: "",
+        signature: "",
+        receiver: "",
+        x: position.x,
+        y: position.y,
+        code_text: "",
+      };
+
+      const newFlowNode: Node = {
+        id: newNote.id,
+        type: "codeCard",
+        position: { x: newNote.x, y: newNote.y },
+        data: { ...newNote },
+      };
+
+      setNodes((nds) => [...nds, newFlowNode]);
+      setActiveTool("select");
+    },
+    [activeTool, screenToFlowPosition, setNodes],
+  );
+
+  const isHand = activeTool === "hand";
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
+      <Toolbar activeTool={activeTool} onToolChange={setActiveTool} />
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeDoubleClick={onNodeDoubleClick}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
+        nodesDraggable={!isHand}
+        nodesConnectable={!isHand}
+        elementsSelectable={!isHand}
+        panOnDrag={isHand ? [0, 1, 2] : [1, 2]}
+        selectionOnDrag={!isHand}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}
@@ -128,7 +186,6 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={20} size={1} />
-        <Controls />
         <MiniMap nodeColor={miniMapNodeColor} maskColor="rgba(0,0,0,0.08)" pannable zoomable />
       </ReactFlow>
 
@@ -138,5 +195,13 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
         onCodeChange={onCodeChange}
       />
     </div>
+  );
+}
+
+export function Whiteboard(props: WhiteboardProps) {
+  return (
+    <ReactFlowProvider>
+      <WhiteboardInner {...props} />
+    </ReactFlowProvider>
   );
 }
