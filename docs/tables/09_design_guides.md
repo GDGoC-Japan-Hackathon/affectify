@@ -1,6 +1,6 @@
 # DesignGuides
 
-設計パターン・アーキテクチャ指針のドキュメントを管理。公開範囲は private / public の2段階。
+設計パターン・アーキテクチャ指針のドキュメントを管理。
 
 ## テーブル定義
 
@@ -10,7 +10,6 @@ CREATE TABLE design_guides (
   name VARCHAR(255) NOT NULL,
   description TEXT,
   content TEXT NOT NULL,
-  visibility VARCHAR(20) NOT NULL CHECK (visibility IN ('private', 'public')),
   created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -21,7 +20,6 @@ CREATE TABLE design_guides (
 
 ```sql
 CREATE INDEX idx_design_guides_created_by ON design_guides(created_by);
-CREATE INDEX idx_design_guides_visibility ON design_guides(visibility);
 ```
 
 ## フィールド説明
@@ -32,7 +30,6 @@ CREATE INDEX idx_design_guides_visibility ON design_guides(visibility);
 | name | VARCHAR(255) | 設計書名 |
 | description | TEXT | 説明 |
 | content | TEXT | マークダウン形式の設計書本文 |
-| visibility | VARCHAR(20) | 公開範囲: `private`, `public` |
 | created_by | INTEGER | 作成者 (FK: users) |
 | created_at | TIMESTAMPTZ | 作成日時 |
 | updated_at | TIMESTAMPTZ | 最終更新日時 |
@@ -47,7 +44,6 @@ SELECT
   dg.id,
   dg.name,
   dg.description,
-  dg.visibility,
   dg.created_by,
   dg.created_at,
   dg.updated_at,
@@ -55,27 +51,4 @@ SELECT
 FROM design_guides dg
   LEFT JOIN design_guide_likes dgl ON dgl.design_guide_id = dg.id
 GROUP BY dg.id;
-```
-
-## RLS ポリシー
-
-```sql
-ALTER TABLE design_guides ENABLE ROW LEVEL SECURITY;
-
--- 閲覧: 公開またはオーナー
-CREATE POLICY design_guides_select_policy ON design_guides
-  FOR SELECT USING (
-    visibility = 'public'
-    OR created_by = auth.uid()
-  );
-
--- 作成・更新・削除: オーナーのみ
-CREATE POLICY design_guides_insert_policy ON design_guides
-  FOR INSERT WITH CHECK (auth.uid() = created_by);
-
-CREATE POLICY design_guides_update_policy ON design_guides
-  FOR UPDATE USING (auth.uid() = created_by);
-
-CREATE POLICY design_guides_delete_policy ON design_guides
-  FOR DELETE USING (auth.uid() = created_by);
 ```
