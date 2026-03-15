@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Editor from "@monaco-editor/react";
 import { X, FileCode, Copy, Check } from "lucide-react";
 import type { BoardNode } from "@/types/type";
 
@@ -211,48 +212,61 @@ export function CodeViewerWindow({
         </div>
       </div>
 
-      {/* コード表示部分 */}
-      <div className="flex-1 overflow-auto bg-gray-50">
-        <div className="flex font-mono text-xs">
-          {/* 行番号 */}
-          <div className="bg-gray-100 px-3 py-2 text-gray-400 select-none border-r border-gray-200 sticky left-0">
-            {codeLines.map((_, i) => (
-              <div key={i} className="leading-5 text-right">
-                {i + 1}
-              </div>
-            ))}
-          </div>
-          {/* コード */}
-          <pre className="flex-1 px-3 py-2 overflow-x-auto">
-            {codeLines.map((line, i) => {
-              const node = lineNodeMap[i];
-              return (
-                <div
-                  key={i}
-                  className={`leading-5 ${
-                    node
-                      ? "bg-blue-50 -mx-1 px-1 rounded cursor-pointer hover:bg-blue-100 transition-colors"
-                      : ""
-                  }`}
-                  onMouseEnter={() => node && onNodeHover?.(node.id)}
-                  onMouseLeave={() => node && onNodeHover?.(null)}
-                  onClick={() => {
-                    if (node) {
-                      onNodeClick?.(node.id);
-                      setSize({ width: 360, height: 250 });
-                      setPosition({
-                        x: typeof window !== "undefined" ? window.innerWidth - 380 : 100,
-                        y: 20,
-                      });
-                    }
-                  }}
-                >
-                  <code>{line || " "}</code>
-                </div>
-              );
-            })}
-          </pre>
-        </div>
+      {/* コード表示部分（Monaco Editor） */}
+      <div className="flex-1 overflow-hidden">
+        <Editor
+          language="go"
+          value={fileContent}
+          theme="vs"
+          onMount={(editor) => {
+            // 関数ごとの背景色デコレーション
+            const decorations: { range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number }; options: { isWholeLine: boolean; className: string } }[] = [];
+            lineNodeMap.forEach((node, i) => {
+              if (node) {
+                decorations.push({
+                  range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 },
+                  options: { isWholeLine: true, className: "bg-blue-50" },
+                });
+              }
+            });
+            editor.createDecorationsCollection(decorations);
+
+            // クリックでノードにジャンプ
+            editor.onMouseDown((e) => {
+              const lineNumber = e.target.position?.lineNumber;
+              if (lineNumber != null) {
+                const node = lineNodeMap[lineNumber - 1];
+                if (node) {
+                  onNodeClick?.(node.id);
+                }
+              }
+            });
+
+            // ホバーでハイライト
+            editor.onMouseMove((e) => {
+              const lineNumber = e.target.position?.lineNumber;
+              if (lineNumber != null) {
+                const node = lineNodeMap[lineNumber - 1];
+                onNodeHover?.(node?.id ?? null);
+              }
+            });
+
+            editor.onMouseLeave(() => {
+              onNodeHover?.(null);
+            });
+          }}
+          options={{
+            readOnly: true,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            fontSize: 12,
+            lineNumbers: "on",
+            scrollbar: { verticalScrollbarSize: 6 },
+            automaticLayout: true,
+            renderLineHighlight: "none",
+            domReadOnly: true,
+          }}
+        />
       </div>
 
       {/* リサイズハンドル（右下） */}

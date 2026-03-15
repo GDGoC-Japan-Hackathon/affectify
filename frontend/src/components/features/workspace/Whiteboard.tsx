@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useMemo } from "react";
+import { useCallback, useState, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -79,6 +79,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [edges, , onEdgesChange] = useEdgesState(initialEdges);
   const { fitView } = useReactFlow();
 
+  const zMax = useRef(0);
+
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
@@ -101,18 +103,19 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   // ノード展開時にzIndexを上げる + フィットして全体表示
   const handleExpand = useCallback(
     (nodeId: string, isExpanded: boolean) => {
-      setNodes((nds) =>
-        nds.map((n) => {
-          if (n.id === nodeId) {
-            return { ...n, zIndex: isExpanded ? 1000 : 0 };
-          }
-          return n.zIndex === 1000 ? { ...n, zIndex: 999 } : n;
-        })
-      );
       if (isExpanded) {
+        zMax.current += 1;
+        const z = zMax.current;
+        setNodes((nds) =>
+          nds.map((n) => (n.id === nodeId ? { ...n, zIndex: z } : n))
+        );
         setTimeout(() => {
           fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 300 });
         }, 50);
+      } else {
+        setNodes((nds) =>
+          nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n))
+        );
       }
     },
     [setNodes, fitView]
@@ -138,15 +141,36 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [nodes, handleCodeChange, handleExpand, edgeCounts]
   );
 
-  // ハイライト状態を setNodes で直接更新
+  // ハイライト状態を setNodes で直接更新 + ホバー中は仮にzMax+1
+  const hoverPrevZ = useRef<{ id: string; z: number } | null>(null);
   const handleNodeHover = useCallback(
     (nodeId: string | null) => {
-      setNodes((nds) =>
-        nds.map((n) => ({
-          ...n,
-          data: { ...n.data, highlighted: n.id === nodeId },
-        }))
-      );
+      setNodes((nds) => {
+        // 前回ホバーしていたノードのzIndexを復元
+        let restored = nds;
+        if (hoverPrevZ.current) {
+          const prev = hoverPrevZ.current;
+          restored = nds.map((n) =>
+            n.id === prev.id ? { ...n, zIndex: prev.z } : n
+          );
+        }
+
+        if (nodeId) {
+          const target = restored.find((n) => n.id === nodeId);
+          hoverPrevZ.current = { id: nodeId, z: target?.zIndex ?? 0 };
+          return restored.map((n) => ({
+            ...n,
+            data: { ...n.data, highlighted: n.id === nodeId },
+            zIndex: n.id === nodeId ? zMax.current + 1 : n.zIndex,
+          }));
+        } else {
+          hoverPrevZ.current = null;
+          return restored.map((n) => ({
+            ...n,
+            data: { ...n.data, highlighted: false },
+          }));
+        }
+      });
     },
     [setNodes]
   );
@@ -249,9 +273,18 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             setActiveTab("");
           }}
           onNodeHover={handleNodeHover}
-          onNodeClick={(nodeId) =>
-            fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500 })
-          }
+          onNodeClick={(nodeId) => {
+            zMax.current += 1;
+            const z = zMax.current;
+            // ホバー中の仮zIndexをクリック後の値に更新
+            if (hoverPrevZ.current?.id === nodeId) {
+              hoverPrevZ.current.z = z;
+            }
+            setNodes((nds) =>
+              nds.map((n) => (n.id === nodeId ? { ...n, zIndex: z } : n))
+            );
+            fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500 });
+          }}
         />
       )}
     </div>
