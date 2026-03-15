@@ -1,2 +1,4 @@
 # generated code (buf generate)
 /gen
+.env
+/genorm

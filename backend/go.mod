@@ -1,4 +1,4 @@
-module github.com/siraiyuto/affectify/backend
+module github.com/GDGoC-Japan-Hackathon/affectify/backend
 
 go 1.26.1
 
@@ -18,6 +18,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
