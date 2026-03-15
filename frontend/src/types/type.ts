@@ -1,10 +1,4 @@
-export type NodeKind =
-  | "function"
-  | "method"
-  | "interface"
-  | "group"
-  | "note"
-  | "image";
+export type NodeKind = "function" | "method" | "interface" | "group" | "note" | "image";
 
 export type EdgeKind = "call" | "import" | "implement";
 
@@ -61,8 +55,7 @@ export interface Variant {
   designGuideId?: string;
 }
 
-export type ProjectVisibility = 'private' | 'teams';
-export type DesignGuideVisibility = 'private' | 'team' | 'public';
+export type DesignGuideVisibility = "private" | "team" | "public";
 
 export interface Project {
   id: string;
@@ -74,10 +67,7 @@ export interface Project {
   nodeCount: number;
   analysisScore?: number;
   variants: Variant[];
-  shareSettings: {
-    visibility: ProjectVisibility;
-    sharedWithTeams?: string[];
-  };
+  members: string[];
 
   // AI分析結果
   analysisReport?: AnalysisReport;
@@ -124,8 +114,8 @@ export interface AnalysisReport {
         circular: number;
       };
       issues: {
-        type: 'circular' | 'tight-coupling' | 'missing';
-        severity: 'high' | 'medium' | 'low';
+        type: "circular" | "tight-coupling" | "missing";
+        severity: "high" | "medium" | "low";
         description: string;
         affectedNodes: string[];
       }[];
@@ -141,16 +131,16 @@ export interface AnalysisReport {
     };
     recommendations: {
       id: string;
-      priority: 'high' | 'medium' | 'low';
-      category: 'architecture' | 'performance' | 'maintainability' | 'security';
+      priority: "high" | "medium" | "low";
+      category: "architecture" | "performance" | "maintainability" | "security";
       title: string;
       description: string;
       impact: string;
-      effort: 'low' | 'medium' | 'high';
+      effort: "low" | "medium" | "high";
     }[];
     risks: {
       id: string;
-      severity: 'critical' | 'high' | 'medium' | 'low';
+      severity: "critical" | "high" | "medium" | "low";
       category: string;
       title: string;
       description: string;
