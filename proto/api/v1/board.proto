@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/siraiyuto/affectify/backend/gen/api/v1;apiv1";
+
+// ボードのノード（描画に必要な全フィールド）
+message BoardNodeProto {
+  string id        = 1;
+  string kind      = 2;
+  string title     = 3;
+  string file_path = 4;
+  string signature = 5;
+  string receiver  = 6;
+  double x         = 7;
+  double y         = 8;
+  string code_text = 9;
+}
+
+// ボードのエッジ
+message BoardEdgeProto {
+  string id           = 1;
+  string from_node_id = 2;
+  string to_node_id   = 3;
+  string kind         = 4;
+  string style        = 5;
+}
+
+// board_id を渡す
+message GetBoardLayoutRequest {
+  string board_id = 1;
+}
+
+// 座標計算済みのノードとエッジを返す
+message GetBoardLayoutResponse {
+  repeated BoardNodeProto nodes = 1;
+  repeated BoardEdgeProto edges = 2;
+}
+
+service BoardService {
+  rpc GetBoardLayout(GetBoardLayoutRequest) returns (GetBoardLayoutResponse) {}
+}
