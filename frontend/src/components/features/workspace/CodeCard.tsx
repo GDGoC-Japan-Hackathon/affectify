@@ -51,7 +51,7 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
           e.stopPropagation();
           const next = !expanded;
           setExpanded(next);
-          setTimeout(() => onExpand?.(data.id, next), 0);
+          setTimeout(() => onExpand?.(data.id, next), 10);
         }}
       >
         <div className="shrink-0 pt-0.5">
