@@ -210,7 +210,12 @@ export function CodeViewerWindow({
                     }`}
                     onMouseEnter={() => node && onNodeHover?.(node.id)}
                     onMouseLeave={() => node && onNodeHover?.(null)}
-                    onClick={() => node && onNodeClick?.(node.id)}
+                    onClick={() => {
+                      if (node) {
+                        onNodeClick?.(node.id);
+                        setMinimized(true);
+                      }
+                    }}
                   >
                     <code>{line || " "}</code>
                   </div>
