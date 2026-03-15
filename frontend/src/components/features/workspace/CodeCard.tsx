@@ -14,18 +14,14 @@ type CodeCardNode = Node<BoardNode & Record<string, unknown>, "codeCard">;
 function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   const colors = nodeColors[data.kind];
   const [expanded, setExpanded] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [code, setCode] = useState(data.code_text ?? "");
   const extra = data as Record<string, unknown>;
   const highlighted = extra.highlighted as boolean | undefined;
   const onCodeChange = extra.onCodeChange as ((nodeId: string, code: string) => void) | undefined;
   const onExpand = extra.onExpand as ((nodeId: string, expanded: boolean) => void) | undefined;
 
-  const codeLines = code.split("\n");
-
   const handleSave = useCallback(() => {
     onCodeChange?.(data.id, code);
-    setEditing(false);
   }, [data.id, code, onCodeChange]);
 
   return (
@@ -107,51 +103,28 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
               </div>
             )}
 
-            {/* コード表示（クリックで編集モードに） */}
+            {/* コードエディタ（常にMonaco） */}
             <div
-              className="max-h-[300px] overflow-auto nowheel nodrag"
+              className="h-[250px] nowheel nodrag"
               onWheel={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!editing) setEditing(true);
-              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
             >
-              {editing ? (
-                <div
-                  className="h-[250px]"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  <Editor
-                    height="100%"
-                    language="go"
-                    value={code}
-                    onChange={(v) => setCode(v ?? "")}
-                    theme="vs"
-                    options={{
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      fontSize: 12,
-                      lineNumbers: "on",
-                      scrollbar: { verticalScrollbarSize: 6 },
-                      automaticLayout: true,
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="flex font-mono text-xs">
-                  <div className="bg-gray-50 px-2 py-2 text-gray-400 select-none border-r border-gray-200 text-right">
-                    {codeLines.map((_, i) => (
-                      <div key={i} className="leading-5">
-                        {i + 1}
-                      </div>
-                    ))}
-                  </div>
-                  <pre className="flex-1 px-3 py-2 overflow-x-auto leading-5 whitespace-pre m-0 cursor-text">
-                    <code>{code}</code>
-                  </pre>
-                </div>
-              )}
+              <Editor
+                height="100%"
+                language="go"
+                value={code}
+                onChange={(v) => setCode(v ?? "")}
+                theme="vs"
+                options={{
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  fontSize: 12,
+                  lineNumbers: "on",
+                  scrollbar: { verticalScrollbarSize: 6 },
+                  automaticLayout: true,
+                }}
+              />
             </div>
           </motion.div>
         )}
