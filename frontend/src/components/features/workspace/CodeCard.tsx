@@ -20,7 +20,6 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   const onCodeChange = extra.onCodeChange as ((nodeId: string, code: string) => void) | undefined;
   const onExpand = extra.onExpand as ((nodeId: string, expanded: boolean) => void) | undefined;
   const edgeCount = (extra.edgeCount as number) ?? 0;
-  const dimmed = extra.dimmed as boolean | undefined;
 
   const lineCount = (data.code_text ?? "").split("\n").length;
 
@@ -49,8 +48,7 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
       style={{
         backgroundColor: "rgba(255, 255, 255, 0.85)",
         borderColor: highlighted ? "#facc15" : colors.border,
-        opacity: dimmed ? 0.15 : 1,
-        transition: "opacity 0.2s, box-shadow 0.2s, border-color 0.2s",
+        transition: "box-shadow 0.2s, border-color 0.2s",
       }}
     >
       <Handle type="target" position={Position.Left} className="!bg-gray-400 !w-3 !h-3" />

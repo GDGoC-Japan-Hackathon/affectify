@@ -37,6 +37,11 @@ export function CodeViewerWindow({
   zIndex = 9999,
   onFocus,
 }: CodeViewerWindowProps) {
+  const onNodeHoverRef = useRef(onNodeHover);
+  onNodeHoverRef.current = onNodeHover;
+  const onNodeClickRef = useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+
   const [copied, setCopied] = useState(false);
   const [position, setPosition] = useState(() => {
     if (initialPosition) return initialPosition;
@@ -274,7 +279,7 @@ export function CodeViewerWindow({
               if (lineNumber != null) {
                 const node = lineNodeMap[lineNumber - 1];
                 if (node) {
-                  onNodeClick?.(node.id);
+                  onNodeClickRef.current?.(node.id);
                   setSize({ width: 360, height: 250 });
                   setIsSmall(true);
                 }
@@ -286,12 +291,12 @@ export function CodeViewerWindow({
               const lineNumber = e.target.position?.lineNumber;
               if (lineNumber != null) {
                 const node = lineNodeMap[lineNumber - 1];
-                onNodeHover?.(node?.id ?? null);
+                onNodeHoverRef.current?.(node?.id ?? null);
               }
             });
 
             editor.onMouseLeave(() => {
-              onNodeHover?.(null);
+              onNodeHoverRef.current?.(null);
             });
           }}
           options={{

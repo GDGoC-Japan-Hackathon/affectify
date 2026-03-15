@@ -23,17 +23,11 @@ import { CodeCard } from "./CodeCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus } from "lucide-react";
+import { FolderTree } from "lucide-react";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
   boardEdges: BoardEdge[];
-}
-
-interface ViewerWindow {
-  id: number;
-  tabs: string[];
-  activeTab: string;
 }
 
 const nodeTypes: NodeTypes = {
@@ -82,10 +76,65 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialEdges = useMemo(() => toFlowEdges(boardEdges), [boardEdges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
   const { fitView } = useReactFlow();
 
-  const zMax = useRef(0);
+  const zMax = useRef(100);
+  const hoverNodeId = useRef<string | null>(null);
+  const hoverSavedZ = useRef<number>(0);
+
+  // zMaxを+1してノードを最前面にする（展開・クリック・ドラッグ用）
+  const bringToFront = useCallback(
+    (nodeId: string) => {
+      zMax.current += 1;
+      const z = zMax.current;
+      // ホバー中のノードなら保存値も更新（ホバー解除で戻されるのを防ぐ）
+      if (hoverNodeId.current === nodeId) {
+        hoverSavedZ.current = z;
+      }
+      setNodes((nds) =>
+        nds.map((n) => (n.id === nodeId ? { ...n, zIndex: z } : n))
+      );
+    },
+    [setNodes]
+  );
+
+  // ホバー時：zMaxは変えず仮に最前面にする。ホバー解除で元に戻す
+  const handleNodeHover = useCallback(
+    (nodeId: string | null) => {
+      const prevHoverId = hoverNodeId.current;
+      const prevSavedZ = hoverSavedZ.current;
+
+      setNodes((nds) => {
+        // 新しいホバー先のzIndexをnds（最新state）から保存
+        if (nodeId && nodeId !== prevHoverId) {
+          const target = nds.find((n) => n.id === nodeId);
+          hoverSavedZ.current = target?.zIndex ?? 0;
+          hoverNodeId.current = nodeId;
+        } else if (!nodeId) {
+          hoverNodeId.current = null;
+        }
+
+        return nds.map((n) => {
+          if (nodeId) {
+            if (n.id === nodeId) {
+              return { ...n, data: { ...n.data, highlighted: true }, zIndex: 9999999 };
+            }
+            if (n.id === prevHoverId && prevHoverId !== nodeId) {
+              return { ...n, data: { ...n.data, highlighted: false }, zIndex: prevSavedZ };
+            }
+            return { ...n, data: { ...n.data, highlighted: false } };
+          } else {
+            if (n.id === prevHoverId) {
+              return { ...n, data: { ...n.data, highlighted: false }, zIndex: prevSavedZ };
+            }
+            return { ...n, data: { ...n.data, highlighted: false } };
+          }
+        });
+      });
+    },
+    [setNodes]
+  );
 
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const windowZMax = useRef(9999);
@@ -94,7 +143,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
-  const [focusMode, setFocusMode] = useState(false);
 
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
@@ -110,30 +158,21 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes]
   );
 
-  // 展開中のノードIDを記録
-  const expandedNodes = useRef<Set<string>>(new Set());
-
   // ノード展開時にzIndexを上げる + フィットして全体表示
   const handleExpand = useCallback(
     (nodeId: string, isExpanded: boolean) => {
       if (isExpanded) {
-        expandedNodes.current.add(nodeId);
-        zMax.current += 1;
-        const z = zMax.current;
-        setNodes((nds) =>
-          nds.map((n) => (n.id === nodeId ? { ...n, zIndex: z } : n))
-        );
+        bringToFront(nodeId);
         setTimeout(() => {
           fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 300 });
         }, 50);
       } else {
-        expandedNodes.current.delete(nodeId);
         setNodes((nds) =>
           nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n))
         );
       }
     },
-    [setNodes, fitView]
+    [setNodes, fitView, bringToFront]
   );
 
   // 各ノードのエッジ数を計算
@@ -156,64 +195,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [nodes, handleCodeChange, handleExpand, edgeCounts]
   );
 
-  // ハイライト状態を setNodes で直接更新 + ホバー中は仮にzMax+1 + 関連ノード以外を半透明
-  const hoverPrevZ = useRef<{ id: string; z: number } | null>(null);
-  const handleNodeHover = useCallback(
-    (nodeId: string | null) => {
-      // 関連ノードIDを取得
-      const connectedIds = new Set<string>();
-      if (nodeId) {
-        connectedIds.add(nodeId);
-        edges.forEach((e) => {
-          if (e.source === nodeId) connectedIds.add(e.target);
-          if (e.target === nodeId) connectedIds.add(e.source);
-        });
-      }
 
-      // エッジの透明度を更新
-      setEdges((eds) =>
-        eds.map((e) => ({
-          ...e,
-          style: {
-            ...e.style,
-            opacity: focusMode && nodeId
-              ? (e.source === nodeId || e.target === nodeId ? 1 : 0.15)
-              : 1,
-          },
-        }))
-      );
-
-      setNodes((nds) => {
-        // 前回ホバーしていたノードのzIndexを復元
-        let restored = nds;
-        if (hoverPrevZ.current) {
-          const prev = hoverPrevZ.current;
-          restored = nds.map((n) =>
-            n.id === prev.id ? { ...n, zIndex: prev.z } : n
-          );
-        }
-
-        if (nodeId) {
-          const target = restored.find((n) => n.id === nodeId);
-          hoverPrevZ.current = { id: nodeId, z: target?.zIndex ?? 0 };
-          return restored.map((n) => ({
-            ...n,
-            data: { ...n.data, highlighted: n.id === nodeId, dimmed: focusMode && !connectedIds.has(n.id) && !expandedNodes.current.has(n.id) },
-            style: { ...n.style, opacity: focusMode && !connectedIds.has(n.id) && !expandedNodes.current.has(n.id) ? 0.15 : 1 },
-            zIndex: n.id === nodeId ? zMax.current + 1 : n.zIndex,
-          }));
-        } else {
-          hoverPrevZ.current = null;
-          return restored.map((n) => ({
-            ...n,
-            data: { ...n.data, highlighted: false, dimmed: false },
-            style: { ...n.style, opacity: 1 },
-          }));
-        }
-      });
-    },
-    [setNodes, setEdges, edges, focusMode]
-  );
 
   // ファイル選択 → 最初のウィンドウにタブ追加（なければ新規ウィンドウ作成）
   const handleFileSelect = useCallback(
@@ -270,16 +252,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         <FolderTree className="size-5 text-gray-700" />
       </button>
 
-      <button
-        onClick={() => setFocusMode((prev) => !prev)}
-        className={`absolute top-4 left-16 z-40 border rounded-lg p-2 shadow-md transition-colors ${
-          focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-        }`}
-        title="フォーカスモード"
-      >
-        <Focus className="size-5" />
-      </button>
-
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
@@ -287,6 +259,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         onEdgesChange={onEdgesChange}
         onNodeMouseEnter={(_, node) => handleNodeHover(node.id)}
         onNodeMouseLeave={() => handleNodeHover(null)}
+        onNodeDragStart={(_, node) => bringToFront(node.id)}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
@@ -371,14 +344,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           }}
           onNodeHover={handleNodeHover}
           onNodeClick={(nodeId) => {
-            zMax.current += 1;
-            const z = zMax.current;
-            if (hoverPrevZ.current?.id === nodeId) {
-              hoverPrevZ.current.z = z;
-            }
-            setNodes((nds) =>
-              nds.map((n) => (n.id === nodeId ? { ...n, zIndex: z } : n))
-            );
+            bringToFront(nodeId);
             fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500 });
           }}
         />
