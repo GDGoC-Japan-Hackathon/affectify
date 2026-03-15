@@ -79,7 +79,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const { fitView } = useReactFlow();
 
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
-  const [viewerFile, setViewerFile] = useState<string | null>(null);
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("");
 
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
@@ -142,7 +143,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   // ファイル選択 → CodeViewerWindow を開く（1つだけ）+ そのファイルのノードにフィット
   const handleFileSelect = useCallback(
     (filePath: string) => {
-      setViewerFile(filePath);
+      setOpenTabs((prev) =>
+        prev.includes(filePath) ? prev : [...prev, filePath]
+      );
+      setActiveTab(filePath);
       const ids = nodes
         .filter((n) => (n.data as unknown as BoardNode).file_path === filePath)
         .map((n) => n.id);
@@ -209,14 +213,30 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         onFileSelect={handleFileSelect}
       />
 
-      {/* ファイル全体表示ウィンドウ（1つのみ） */}
-      {viewerFile && (
+      {/* ファイル全体表示ウィンドウ（タブ式） */}
+      {openTabs.length > 0 && (
         <CodeViewerWindow
-          filePath={viewerFile}
-          nodes={nodes
-            .map((n) => n.data as unknown as BoardNode)
-            .filter((n) => n.file_path === viewerFile)}
-          onClose={() => setViewerFile(null)}
+          tabs={openTabs.map((fp) => ({
+            filePath: fp,
+            nodes: nodes
+              .map((n) => n.data as unknown as BoardNode)
+              .filter((n) => n.file_path === fp),
+          }))}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onTabClose={(fp) => {
+            setOpenTabs((prev) => {
+              const next = prev.filter((f) => f !== fp);
+              if (activeTab === fp) {
+                setActiveTab(next[next.length - 1] ?? "");
+              }
+              return next;
+            });
+          }}
+          onCloseAll={() => {
+            setOpenTabs([]);
+            setActiveTab("");
+          }}
           onNodeHover={handleNodeHover}
           onNodeClick={(nodeId) =>
             fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 500 })
