@@ -78,7 +78,7 @@ export function ManageMembersDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>{isOwner ? 'メンバー管理' : 'メンバー'}</DialogTitle>
+          <DialogTitle>メンバー管理</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-2 overflow-y-auto">
