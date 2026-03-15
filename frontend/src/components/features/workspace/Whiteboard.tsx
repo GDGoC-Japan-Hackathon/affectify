@@ -192,9 +192,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     (nodeId: string, isExpanded: boolean) => {
       if (isExpanded) {
         bringToFront(nodeId);
-        setTimeout(() => {
-          fitView({ nodes: [{ id: nodeId }], padding: 1.5, duration: 300, maxZoom: 1 });
-        }, 200);
       } else {
         setNodes((nds) =>
           nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n))
@@ -392,7 +389,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           onNodeHover={handleNodeHover}
           onNodeClick={(nodeId) => {
             bringToFront(nodeId);
-            fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500 });
+            fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500, maxZoom: 0.8 });
           }}
         />
       ))}
