@@ -6,8 +6,8 @@
 
 ```sql
 CREATE TABLE analysis_reports (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  variant_id UUID NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  variant_id INTEGER NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
   overall_score INTEGER NOT NULL CHECK (overall_score BETWEEN 0 AND 100),
   report_data JSONB NOT NULL,
   analyzed_at TIMESTAMPTZ DEFAULT NOW(),
@@ -27,8 +27,8 @@ CREATE INDEX idx_analysis_reports_report_data ON analysis_reports USING GIN(repo
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | レポートID |
-| variant_id | UUID | 分析対象バリエーションID (FK: variants) |
+| id | SERIAL | レポートID |
+| variant_id | INTEGER | 分析対象バリエーションID (FK: variants) |
 | overall_score | INTEGER | 総合スコア（0-100） |
 | report_data | JSONB | レポート全内容（下記構造参照） |
 | analyzed_at | TIMESTAMPTZ | 分析実行日時 |

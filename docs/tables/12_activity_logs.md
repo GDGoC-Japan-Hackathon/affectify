@@ -6,10 +6,10 @@
 
 ```sql
 CREATE TABLE activity_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-  team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
   action_type VARCHAR(100) NOT NULL,
   action_description TEXT,
   metadata JSONB,
@@ -30,10 +30,10 @@ CREATE INDEX idx_activity_logs_created_at ON activity_logs(created_at DESC);
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | ログID |
-| user_id | UUID | アクション実行者 (FK: users) |
-| project_id | UUID | 関連プロジェクトID (FK: projects) |
-| team_id | UUID | 関連チームID (FK: teams) |
+| id | SERIAL | ログID |
+| user_id | INTEGER | アクション実行者 (FK: users) |
+| project_id | INTEGER | 関連プロジェクトID (FK: projects) |
+| team_id | INTEGER | 関連チームID (FK: teams) |
 | action_type | VARCHAR(100) | アクション種別 |
 | action_description | TEXT | アクション説明（表示用） |
 | metadata | JSONB | 追加情報 |

@@ -6,8 +6,8 @@
 
 ```sql
 CREATE TABLE nodes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  variant_id UUID NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  variant_id INTEGER NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
   kind VARCHAR(50) NOT NULL,
   title VARCHAR(255) NOT NULL,
   file_path TEXT,
@@ -34,8 +34,8 @@ CREATE INDEX idx_nodes_title ON nodes(title);
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | ノードID |
-| variant_id | UUID | 所属バリエーションID (FK: variants) |
+| id | SERIAL | ノードID |
+| variant_id | INTEGER | 所属バリエーションID (FK: variants) |
 | kind | VARCHAR(50) | ノード種別: `function`, `method`, `interface`, `group`, `note`, `image` |
 | title | VARCHAR(255) | ノード名（関数名、クラス名など） |
 | file_path | TEXT | ファイルパス |

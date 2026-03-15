@@ -6,14 +6,13 @@
 
 ```sql
 CREATE TABLE design_guides (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   content TEXT NOT NULL,
   visibility VARCHAR(20) NOT NULL CHECK (visibility IN ('private', 'team', 'public')),
-  created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
-  tags TEXT[] DEFAULT '{}',
+  created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -25,21 +24,19 @@ CREATE TABLE design_guides (
 CREATE INDEX idx_design_guides_created_by ON design_guides(created_by);
 CREATE INDEX idx_design_guides_team_id ON design_guides(team_id);
 CREATE INDEX idx_design_guides_visibility ON design_guides(visibility);
-CREATE INDEX idx_design_guides_tags ON design_guides USING GIN(tags);
 ```
 
 ## フィールド説明
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| id | UUID | 設計書ID |
+| id | SERIAL | 設計書ID |
 | name | VARCHAR(255) | 設計書名 |
 | description | TEXT | 説明 |
 | content | TEXT | マークダウン形式の設計書本文 |
 | visibility | VARCHAR(20) | 公開範囲: `private`, `team`, `public` |
-| created_by | UUID | 作成者 (FK: users) |
-| team_id | UUID | チームID、team visibilityの場合 (FK: teams) |
-| tags | TEXT[] | タグ（例: DDD, Clean Architecture, SOLID） |
+| created_by | INTEGER | 作成者 (FK: users) |
+| team_id | INTEGER | チームID、team visibilityの場合 (FK: teams) |
 | created_at | TIMESTAMPTZ | 作成日時 |
 | updated_at | TIMESTAMPTZ | 最終更新日時 |
 
@@ -55,7 +52,6 @@ SELECT
   dg.description,
   dg.visibility,
   dg.created_by,
-  dg.tags,
   dg.created_at,
   dg.updated_at,
   COUNT(DISTINCT dgl.user_id) AS like_count
