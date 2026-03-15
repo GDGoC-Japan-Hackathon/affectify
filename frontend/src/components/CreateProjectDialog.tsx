@@ -24,7 +24,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { mockTeams } from '@/data/mockData';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import type { ProjectVisibility } from '@/types';
+import type { ProjectVisibility } from '@/types/type';
 import { toast } from 'sonner';
 
 interface CreateProjectDialogProps {

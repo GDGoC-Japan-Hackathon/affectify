@@ -7,7 +7,7 @@ import { DesignDocViewer } from '@/components/features/design-guide/DesignDocVie
 import { mockProjects, mockTeams, mockUser } from '@/data/mockData';
 import { mockAnalysisReports } from '@/data/mockDesignDocs';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import { Variant } from '@/types';
+import { Variant } from '@/types/type';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

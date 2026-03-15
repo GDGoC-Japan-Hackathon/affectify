@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import { DesignGuide } from '@/types';
+import { DesignGuide } from '@/types/type';
 import {
   Globe,
   Search,

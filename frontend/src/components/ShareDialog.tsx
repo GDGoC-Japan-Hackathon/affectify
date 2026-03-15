@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Project, ProjectVisibility } from '@/types';
+import { Project, ProjectVisibility } from '@/types/type';
 import {
   Dialog,
   DialogContent,

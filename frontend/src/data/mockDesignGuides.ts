@@ -1,4 +1,4 @@
-import { DesignGuide } from '@/types';
+import { DesignGuide } from '@/types/type';
 
 export const mockDesignGuides: DesignGuide[] = [
   {

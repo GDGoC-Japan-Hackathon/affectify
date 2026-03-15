@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { ProjectCard } from '@/components/features/project/ProjectCard';
 import { mockProjects, mockUser } from '@/data/mockData';
-import { Project } from '@/types';
+import { Project } from '@/types/type';
 import { Button } from '@/components/ui/button';
 import {
   LayoutGrid,
