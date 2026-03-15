@@ -1,0 +1,8 @@
+.git
+.gitignore
+.env
+tmp
+bin
+coverage
+gen
+node_modules
