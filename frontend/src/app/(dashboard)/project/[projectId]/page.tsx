@@ -123,9 +123,9 @@ export default function ProjectDetail() {
               <div className="flex items-center">
                 <div className="flex -space-x-2">
                   {members.slice(0, 3).map((memberId, i) => (
-                    <Avatar key={memberId} className="w-8 h-8 border-2 border-white" style={{ zIndex: 3 - i }}>
+                    <Avatar key={memberId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
                       <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${memberId}`} />
-                      <AvatarFallback className="text-xs">{memberId.slice(-1)}</AvatarFallback>
+                      <AvatarFallback className="text-xs bg-gray-200">{memberId.slice(-1)}</AvatarFallback>
                     </Avatar>
                   ))}
                 </div>
