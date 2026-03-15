@@ -110,7 +110,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       );
       if (isExpanded) {
         setTimeout(() => {
-          fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 300 });
+          fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 300 });
         }, 50);
       }
     },
