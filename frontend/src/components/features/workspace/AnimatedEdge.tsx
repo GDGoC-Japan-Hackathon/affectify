@@ -28,22 +28,22 @@ export function AnimatedEdge({
 
       {/* 流れる点のアニメーション */}
       <circle r="3" fill={(style.stroke as string) || "#94a3b8"}>
-        <animateMotion dur="2s" repeatCount="indefinite" path={edgePath} />
+        <animateMotion dur="4s" repeatCount="indefinite" path={edgePath} />
       </circle>
       <circle r="3" fill={(style.stroke as string) || "#94a3b8"}>
         <animateMotion
-          dur="2s"
+          dur="4s"
           repeatCount="indefinite"
           path={edgePath}
-          begin="0.5s"
+          begin="1.3s"
         />
       </circle>
       <circle r="3" fill={(style.stroke as string) || "#94a3b8"}>
         <animateMotion
-          dur="2s"
+          dur="4s"
           repeatCount="indefinite"
           path={edgePath}
-          begin="1s"
+          begin="2.6s"
         />
       </circle>
     </>

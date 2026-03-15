@@ -1,9 +1,9 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useState, useCallback } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { Card, CardContent, Chip, Typography, Box, Collapse } from "@mui/material";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Card, CardContent, Chip, Typography, Box, Collapse, Button } from "@mui/material";
+import { ChevronDown, ChevronRight, Pencil, Eye } from "lucide-react";
 import type { BoardNode } from "@/types/type";
 import { nodeColors } from "@/lib/node-colors";
 
@@ -12,8 +12,19 @@ type CodeCardNode = Node<BoardNode & Record<string, unknown>, "codeCard">;
 function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   const colors = nodeColors[data.kind];
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [code, setCode] = useState(data.code_text ?? "");
   const highlighted = (data as Record<string, unknown>).highlighted;
-  const codeLines = data.code_text?.split("\n") ?? [];
+  const onCodeChange = (data as Record<string, unknown>).onCodeChange as
+    | ((nodeId: string, code: string) => void)
+    | undefined;
+
+  const codeLines = code.split("\n");
+
+  const handleSave = useCallback(() => {
+    onCodeChange?.(data.id, code);
+    setEditing(false);
+  }, [data.id, code, onCodeChange]);
 
   return (
     <>
@@ -21,7 +32,8 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
       <Card
         sx={{
           minWidth: 220,
-          maxWidth: expanded ? 600 : 280,
+          maxWidth: expanded ? "none" : 280,
+          width: expanded ? 500 : undefined,
           backgroundColor: colors.bg,
           border: `2px solid ${highlighted ? "#facc15" : colors.border}`,
           cursor: "pointer",
@@ -74,53 +86,97 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
           )}
         </CardContent>
 
-        {/* 展開部分（コード表示） */}
+        {/* 展開部分（コード表示/編集） */}
         <Collapse in={expanded}>
           <Box
-            sx={{
-              borderTop: `1px solid ${colors.border}`,
-              maxHeight: 300,
-              overflow: "auto",
-            }}
-            className="nowheel nodrag"
-            onWheel={(e) => e.stopPropagation()}
+            sx={{ borderTop: `1px solid ${colors.border}` }}
           >
-            <Box sx={{ display: "flex", fontFamily: "monospace", fontSize: 12 }}>
-              {/* 行番号 */}
-              <Box
-                sx={{
-                  px: 1,
-                  py: 1,
-                  backgroundColor: "rgba(0,0,0,0.04)",
-                  color: "grey.500",
-                  userSelect: "none",
-                  borderRight: "1px solid",
-                  borderColor: "grey.200",
-                  textAlign: "right",
+            {/* 表示/編集切り替えボタン */}
+            <Box sx={{ display: "flex", justifyContent: "flex-end", px: 1, pt: 0.5 }}>
+              <Button
+                size="small"
+                startIcon={editing ? <Eye size={14} /> : <Pencil size={14} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (editing) handleSave();
+                  else setEditing(true);
                 }}
+                sx={{ fontSize: 11, textTransform: "none" }}
               >
-                {codeLines.map((_, i) => (
-                  <Box key={i} sx={{ lineHeight: "20px" }}>
-                    {i + 1}
-                  </Box>
-                ))}
-              </Box>
-              {/* コード */}
-              <Box
-                component="pre"
-                sx={{
-                  flex: 1,
-                  px: 1.5,
-                  py: 1,
-                  m: 0,
-                  overflowX: "auto",
-                  lineHeight: "20px",
-                  whiteSpace: "pre",
-                }}
-              >
-                <code>{data.code_text}</code>
-              </Box>
+                {editing ? "保存" : "編集"}
+              </Button>
             </Box>
+
+            {editing ? (
+              /* 編集モード */
+              <Box
+                className="nowheel nodrag"
+                onWheel={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                sx={{ px: 1, pb: 1 }}
+              >
+                <textarea
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  style={{
+                    width: "100%",
+                    minWidth: 300,
+                    minHeight: 200,
+                    fontFamily: "monospace",
+                    fontSize: 12,
+                    lineHeight: "20px",
+                    padding: 8,
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 4,
+                    resize: "both",
+                    outline: "none",
+                    overflow: "auto",
+                  }}
+                />
+              </Box>
+            ) : (
+              /* 表示モード */
+              <Box
+                sx={{ maxHeight: 300, overflow: "auto" }}
+                className="nowheel nodrag"
+                onWheel={(e) => e.stopPropagation()}
+              >
+                <Box sx={{ display: "flex", fontFamily: "monospace", fontSize: 12 }}>
+                  <Box
+                    sx={{
+                      px: 1,
+                      py: 1,
+                      backgroundColor: "rgba(0,0,0,0.04)",
+                      color: "grey.500",
+                      userSelect: "none",
+                      borderRight: "1px solid",
+                      borderColor: "grey.200",
+                      textAlign: "right",
+                    }}
+                  >
+                    {codeLines.map((_, i) => (
+                      <Box key={i} sx={{ lineHeight: "20px" }}>
+                        {i + 1}
+                      </Box>
+                    ))}
+                  </Box>
+                  <Box
+                    component="pre"
+                    sx={{
+                      flex: 1,
+                      px: 1.5,
+                      py: 1,
+                      m: 0,
+                      overflowX: "auto",
+                      lineHeight: "20px",
+                      whiteSpace: "pre",
+                    }}
+                  >
+                    <code>{code}</code>
+                  </Box>
+                </Box>
+              </Box>
+            )}
           </Box>
         </Collapse>
       </Card>

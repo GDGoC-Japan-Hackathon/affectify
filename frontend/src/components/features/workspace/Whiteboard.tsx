@@ -85,6 +85,30 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const [openFiles, setOpenFiles] = useState<string[]>([]);
 
+  // コード編集時にノードデータを更新
+  const handleCodeChange = useCallback(
+    (nodeId: string, code: string) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...n.data, code_text: code, onCodeChange: handleCodeChange } }
+            : n
+        )
+      );
+    },
+    [setNodes]
+  );
+
+  // onCodeChange をノードデータに注入
+  const nodesWithCallbacks = useMemo(
+    () =>
+      nodes.map((n) => ({
+        ...n,
+        data: { ...n.data, onCodeChange: handleCodeChange },
+      })),
+    [nodes, handleCodeChange]
+  );
+
   // ハイライト状態を setNodes で直接更新
   const handleNodeHover = useCallback(
     (nodeId: string | null) => {
@@ -147,7 +171,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       </button>
 
       <ReactFlow
-        nodes={nodes}
+        nodes={nodesWithCallbacks}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -180,15 +204,21 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       />
 
       {/* ファイル全体表示ウィンドウ（複数同時表示） */}
-      {openFiles.map((fp) => (
+      {openFiles.map((fp, i) => (
         <CodeViewerWindow
           key={fp}
           filePath={fp}
-          nodes={boardNodes.filter((n) => n.file_path === fp)}
+          nodes={nodes
+            .map((n) => n.data as unknown as BoardNode)
+            .filter((n) => n.file_path === fp)}
+          index={i}
           onClose={() =>
             setOpenFiles((prev) => prev.filter((f) => f !== fp))
           }
           onNodeHover={handleNodeHover}
+          onNodeClick={(nodeId) =>
+            fitView({ nodes: [{ id: nodeId }], padding: 0.5, duration: 500 })
+          }
         />
       ))}
     </div>

@@ -7,15 +7,19 @@ import type { BoardNode } from "@/types/type";
 interface CodeViewerWindowProps {
   filePath: string;
   nodes: BoardNode[];
+  index?: number;
   onClose: () => void;
   onNodeHover?: (nodeId: string | null) => void;
+  onNodeClick?: (nodeId: string) => void;
 }
 
 export function CodeViewerWindow({
   filePath,
   nodes,
+  index = 0,
   onClose,
   onNodeHover,
+  onNodeClick,
 }: CodeViewerWindowProps) {
   const [copied, setCopied] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -27,10 +31,14 @@ export function CodeViewerWindow({
   const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
   const headerRef = useRef<HTMLDivElement>(null);
 
-  // 初期位置をウィンドウ右寄りに設定
+  // 初期位置をウィンドウ右寄り + indexでずらす
   useEffect(() => {
-    setPosition({ x: Math.max(100, window.innerWidth - 600), y: 80 });
-  }, []);
+    const offset = index * 30;
+    setPosition({
+      x: Math.max(100, window.innerWidth - 600 - offset),
+      y: 80 + offset,
+    });
+  }, [index]);
 
   // ファイル内の全ノードのコードを結合しつつ、各行がどのノードに属するか記録
   const codeLines: string[] = [];
@@ -207,6 +215,7 @@ export function CodeViewerWindow({
                     }`}
                     onMouseEnter={() => node && onNodeHover?.(node.id)}
                     onMouseLeave={() => node && onNodeHover?.(null)}
+                    onClick={() => node && onNodeClick?.(node.id)}
                   >
                     <code>{line || " "}</code>
                   </div>
