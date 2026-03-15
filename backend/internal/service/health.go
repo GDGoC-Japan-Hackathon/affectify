@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/siraiyuto/affectify/backend/internal/entity"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/entity"
 )
 
 type HealthService struct{}

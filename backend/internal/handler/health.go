@@ -5,8 +5,8 @@ import (
 
 	connect "connectrpc.com/connect"
 
-	apiv1 "github.com/siraiyuto/affectify/backend/gen/api/v1"
-	"github.com/siraiyuto/affectify/backend/internal/service"
+	apiv1 "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/service"
 )
 
 type HealthServiceHandler struct {
