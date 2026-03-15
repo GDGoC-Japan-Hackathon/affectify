@@ -147,7 +147,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   );
 
   const miniMapNodeColor = useCallback((node: Node) => {
-    const kind = (node.data as unknown as BoardNode)?.kind;
+    const data = node.data as unknown as BoardNode & Record<string, unknown>;
+    if (data.highlighted) return "#facc15";
     const colorMap: Record<string, string> = {
       function: "#3b82f6",
       method: "#10b981",
@@ -156,7 +157,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       note: "#eab308",
       image: "#ec4899",
     };
-    return colorMap[kind] ?? "#94a3b8";
+    return colorMap[data.kind] ?? "#94a3b8";
   }, []);
 
   return (
