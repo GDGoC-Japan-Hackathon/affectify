@@ -1,6 +1,6 @@
 # Projects
 
-プロジェクトのメタ情報を管理。個人所有モデル。
+プロジェクトのメタ情報を管理。個人所有モデル。メンバー管理は `project_members` テーブルで行う。
 
 ## テーブル定義
 
@@ -33,20 +33,30 @@ CREATE INDEX idx_projects_updated_at ON projects(updated_at DESC);
 | created_at | TIMESTAMPTZ | 作成日時 |
 | updated_at | TIMESTAMPTZ | 最終更新日時 |
 
+## フロントエンド型との対応
+
+フロントエンドの `Project` 型では以下のフィールドが計算値として含まれる:
+
+| フロントエンド | 取得元 |
+|--------------|--------|
+| `nodeCount` | `variants` のメインバリアントの `nodeCount` から取得 |
+| `analysisScore` | `analysis_reports` テーブルから最新のスコアを取得 |
+| `variants` | `variants` テーブルから `project_id` で取得 |
+| `members` | `project_members` テーブルから `project_id` で `user_id` の配列を取得 |
+
 ## RLS ポリシー
 
 ```sql
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 
--- 閲覧: オーナーまたは共有チームのメンバー
+-- 閲覧: オーナーまたはメンバー
 CREATE POLICY projects_select_policy ON projects
   FOR SELECT USING (
     auth.uid() = owner_id
     OR EXISTS (
-      SELECT 1 FROM project_shares ps
-      JOIN team_members tm ON tm.team_id = ps.team_id
-      WHERE ps.project_id = projects.id
-        AND tm.user_id = auth.uid()
+      SELECT 1 FROM project_members pm
+      WHERE pm.project_id = projects.id
+        AND pm.user_id = auth.uid()
     )
   );
 
