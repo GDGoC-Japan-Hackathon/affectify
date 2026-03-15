@@ -124,7 +124,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         ...n,
         data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand },
       })),
-    [nodes, handleCodeChange]
+    [nodes, handleCodeChange, handleExpand]
   );
 
   // ハイライト状態を setNodes で直接更新
