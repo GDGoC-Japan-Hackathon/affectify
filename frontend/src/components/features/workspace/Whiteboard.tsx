@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
   ReactFlow,
   Background,
@@ -10,15 +10,14 @@ import {
   useEdgesState,
   type Node,
   type Edge,
-  type NodeMouseHandler,
   type NodeTypes,
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
-import { CodeCard } from "./CodeCard";
-import { CodeModal } from "./CodeModal";
+import { FunctionNodeCard } from "./FunctionNodeCard";
+import { AnimatedEdge } from "./AnimatedEdge";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -26,13 +25,17 @@ interface WhiteboardProps {
 }
 
 const nodeTypes: NodeTypes = {
-  codeCard: CodeCard,
+  functionNodeCard: FunctionNodeCard,
+};
+
+const edgeTypes = {
+  animatedEdge: AnimatedEdge,
 };
 
 function toFlowNodes(boardNodes: BoardNode[]): Node[] {
   return boardNodes.map((n) => ({
     id: n.id,
-    type: "codeCard",
+    type: "functionNodeCard",
     position: { x: n.x, y: n.y },
     data: { ...n },
   }));
@@ -52,6 +55,7 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
       id: e.id,
       source: e.from_node_id,
       target: e.to_node_id,
+      type: "animatedEdge",
       style: {
         strokeDasharray: e.style === "dashed" ? "6 3" : undefined,
         stroke: edgeColors[e.kind] ?? "#94a3b8",
@@ -73,32 +77,6 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
   const [nodes, , onNodesChange] = useNodesState(initialNodes);
   const [edges, , onEdgesChange] = useEdgesState(initialEdges);
 
-  const [selectedNode, setSelectedNode] = useState<BoardNode | null>(null);
-
-  const onNodeDoubleClick: NodeMouseHandler = useCallback((_, node) => {
-    setSelectedNode(node.data as unknown as BoardNode);
-  }, []);
-
-  const onCodeChange = useCallback(
-    (nodeId: string, code: string) => {
-      setSelectedNode((prev) => (prev && prev.id === nodeId ? { ...prev, code_text: code } : prev));
-      onNodesChange([
-        {
-          type: "replace",
-          id: nodeId,
-          item: {
-            ...nodes.find((n) => n.id === nodeId)!,
-            data: {
-              ...nodes.find((n) => n.id === nodeId)!.data,
-              code_text: code,
-            },
-          },
-        },
-      ]);
-    },
-    [nodes, onNodesChange],
-  );
-
   const miniMapNodeColor = useCallback((node: Node) => {
     const kind = (node.data as unknown as BoardNode)?.kind;
     const colorMap: Record<string, string> = {
@@ -119,8 +97,8 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeDoubleClick={onNodeDoubleClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}
@@ -131,12 +109,6 @@ export function Whiteboard({ boardNodes, boardEdges }: WhiteboardProps) {
         <Controls />
         <MiniMap nodeColor={miniMapNodeColor} maskColor="rgba(0,0,0,0.08)" pannable zoomable />
       </ReactFlow>
-
-      <CodeModal
-        node={selectedNode}
-        onClose={() => setSelectedNode(null)}
-        onCodeChange={onCodeChange}
-      />
     </div>
   );
 }
