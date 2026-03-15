@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { mockProjects, mockUser } from '@/data/mockData';
+import { mockProjects, mockUser, mockUsers } from '@/data/mockData';
 import { Variant } from '@/types/type';
 import { CreateBranchDialog } from '@/components/features/project/CreateBranchDialog';
 import { BranchCard, getScoreColor } from '@/components/features/project/BranchCard';
@@ -122,12 +122,15 @@ export default function ProjectDetail() {
               {/* Member Avatars */}
               <div className="flex items-center">
                 <div className="flex -space-x-2">
-                  {members.slice(0, 3).map((memberId, i) => (
-                    <Avatar key={memberId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
-                      <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${memberId}`} />
-                      <AvatarFallback className="text-xs bg-gray-200">{memberId.slice(-1)}</AvatarFallback>
-                    </Avatar>
-                  ))}
+                  {members.slice(0, 3).map((memberId, i) => {
+                    const user = mockUsers.find((u) => u.id === memberId);
+                    return (
+                      <Avatar key={memberId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
+                        <AvatarImage src={user?.avatar} />
+                        <AvatarFallback className="text-xs bg-gray-200">{user?.name?.[0] ?? '?'}</AvatarFallback>
+                      </Avatar>
+                    );
+                  })}
                 </div>
                 {members.length > 3 && (
                   <span className="ml-2 text-sm text-gray-500">
