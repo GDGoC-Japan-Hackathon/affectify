@@ -111,21 +111,6 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
             className="overflow-hidden border-t"
             style={{ borderColor: colors.border }}
           >
-            {/* 変更があるときだけ保存ボタン */}
-            {code !== (data.code_text ?? "") && (
-              <div className="flex justify-end px-2 pt-1">
-                <button
-                  className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 transition-colors px-2 py-1 rounded hover:bg-green-50 font-medium"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSave();
-                  }}
-                >
-                  保存
-                </button>
-              </div>
-            )}
-
             {/* コードエディタ（常にMonaco） */}
             <div
               className="nowheel nodrag"
@@ -150,6 +135,21 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
                 }}
               />
             </div>
+
+            {/* 変更があるときだけ保存ボタン（右下） */}
+            {code !== (data.code_text ?? "") && (
+              <div className="flex justify-end px-3 py-2">
+                <button
+                  className="text-sm text-white bg-green-500 hover:bg-green-600 transition-colors px-4 py-1.5 rounded-md font-medium shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSave();
+                  }}
+                >
+                  保存
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
