@@ -2,15 +2,13 @@
 
 import { ReactNode, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
   Folder,
   Users,
-  Settings,
   Search,
   Plus,
-  Bell,
   LogOut,
   ChevronDown,
   BookOpen,
@@ -21,22 +19,25 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { mockUser } from '@/data/mockData';
 import { CreateProjectDialog } from '@/components/CreateProjectDialog';
+import { useAuth } from '@/lib/auth';
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false);
+  const { signOut, user } = useAuth();
 
   const personalNavigation = [
     { name: 'ホーム', href: '/', icon: Home },
@@ -45,14 +46,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: '設計書ライブラリ', href: '/design-guides', icon: BookOpen },
   ];
 
-  const settingsNavigation = [
-    { name: '設定', href: '/settings', icon: Settings },
-  ];
-
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
     return pathname.startsWith(path);
   };
+
+  const displayName = user?.displayName ?? user?.email ?? "User";
+  const avatarURL = user?.photoURL ?? undefined;
+  const email = user?.email ?? "";
 
   return (
     <div className="h-screen flex bg-gray-50">
@@ -62,9 +63,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">CD</span>
+              <span className="text-white font-bold text-sm">WC</span>
             </div>
-            <span className="font-semibold text-gray-900">CodeDesign</span>
+            <span className="font-semibold text-gray-900">WhiteCoder</span>
           </div>
         </div>
 
@@ -95,71 +96,55 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             })}
           </div>
 
-          {/* Separator */}
-          <div className="my-4 border-t border-gray-200" />
-
-          {/* Settings Navigation */}
-          <div className="space-y-1">
-            {settingsNavigation.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`
-                    flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                    ${
-                      active
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }
-                  `}
-                >
-                  <Icon className="w-5 h-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </div>
         </nav>
 
         {/* User Profile */}
         <div className="p-3 border-t border-gray-200">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 transition-colors hover:bg-gray-50">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              onClick={() => {
+                router.push("/settings");
+              }}
+            >
                 <Avatar className="w-8 h-8">
-                  <AvatarImage src={mockUser.avatar} />
-                  <AvatarFallback>{mockUser.name[0]}</AvatarFallback>
+                  <AvatarImage src={avatarURL} />
+                  <AvatarFallback>{displayName[0]}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-left min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">
-                    {mockUser.name}
+                    {displayName}
                   </div>
                   <div className="text-xs text-gray-500 truncate">
-                    {mockUser.email}
+                    {email}
                   </div>
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>アカウント</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <Settings className="w-4 h-4 mr-2" />
-                設定
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell className="w-4 h-4 mr-2" />
-                通知
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600">
-                <LogOut className="w-4 h-4 mr-2" />
-                ログアウト
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
+                <ChevronDown className="w-4 h-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>アカウント</DropdownMenuLabel>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    className="text-red-600"
+                    onClick={async () => {
+                      await signOut();
+                      router.replace("/login");
+                    }}
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    ログアウト
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </aside>
 
@@ -181,11 +166,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-            </Button>
-
             <Button className="gap-2" onClick={() => setShowCreateProjectDialog(true)}>
               <Plus className="w-4 h-4" />
               新規プロジェクト
