@@ -1,20 +1,16 @@
 "use client";
 
-import { ReactNode, useState } from 'react';
+import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
   Folder,
   Users,
-  Search,
-  Plus,
   LogOut,
   ChevronDown,
   BookOpen,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -25,7 +21,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { CreateProjectDialog } from '@/components/CreateProjectDialog';
 import { useAuth } from '@/lib/auth';
 
 interface DashboardLayoutProps {
@@ -35,8 +30,6 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false);
   const { signOut, user } = useAuth();
 
   const personalNavigation = [
@@ -122,7 +115,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </div>
             </button>
             <DropdownMenu>
-              <DropdownMenuTrigger className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
+              <DropdownMenuTrigger className="rounded-md p-1 text-gray-400 transition-colors hover:bg-100 hover:text-gray-600">
                 <ChevronDown className="w-4 h-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -150,40 +143,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-          <div className="flex-1 max-w-xl">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="プロジェクトを検索..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-gray-50 border-gray-200"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button className="gap-2" onClick={() => setShowCreateProjectDialog(true)}>
-              <Plus className="w-4 h-4" />
-              新規プロジェクト
-            </Button>
-          </div>
-        </header>
-
         {/* Page Content */}
         <main className="flex-1 overflow-auto">
           {children}
         </main>
       </div>
-
-      {/* Create Project Dialog */}
-      <CreateProjectDialog
-        open={showCreateProjectDialog}
-        onOpenChange={setShowCreateProjectDialog}
-      />
     </div>
   );
 }
