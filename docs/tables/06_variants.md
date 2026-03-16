@@ -59,12 +59,16 @@ CREATE POLICY variants_select_policy ON variants
         AND (
           p.owner_id = auth.uid()
           OR EXISTS (
-            SELECT 1 FROM project_shares ps
-            JOIN team_members tm ON tm.team_id = ps.team_id
-            WHERE ps.project_id = p.id
-              AND tm.user_id = auth.uid()
+            SELECT 1 FROM project_members pm
+            WHERE pm.project_id = p.id
+              AND pm.user_id = auth.uid()
           )
         )
     )
   );
 ```
+
+## 設計メモ
+
+- アクセス制御は親プロジェクトの権限に従う
+- 共有は `project_members` で管理し、`teams` や `project_shares` は使わない
