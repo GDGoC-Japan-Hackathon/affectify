@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 
+	connect "connectrpc.com/connect"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1/apiv1connect"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/auth"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/config"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/handler"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/handler/middleware"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/postgres"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/service"
 )
@@ -36,12 +41,24 @@ func main() {
 		log.Fatal(err)
 	}
 
+	verifier, err := auth.NewVerifier(context.Background(), config.LoadFirebaseConfig())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	interceptors := connect.WithInterceptors(auth.NewInterceptor(verifier))
+
+	userRepository := repository.NewUserRepository(db)
 	healthService := service.NewHealthService()
+	userService := service.NewUserService(userRepository)
 	healthHandler := handler.NewHealthServiceHandler(healthService)
+	userHandler := handler.NewUserServiceHandler(userService)
 
 	mux := http.NewServeMux()
-	path, h := apiv1connect.NewHealthServiceHandler(healthHandler)
-	mux.Handle(path, h)
+	healthPath, healthHTTPHandler := apiv1connect.NewHealthServiceHandler(healthHandler, interceptors)
+	mux.Handle(healthPath, healthHTTPHandler)
+	userPath, userHTTPHandler := apiv1connect.NewUserServiceHandler(userHandler, interceptors)
+	mux.Handle(userPath, userHTTPHandler)
 
 	port := config.GetEnv("APP_PORT", "8080")
 	addr := ":" + port
@@ -50,6 +67,6 @@ func main() {
 	fmt.Printf("database target: %s:%s\n", dbConfig.Host, dbConfig.Port)
 	log.Fatal(http.ListenAndServe(
 		addr,
-		h2c.NewHandler(mux, &http2.Server{}),
+		h2c.NewHandler(middleware.WithCORS(mux), &http2.Server{}),
 	))
 }
