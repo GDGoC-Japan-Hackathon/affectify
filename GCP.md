@@ -1,6 +1,6 @@
 # GCP Deployment Plan
 
-このドキュメントは、`affectify` を Google Cloud / Firebase 上にどのように配置するかをまとめたものです。
+このドキュメントは、`WhiteCoder` を Google Cloud / Firebase 上にどのように配置するかをまとめたものです。
 
 ## Goal
 
