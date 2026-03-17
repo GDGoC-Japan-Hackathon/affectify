@@ -368,14 +368,30 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         </button>
       </div>
 
-      <ReactFlow nodes={nodesWithCallbacks} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeMouseEnter={(_, node) => handleNodeHover(node.id)} onNodeMouseLeave={() => handleNodeHover(null)} onNodeDragStart={(_, node) => bringToFront(node.id)} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }} onInit={() => {
+      <ReactFlow
+        nodes={nodesWithCallbacks}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeMouseEnter={(_, node) => handleNodeHover(node.id)}
+        onNodeMouseLeave={() => handleNodeHover(null)}
+        onNodeDragStart={(_, node) => bringToFront(node.id)}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.1}
+        maxZoom={2}
+        proOptions={{ hideAttribution: true }}
+        onInit={() => {
           if (hasAutoLayoutedRef.current) return;
           const allAtOrigin = nodes.every((n) => n.position.x === 0 && n.position.y === 0);
           if (allAtOrigin && nodes.length > 1) {
             hasAutoLayoutedRef.current = true;
             setTimeout(() => handleAutoLayout(), 150);
           }
-        }}>
+        }}
+      >
         <Background gap={20} size={1} />
         <Controls />
         <MiniMap nodeColor={miniMapNodeColor} maskColor="rgba(0,0,0,0.08)" pannable zoomable />

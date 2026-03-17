@@ -102,8 +102,7 @@ export const mockNodes: BoardNode[] = [
     receiver: "",
     x: 800,
     y: 150,
-    code_text:
-      "This package handles parsing Go source files and extracting function/method call graphs.",
+    code_text: "This package handles parsing Go source files and extracting function/method call graphs.",
   },
 ];
 
@@ -116,7 +115,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "cmd/server/main.go",
     signature: "func()",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func main() {
 \tlog.Println("starting server...")
 \tif err := boot.Run(); err != nil {
@@ -131,7 +131,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/boot/run.go",
     signature: "func Run() error",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func Run() error {
 \tcfg, err := loadConfig()
 \tif err != nil {
@@ -154,7 +155,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/boot/config.go",
     signature: "func loadConfig() (*Config, error)",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func loadConfig() (*Config, error) {
 \tpath := os.Getenv("CONFIG_PATH")
 \tif path == "" {
@@ -181,7 +183,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/boot/db.go",
     signature: "func initDB(cfg DatabaseConfig) (*sql.DB, error)",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func initDB(cfg DatabaseConfig) (*sql.DB, error) {
 \tdsn := fmt.Sprintf(
 \t\t"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
@@ -211,7 +214,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/http/server.go",
     signature: "func startHTTP(cfg ServerConfig, db *sql.DB) error",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func startHTTP(cfg ServerConfig, db *sql.DB) error {
 \tmux := http.NewServeMux()
 \tregisterRoutes(mux, db)
@@ -238,7 +242,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/http/routes.go",
     signature: "func registerRoutes(mux *http.ServeMux, db *sql.DB)",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func registerRoutes(mux *http.ServeMux, db *sql.DB) {
 \trepo := repository.NewUserRepository(db)
 \tsvc := service.NewUserService(repo)
@@ -260,7 +265,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/handler/user.go",
     signature: "func(w http.ResponseWriter, r *http.Request)",
     receiver: "UserHandler",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 \tid := r.PathValue("id")
 \tif id == "" {
@@ -289,7 +295,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/handler/user.go",
     signature: "func(w http.ResponseWriter, r *http.Request)",
     receiver: "UserHandler",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 \tvar input CreateUserInput
 \tif err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -321,7 +328,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/service/user.go",
     signature: "func(ctx context.Context, id string) (*User, error)",
     receiver: "UserService",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func (s *UserService) GetUser(ctx context.Context, id string) (*User, error) {
 \tif id == "" {
 \t\treturn nil, ErrInvalidID
@@ -350,7 +358,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/service/user.go",
     signature: "func(ctx context.Context, in CreateUserInput) (*User, error)",
     receiver: "UserService",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func (s *UserService) CreateUser(ctx context.Context, in CreateUserInput) (*User, error) {
 \tif err := in.Validate(); err != nil {
 \t\treturn nil, fmt.Errorf("validate: %w", err)
@@ -374,7 +383,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/repository/user.go",
     signature: "func(ctx context.Context, id string) (*User, error)",
     receiver: "UserRepository",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func (r *UserRepository) FindByID(ctx context.Context, id string) (*User, error) {
 \tconst q = \`
 \t\tSELECT id, name, email, created_at
@@ -411,7 +421,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/repository/user.go",
     signature: "func(ctx context.Context, u *User) (*User, error)",
     receiver: "UserRepository",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func (r *UserRepository) Save(ctx context.Context, u *User) (*User, error) {
 \tconst q = \`
 \t\tINSERT INTO users (id, name, email, created_at)
@@ -438,7 +449,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/auth/token.go",
     signature: "func(token string) (Claims, error)",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func VerifyToken(tokenStr string) (Claims, error) {
 \ttoken, err := jwt.ParseWithClaims(
 \t\ttokenStr,
@@ -468,7 +480,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/handler/middleware/auth.go",
     signature: "func(next http.Handler) http.Handler",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func AuthMiddleware(next http.Handler) http.Handler {
 \treturn http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 \t\tauthorization := r.Header.Get("Authorization")
@@ -501,7 +514,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/analysis/run.go",
     signature: "func(ctx context.Context, code string) (Report, error)",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func RunAnalysis(ctx context.Context, code string) (Report, error) {
 \tkey := hashKey(code)
 
@@ -531,7 +545,8 @@ export const mockNodesLarge: BoardNode[] = [
     file_path: "internal/analysis/cache.go",
     signature: "func(key string) (Report, bool)",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `// reportCache はインメモリキャッシュ（TTL付き）
 var reportCache sync.Map
 
@@ -558,7 +573,8 @@ func GetReportCache(key string) (Report, bool) {
     file_path: "internal/analysis/cache.go",
     signature: "func(key string, report Report)",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func PutReportCache(key string, report Report) {
 \treportCache.Store(key, cacheEntry{
 \t\treport:   report,
@@ -583,7 +599,8 @@ func GetReportCache(key string) (Report, bool) {
     file_path: "internal/graph/build.go",
     signature: "func(nodes []Node, edges []Edge) Graph",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `func BuildGraph(nodes []Node, edges []Edge) Graph {
 \tadj := make(map[NodeID][]NodeID, len(nodes))
 \tradj := make(map[NodeID][]NodeID, len(nodes))
@@ -613,7 +630,8 @@ func GetReportCache(key string) (Report, bool) {
     file_path: "internal/graph/scc.go",
     signature: "func(g Graph) [][]NodeID",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `// FindSCC はKosarajuのアルゴリズムでSCCを列挙する
 func FindSCC(g Graph) [][]NodeID {
 \tvisited := make(map[NodeID]bool)
@@ -668,7 +686,8 @@ func FindSCC(g Graph) [][]NodeID {
     file_path: "internal/graph/topo.go",
     signature: "func(g Graph) []NodeID",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `// TopoSort はKahnのアルゴリズムでトポロジカルソートを行う。
 // 閉路がある場合は残ったノードをそのまま末尾に追加する。
 func TopoSort(g Graph) []NodeID {
@@ -712,7 +731,8 @@ func TopoSort(g Graph) []NodeID {
     file_path: "",
     signature: "",
     receiver: "",
-    x: 0, y: 0,
+    x: 0,
+    y: 0,
     code_text: `## アーキテクチャ概要
 
 このサービスは Clean Architecture に従い、

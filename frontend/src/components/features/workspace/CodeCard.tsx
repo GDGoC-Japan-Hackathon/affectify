@@ -68,7 +68,7 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
 
       {/* ヘッダー */}
       <div
-        className="p-3 flex items-start gap-2 cursor-pointer hover:bg-black/5 rounded-t-lg"
+        className="p-3.5 flex items-start gap-2 cursor-pointer hover:bg-black/5 rounded-t-lg"
         onClick={(e) => {
           e.stopPropagation();
           const next = !expanded;
@@ -79,19 +79,19 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
         <div className="shrink-0 pt-0.5">{expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Badge className="text-[10px] font-bold uppercase px-1.5 py-0 bg-transparent border" style={{ color: colors.badge, borderColor: colors.badge }}>
+          <div className="flex items-center gap-2 mb-0.5">
+            <Badge className="text-[11px] font-bold uppercase px-1.5 py-0 bg-transparent border" style={{ color: colors.badge, borderColor: colors.badge }}>
               {data.kind}
             </Badge>
-            {lineCount > 0 && <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">{lineCount} 行</Badge>}
-            {edgeCount > 0 && <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">依存 {edgeCount}</Badge>}
+            {lineCount > 0 && <Badge className="text-[11px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">{lineCount} 行</Badge>}
+            {edgeCount > 0 && <Badge className="text-[11px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">依存 {edgeCount}</Badge>}
           </div>
-          <h3 className="font-mono font-semibold truncate text-sm flex items-center gap-1.5">
+          <h3 className="font-mono font-bold text-base leading-tight flex items-start gap-1.5 whitespace-normal break-all">
             <span className="text-gray-500">{kindIcons[data.kind]}</span>
             {data.receiver ? `(${data.receiver}).` : ""}
             {data.title}
           </h3>
-          {data.file_path && <p className="text-xs text-gray-500 truncate">{data.file_path}</p>}
+          {data.file_path && <p className="text-sm leading-tight text-gray-500 truncate">{data.file_path}</p>}
         </div>
       </div>
 
