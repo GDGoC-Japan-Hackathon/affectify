@@ -142,6 +142,7 @@ terraform plan
 
 `plan` の内容を実際に GCP へ適用します。
 
+
 ```bash
 terraform apply
 ```
