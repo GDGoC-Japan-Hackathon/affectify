@@ -317,7 +317,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       const funcName = name || "newFunction";
       const refNode = afterNodeId ? nodes.find((n) => n.id === afterNodeId) : nodes.find((n) => (n.data as unknown as BoardNode).file_path === filePath);
       const x = refNode?.position.x ?? 100;
-      const y = refNode ? refNode.position.y + 250 : 100;
+      const y = refNode ? (afterNodeId ? refNode.position.y + 250 : refNode.position.y - 250) : 100;
       const newBoardNode: BoardNode = {
         id: newId,
         title: funcName,
@@ -331,7 +331,11 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       };
       setNodes((nds) => {
         const newNode = { id: newId, type: "codeCard" as const, position: { x, y }, data: { ...newBoardNode }, zIndex: 0 };
-        if (!afterNodeId) return [...nds, newNode];
+        if (!afterNodeId) {
+          const firstInFileIdx = nds.findIndex((n) => (n.data as unknown as BoardNode).file_path === filePath);
+          if (firstInFileIdx === -1) return [...nds, newNode];
+          return [...nds.slice(0, firstInFileIdx), newNode, ...nds.slice(firstInFileIdx)];
+        }
         const afterIdx = nds.findIndex((n) => n.id === afterNodeId);
         if (afterIdx === -1) return [...nds, newNode];
         return [...nds.slice(0, afterIdx + 1), newNode, ...nds.slice(afterIdx + 1)];
