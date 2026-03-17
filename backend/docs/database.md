@@ -88,18 +88,21 @@ cd backend && go run ./cmd/atlasschema
 ```
 
 Atlas migration 生成:
+生成される.sqlはgit管理すること
 
 ```bash
 cd backend && atlas migrate diff <migration_name> --env local
 ```
 
 Atlas migration 適用:
+この時はPostgresの起動が必要
 
 ```bash
 cd backend && atlas migrate apply --env local
 ```
 
 Cloud SQL へ migration 適用:
+CI/CDによって行われるので不要
 
 ```bash
 cd backend && DB_PASSWORD=... ./scripts/migrate-cloud-sql.sh

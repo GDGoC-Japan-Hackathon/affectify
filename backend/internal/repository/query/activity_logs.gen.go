@@ -31,7 +31,6 @@ func newActivityLog(db *gorm.DB, opts ...gen.DOOption) activityLog {
 	_activityLog.ID = field.NewInt64(tableName, "id")
 	_activityLog.UserID = field.NewInt64(tableName, "user_id")
 	_activityLog.ProjectID = field.NewInt64(tableName, "project_id")
-	_activityLog.TeamID = field.NewInt64(tableName, "team_id")
 	_activityLog.ActionType = field.NewString(tableName, "action_type")
 	_activityLog.ActionDescription = field.NewString(tableName, "action_description")
 	_activityLog.Metadata = field.NewField(tableName, "metadata")
@@ -49,7 +48,6 @@ type activityLog struct {
 	ID                field.Int64
 	UserID            field.Int64
 	ProjectID         field.Int64
-	TeamID            field.Int64
 	ActionType        field.String
 	ActionDescription field.String
 	Metadata          field.Field
@@ -73,7 +71,6 @@ func (a *activityLog) updateTableName(table string) *activityLog {
 	a.ID = field.NewInt64(table, "id")
 	a.UserID = field.NewInt64(table, "user_id")
 	a.ProjectID = field.NewInt64(table, "project_id")
-	a.TeamID = field.NewInt64(table, "team_id")
 	a.ActionType = field.NewString(table, "action_type")
 	a.ActionDescription = field.NewString(table, "action_description")
 	a.Metadata = field.NewField(table, "metadata")
@@ -104,11 +101,10 @@ func (a *activityLog) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (a *activityLog) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 8)
+	a.fieldMap = make(map[string]field.Expr, 7)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["user_id"] = a.UserID
 	a.fieldMap["project_id"] = a.ProjectID
-	a.fieldMap["team_id"] = a.TeamID
 	a.fieldMap["action_type"] = a.ActionType
 	a.fieldMap["action_description"] = a.ActionDescription
 	a.fieldMap["metadata"] = a.Metadata

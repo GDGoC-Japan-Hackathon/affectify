@@ -1,13 +1,5 @@
 package entity
 
-type DesignGuideVisibility string
-
-const (
-	DesignGuideVisibilityPrivate DesignGuideVisibility = "private"
-	DesignGuideVisibilityTeam    DesignGuideVisibility = "team"
-	DesignGuideVisibilityPublic  DesignGuideVisibility = "public"
-)
-
 type NodeKind string
 
 const (

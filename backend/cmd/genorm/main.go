@@ -15,10 +15,8 @@ func main() {
 
 	g.ApplyBasic(
 		repoentity.User{},
-		repoentity.Team{},
-		repoentity.TeamMember{},
 		repoentity.Project{},
-		repoentity.ProjectShare{},
+		repoentity.ProjectMember{},
 		repoentity.Variant{},
 		repoentity.Node{},
 		repoentity.Edge{},
