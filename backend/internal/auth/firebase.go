@@ -33,6 +33,9 @@ func NewVerifier(ctx context.Context, cfg config.FirebaseConfig) (*Verifier, err
 	if cfg.CredentialsFile != "" {
 		opts = append(opts, option.WithCredentialsFile(cfg.CredentialsFile))
 	}
+	if cfg.CredentialsJSON != "" {
+		opts = append(opts, option.WithCredentialsJSON([]byte(cfg.CredentialsJSON)))
+	}
 
 	app, err := firebase.NewApp(ctx, appConfig, opts...)
 	if err != nil {

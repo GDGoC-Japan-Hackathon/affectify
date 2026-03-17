@@ -1,0 +1,95 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-dev:
+    name: Build, migrate, deploy (dev)
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: hackathon-2e83a
+      TF_VAR_project_id: hackathon-2e83a
+      TF_VAR_project_number: "452456627550"
+      TF_VAR_github_owner: GDGoC-Japan-Hackathon
+      TF_VAR_github_repository: affectify
+      GCP_REGION: asia-northeast1
+      ARTIFACT_REPOSITORY: whitecoder-backend
+      BACKEND_IMAGE_NAME: backend
+      CLOUD_SQL_INSTANCE_CONNECTION_NAME: hackathon-2e83a:asia-northeast1:whitecoder-postgres-dev
+      DB_NAME: affectify
+      DB_USER: whitecoder_app
+    steps:
+      - uses: actions/checkout@v4
+
+      # サービスアカウント鍵を配らず、WIF 経由で deploy 権限を借りる。
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/452456627550/locations/global/workloadIdentityPools/github-actions/providers/github-provider
+          service_account: whitecoder-github-deployer@hackathon-2e83a.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - uses: bufbuild/buf-setup-action@v1
+
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | sh
+
+      - name: Install Cloud SQL Auth Proxy
+        run: |
+          curl -fsSL https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.18.3/cloud-sql-proxy.linux.amd64 -o /usr/local/bin/cloud-sql-proxy
+          chmod +x /usr/local/bin/cloud-sql-proxy
+
+      - name: Set image tag
+        # どの commit から作った image か追えるように、git sha をそのまま tag に使う。
+        run: echo "GIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Generate protobuf code
+        working-directory: proto
+        run: buf generate
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
+
+      - name: Build and push backend image
+        working-directory: backend
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_IMAGE_NAME}:${GIT_SHA} \
+            --push \
+            .
+
+      - name: Run Atlas migration against Cloud SQL
+        working-directory: backend
+        env:
+          DB_PASSWORD: ${{ secrets.DEV_CLOUD_SQL_USER_PASSWORD }}
+          INSTANCE_CONNECTION_NAME: ${{ env.CLOUD_SQL_INSTANCE_CONNECTION_NAME }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+        # deploy 前に schema を進めて、アプリ本体と DB 構造のズレを減らす。
+        run: ./scripts/migrate-cloud-sql.sh
+
+      - name: Terraform init
+        working-directory: infra/terraform/envs/dev
+        run: terraform init
+
+      - name: Terraform apply
+        working-directory: infra/terraform/envs/dev
+        env:
+          TF_VAR_cloud_sql_user_password: ${{ secrets.DEV_CLOUD_SQL_USER_PASSWORD }}
+          TF_VAR_firebase_admin_credentials_json: ${{ secrets.DEV_FIREBASE_ADMIN_CREDENTIALS_JSON }}
+          TF_VAR_backend_image_tag: ${{ env.GIT_SHA }}
+        # image push 後の sha を Cloud Run に反映する。build 自体は Terraform では行わない。
+        run: terraform apply -auto-approve

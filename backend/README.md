@@ -16,6 +16,12 @@ cd backend && docker compose up --build
 cd backend && go run ./cmd/server
 ```
 
+Cloud SQL へ migration 適用:
+
+```bash
+cd backend && DB_PASSWORD=... ./scripts/migrate-cloud-sql.sh
+```
+
 ## Documents
 
 - [構造と依存関係](./docs/architecture.md)

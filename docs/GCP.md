@@ -116,6 +116,52 @@
 7. Cloud Run service を deploy
 8. frontend は Firebase App Hosting 側で GitHub 連携デプロイ
 
+## Terraform Strategy
+
+推奨: GCP 基盤は Terraform で管理し、frontend の Firebase App Hosting は必要に応じて段階的に取り込む。
+
+### Directory Layout
+
+```text
+infra/terraform/
+  modules/
+    artifact_registry/
+    cloud_run/
+    cloud_sql/
+    github_wif/
+    project_services/
+    secret_manager/
+  envs/
+    dev/
+    prod/
+```
+
+### Scope
+
+最初に Terraform 管理へ入れる対象:
+
+- GCP API の有効化
+- Artifact Registry
+- Cloud SQL for PostgreSQL
+- Cloud Run
+- Secret Manager
+- GitHub Actions 用 Workload Identity Federation
+
+後回しにする対象:
+
+- Firebase App Hosting の詳細設定
+- Firebase Console 上の細かな運用設定
+
+### Practices
+
+- `terraform plan` を PR で確認する
+- `terraform apply` は GitHub Actions からのみ実行する
+- state は GCS backend に置く
+- 秘密値は Secret Manager を使い、`tfvars` に直接書かない
+- `dev` と `prod` は `envs/` で分ける
+- Cloud Run の公開設定は `allUsers` への Invoker 付与ではなく、Invoker IAM check の無効化を優先する
+- DB ユーザーのパスワードと Secret Manager の値は同じ Terraform input から管理し、二重入力を避ける
+
 ## Database Migration Strategy
 
 推奨: Atlas
@@ -166,6 +212,7 @@
 - `GOOGLE_CLOUD_PROJECT`
 
 Cloud SQL 接続は `/cloudsql/<INSTANCE_CONNECTION_NAME>` の Unix socket か、Cloud SQL connector 方針に寄せる。
+DB ユーザーは `postgres` ではなく、アプリ専用ユーザーを Terraform で作成して使う。
 
 ## Frontend Runtime Settings
 
@@ -191,6 +238,53 @@ frontend が Firebase App Hosting の場合、主に必要なのは次です。
 8. GitHub Actions 用 Workload Identity Federation 設定
 9. backend を初回 deploy
 10. frontend を初回 deploy
+
+#### Backend 初回 deploy の注意
+
+Cloud Run は初回作成時に実在する container image を必要とする。
+そのため backend の初回 deploy では、Cloud Run を作る前に Artifact Registry へ image を push しておく。
+
+流れ:
+
+1. Artifact Registry を作成する
+2. backend image を build する
+3. Artifact Registry に push する
+4. Terraform / deploy で Cloud Run を作成する
+
+この bootstrap は `dev` でも `prod` でも初回だけ必要。
+
+#### Image tag 方針
+
+Cloud Run が参照する image は固定タグではなく `git sha` のような immutable tag を使う。
+
+これで防げること:
+
+- 前の image を誤って使い続けること
+- `dev` / `latest` の上書きによる取り違え
+- どの commit が deploy 済みか追跡できない状態
+- rollback 先の特定が難しくなること
+
+`dev` と `prod` は GCP 環境として分離したまま、同じ image tag を別環境へ deploy できる。
+
+#### Container image の注意
+
+Cloud Run へ deploy する image は `linux/amd64` で build する。
+Apple Silicon の Mac で通常の `docker build` を使うと、Cloud Run が受け付けない image になることがあるため、初回 bootstrap と手動検証では次を使う。
+
+また、現在の Docker build は `backend/` を context にしているため、build 前に `buf generate` を実行して `backend/gen/` を生成しておく必要がある。
+
+```bash
+cd /Users/siraiyuto/Projects/affectify/proto
+buf generate
+
+cd /Users/siraiyuto/Projects/affectify/backend
+GIT_SHA=$(git rev-parse --short HEAD)
+docker buildx build \
+  --platform linux/amd64 \
+  -t asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/whitecoder-backend/backend:${GIT_SHA} \
+  --push \
+  .
+```
 
 ### Normal Release
 
