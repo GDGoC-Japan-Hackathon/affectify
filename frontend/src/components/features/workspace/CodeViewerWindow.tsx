@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { flushSync } from "react-dom";
 import Editor from "@monaco-editor/react";
 import { X, FileCode, Copy, Check, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import type { BoardNode } from "@/types/type";
@@ -26,21 +27,7 @@ interface CodeViewerWindowProps {
   onFocus?: () => void;
 }
 
-export function CodeViewerWindow({
-  tabs,
-  activeTab,
-  onTabChange,
-  onTabClose,
-  onCloseAll,
-  onDetachTab,
-  onNodeHover,
-  onNodeClick,
-  onCodeSync,
-  onAddNode,
-  initialPosition,
-  zIndex = 9999,
-  onFocus,
-}: CodeViewerWindowProps) {
+export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onCloseAll, onDetachTab, onNodeHover, onNodeClick, onCodeSync, onAddNode, initialPosition, zIndex = 9999, onFocus }: CodeViewerWindowProps) {
   const onNodeHoverRef = useRef(onNodeHover);
   onNodeHoverRef.current = onNodeHover;
   const onNodeClickRef = useRef(onNodeClick);
@@ -99,10 +86,7 @@ export function CodeViewerWindow({
       codeLines.push("");
       lineNodeMap.push(null);
     }
-    const header =
-      n.kind === "method"
-        ? `// (${n.receiver}).${n.title}`
-        : `// ${n.title}`;
+    const header = n.kind === "method" ? `// (${n.receiver}).${n.title}` : `// ${n.title}`;
     codeLines.push(header);
     lineNodeMap.push(null);
 
@@ -128,6 +112,9 @@ export function CodeViewerWindow({
   const lineNodeMapRef = useRef(lineNodeMap);
   lineNodeMapRef.current = lineNodeMap;
 
+  const fileContentRef = useRef(fileContent);
+  fileContentRef.current = fileContent;
+
   // nodesが変わったときにliveSeparatorEntriesを初期化
   useEffect(() => {
     const entries: Array<{ lineNum: number; afterNodeId: string | null }> = [];
@@ -141,7 +128,7 @@ export function CodeViewerWindow({
       }
     });
     setLiveSeparatorEntries(entries);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length, activeTab]);
 
   // External sync effect
@@ -153,13 +140,7 @@ export function CodeViewerWindow({
       isProgrammaticRef.current = false;
     }
     if (decorationsRef.current) {
-      decorationsRef.current.set(
-        lineNodeMap
-          .map((node, i) =>
-            node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null
-          )
-          .filter(Boolean)
-      );
+      decorationsRef.current.set(lineNodeMap.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter(Boolean));
     }
   }, [fileContent]);
 
@@ -186,7 +167,7 @@ export function CodeViewerWindow({
         dragOffset.current = { x: e.clientX - position.x, y: e.clientY - position.y };
       }
     },
-    [position]
+    [position],
   );
 
   const handleResizeStart = useCallback(
@@ -196,7 +177,7 @@ export function CodeViewerWindow({
       setIsResizing(true);
       resizeStart.current = { x: e.clientX, y: e.clientY, w: size.width, h: size.height };
     },
-    [size]
+    [size],
   );
 
   useEffect(() => {
@@ -204,11 +185,17 @@ export function CodeViewerWindow({
       if (isDragging) setPosition({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y });
       if (isResizing) setSize({ width: Math.max(360, resizeStart.current.w + e.clientX - resizeStart.current.x), height: Math.max(200, resizeStart.current.h + e.clientY - resizeStart.current.y) });
     };
-    const handleMouseUp = () => { setIsDragging(false); setIsResizing(false); };
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setIsResizing(false);
+    };
     if (isDragging || isResizing) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
-      return () => { window.removeEventListener("mousemove", handleMouseMove); window.removeEventListener("mouseup", handleMouseUp); };
+      return () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
     }
   }, [isDragging, isResizing]);
 
@@ -222,22 +209,34 @@ export function CodeViewerWindow({
 
   return (
     <>
-      <div
-        style={{ position: "fixed", top: position.y, left: position.x, width: size.width, height: size.height, zIndex }}
-        className="bg-white border-2 border-gray-300 rounded-lg shadow-2xl flex flex-col overflow-hidden"
-        onMouseDown={onFocus}
-      >
+      <div style={{ position: "fixed", top: position.y, left: position.x, width: size.width, height: size.height, zIndex }} className="bg-white border-2 border-gray-300 rounded-lg shadow-2xl flex flex-col overflow-hidden" onMouseDown={onFocus}>
         {/* ヘッダー */}
         <div ref={headerRef} onMouseDown={handleMouseDown} className="border-b border-gray-200 bg-gray-50 cursor-move shrink-0">
           <div className="flex items-center justify-between px-3 py-1.5">
-            <span className="text-xs text-gray-400">{nodes.length} 関数 / {codeLines.length} 行</span>
+            <span className="text-xs text-gray-400">
+              {nodes.length} 関数 / {codeLines.length} 行
+            </span>
             <div className="flex items-center gap-1">
               {isSmall ? (
-                <button onClick={() => { setSize(defaultSize); setIsSmall(false); }} className="p-1 hover:bg-gray-200 rounded transition-colors" title="元のサイズに戻す">
+                <button
+                  onClick={() => {
+                    setSize(defaultSize);
+                    setIsSmall(false);
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  title="元のサイズに戻す"
+                >
                   <Maximize2 className="size-3.5 text-gray-500" />
                 </button>
               ) : (
-                <button onClick={() => { setSize({ width: 360, height: 250 }); setIsSmall(true); }} className="p-1 hover:bg-gray-200 rounded transition-colors" title="小さくする">
+                <button
+                  onClick={() => {
+                    setSize({ width: 360, height: 250 });
+                    setIsSmall(true);
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  title="小さくする"
+                >
                   <Minimize2 className="size-3.5 text-gray-500" />
                 </button>
               )}
@@ -256,19 +255,28 @@ export function CodeViewerWindow({
               const name = tab.filePath.split("/").pop() ?? tab.filePath;
               const isActive = tab.filePath === activeTab;
               return (
-                <div
-                  key={tab.filePath}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-t text-xs cursor-pointer shrink-0 ${isActive ? "bg-white border border-b-0 border-gray-200 text-gray-900 font-medium" : "text-gray-500 hover:bg-gray-100"}`}
-                  onClick={() => onTabChange(tab.filePath)}
-                >
+                <div key={tab.filePath} className={`flex items-center gap-1 px-2 py-1 rounded-t text-xs cursor-pointer shrink-0 ${isActive ? "bg-white border border-b-0 border-gray-200 text-gray-900 font-medium" : "text-gray-500 hover:bg-gray-100"}`} onClick={() => onTabChange(tab.filePath)}>
                   <FileCode className="size-3 text-green-600 shrink-0" />
                   <span className="truncate max-w-[120px]">{name}</span>
                   {onDetachTab && tabs.length > 1 && (
-                    <button className="ml-0.5 p-0.5 rounded hover:bg-gray-300/50 transition-colors" title="新しいウィンドウに移動" onClick={(e) => { e.stopPropagation(); onDetachTab(tab.filePath); }}>
+                    <button
+                      className="ml-0.5 p-0.5 rounded hover:bg-gray-300/50 transition-colors"
+                      title="新しいウィンドウに移動"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDetachTab(tab.filePath);
+                      }}
+                    >
                       <ExternalLink className="size-3" />
                     </button>
                   )}
-                  <button className="ml-0.5 p-0.5 rounded hover:bg-gray-300/50 transition-colors" onClick={(e) => { e.stopPropagation(); onTabClose(tab.filePath); }}>
+                  <button
+                    className="ml-0.5 p-0.5 rounded hover:bg-gray-300/50 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTabClose(tab.filePath);
+                    }}
+                  >
                     <X className="size-3" />
                   </button>
                 </div>
@@ -288,16 +296,12 @@ export function CodeViewerWindow({
               editorRef.current = editor;
               setLh((editor.getOption(63) as unknown as number) || 19);
 
-              decorationsRef.current = editor.createDecorationsCollection(
-                lineNodeMapRef.current
-                  .map((node, i) =>
-                    node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null
-                  )
-                  .filter(Boolean) as any[]
-              );
+              decorationsRef.current = editor.createDecorationsCollection(lineNodeMapRef.current.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter(Boolean) as any[]);
 
               editor.onDidScrollChange((e) => {
-                setEditorScrollTop(e.scrollTop);
+                flushSync(() => {
+                  setEditorScrollTop(e.scrollTop);
+                });
               });
 
               editor.onMouseMove((e) => {
@@ -307,7 +311,9 @@ export function CodeViewerWindow({
                   onNodeHoverRef.current?.(node?.id ?? null);
                 }
               });
-              editor.onMouseLeave(() => { onNodeHoverRef.current?.(null); });
+              editor.onMouseLeave(() => {
+                onNodeHoverRef.current?.(null);
+              });
 
               editor.onMouseDown((e) => {
                 const lineNumber = e.target.position?.lineNumber;
@@ -331,13 +337,34 @@ export function CodeViewerWindow({
                 const contentLines = content.split("\n");
                 const currentNodes = nodesRef.current;
 
+                // ヘッダー行・セパレーター行保護：消されていたら元に戻す
+                const expectedHeaders = currentNodes.map((n) => (n.kind === "method" ? `// (${n.receiver}).${n.title}` : `// ${n.title}`));
+                const hasAllHeaders = expectedHeaders.every((h) => contentLines.some((l) => l.trim() === h));
+                // ヘッダー行以外にも、2つ目以降のヘッダー直前は空白行が必要
+                const headerIndices = expectedHeaders.map((h) => contentLines.findIndex((l) => l.trim() === h));
+                const hasSeparators = headerIndices.slice(1).every((idx) => idx > 0 && contentLines[idx - 1].trim() === "");
+                if (!hasAllHeaders || !hasSeparators) {
+                  const savedPosition = editor.getPosition();
+                  isProgrammaticRef.current = true;
+                  editor.setValue(fileContentRef.current);
+                  isProgrammaticRef.current = false;
+                  if (savedPosition) editor.setPosition(savedPosition);
+                  if (decorationsRef.current) {
+                    decorationsRef.current.set(lineNodeMapRef.current.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter(Boolean) as any[]);
+                  }
+                  return;
+                }
+
                 const headerToNode: Map<string, BoardNode> = new Map();
                 for (const n of currentNodes) {
                   const header = n.kind === "method" ? `// (${n.receiver}).${n.title}` : `// ${n.title}`;
                   headerToNode.set(header, n);
                 }
 
-                interface NodeSection { nodeId: string; startLine: number; }
+                interface NodeSection {
+                  nodeId: string;
+                  startLine: number;
+                }
                 const sections: NodeSection[] = [];
                 contentLines.forEach((line, idx) => {
                   const node = headerToNode.get(line.trim());
@@ -370,44 +397,42 @@ export function CodeViewerWindow({
           />
 
           {/* セパレーター行ヒント（関数間の空白行に重ねて表示） */}
-          {onAddNode && liveSeparatorEntries.map(({ lineNum, afterNodeId }) => {
-            const y = (lineNum - 1) * lh - editorScrollTop;
-            return (
-              <div
-                key={lineNum}
-                style={{
-                  position: "absolute",
-                  top: y,
-                  left: 0,
-                  right: 0,
-                  height: lh,
-                  zIndex: 5,
-                  display: "flex",
-                  alignItems: "center",
-                  paddingLeft: 64,
-                  cursor: "pointer",
-                  userSelect: "none",
-                  pointerEvents: "auto",
-                }}
-                className="group"
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  setAddPopup({
-                    screenX: e.clientX,
-                    screenY: e.clientY + 8,
-                    afterNodeId,
-                  });
-                }}
-              >
-                <span
-                  className="opacity-30 group-hover:opacity-80 transition-opacity"
-                  style={{ color: "#6b7280", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}
+          {onAddNode &&
+            liveSeparatorEntries.map(({ lineNum, afterNodeId }) => {
+              const y = editorRef.current ? editorRef.current.getTopForLineNumber(lineNum) - editorScrollTop : (lineNum - 1) * lh - editorScrollTop;
+              return (
+                <div
+                  key={lineNum}
+                  style={{
+                    position: "absolute",
+                    top: y,
+                    left: 0,
+                    right: 0,
+                    height: lh,
+                    zIndex: 5,
+                    display: "flex",
+                    alignItems: "center",
+                    paddingLeft: 64,
+                    cursor: "pointer",
+                    userSelect: "none",
+                    pointerEvents: "auto",
+                  }}
+                  className="group"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setAddPopup({
+                      screenX: e.clientX,
+                      screenY: e.clientY + 8,
+                      afterNodeId,
+                    });
+                  }}
                 >
-                  ⇒ 関数を追加
-                </span>
-              </div>
-            );
-          })}
+                  <span className="opacity-70 group-hover:opacity-110 transition-opacity" style={{ color: "#374151", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}>
+                    ⇒ 関数を追加
+                  </span>
+                </div>
+              );
+            })}
         </div>
 
         {/* リサイズハンドル */}
@@ -416,11 +441,7 @@ export function CodeViewerWindow({
 
       {/* 関数追加ポップアップ */}
       {addPopup && (
-        <div
-          style={{ position: "fixed", left: addPopup.screenX, top: addPopup.screenY, transform: "translateX(-50%)", zIndex: zIndex + 10 }}
-          className="bg-white border border-gray-300 rounded-lg shadow-xl px-3 py-2.5 flex flex-col gap-2 w-52"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
+        <div style={{ position: "fixed", left: addPopup.screenX, top: addPopup.screenY, transform: "translateX(-50%)", zIndex: zIndex + 10 }} className="bg-white border border-gray-300 rounded-lg shadow-xl px-3 py-2.5 flex flex-col gap-2 w-52" onMouseDown={(e) => e.stopPropagation()}>
           <span className="text-xs text-gray-500 font-medium">関数名を入力</span>
           <input
             ref={popupInputRef}
@@ -434,8 +455,12 @@ export function CodeViewerWindow({
             }}
           />
           <div className="flex gap-1 justify-end">
-            <button className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors" onClick={() => setAddPopup(null)}>キャンセル</button>
-            <button className="text-xs px-2 py-1 rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors" onClick={handleConfirmAdd}>追加</button>
+            <button className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors" onClick={() => setAddPopup(null)}>
+              キャンセル
+            </button>
+            <button className="text-xs px-2 py-1 rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors" onClick={handleConfirmAdd}>
+              追加
+            </button>
           </div>
         </div>
       )}
