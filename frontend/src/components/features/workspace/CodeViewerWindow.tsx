@@ -63,6 +63,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   const decorationsRef = useRef<any>(null);
   const [lh, setLh] = useState(19);
   const [editorScrollTop, setEditorScrollTop] = useState(0);
+  const [editorScrollHeight, setEditorScrollHeight] = useState(0);
 
   // セパレーター行をライブ追跡（編集中もずれない）
   const [liveSeparatorEntries, setLiveSeparatorEntries] = useState<Array<{ lineNum: number; afterNodeId: string | null }>>([]);
@@ -298,9 +299,11 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
 
               decorationsRef.current = editor.createDecorationsCollection(lineNodeMapRef.current.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter(Boolean) as any[]);
 
+              setEditorScrollHeight(editor.getScrollHeight());
               editor.onDidScrollChange((e) => {
                 flushSync(() => {
                   setEditorScrollTop(e.scrollTop);
+                  if (e.scrollHeightChanged) setEditorScrollHeight(e.scrollHeight);
                 });
               });
 
@@ -393,22 +396,86 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
               scrollbar: { verticalScrollbarSize: 6 },
               automaticLayout: true,
               renderLineHighlight: "none",
+              padding: { top: 19, bottom: 19 },
             }}
           />
 
-          {/* セパレーター行ヒント（関数間の空白行に重ねて表示） */}
-          {onAddNode &&
-            liveSeparatorEntries.map(({ lineNum, afterNodeId }) => {
-              const y = editorRef.current ? editorRef.current.getTopForLineNumber(lineNum) - editorScrollTop : (lineNum - 1) * lh - editorScrollTop;
-              return (
+          {/* セパレーター行ヒント（関数間の空白行に重ねて表示） + 上下ボタン */}
+          {onAddNode && (
+            <>
+              {/* 一番上：topパディング領域 */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: -editorScrollTop,
+                  left: 0,
+                  right: 0,
+                  height: 19,
+                  zIndex: 5,
+                  display: "flex",
+                  alignItems: "center",
+                  paddingLeft: 64,
+                  cursor: "pointer",
+                  userSelect: "none",
+                  pointerEvents: "auto",
+                }}
+                className="group"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setAddPopup({ screenX: e.clientX, screenY: e.clientY + 8, afterNodeId: null });
+                }}
+              >
+                <span className="opacity-70 group-hover:opacity-110 transition-opacity" style={{ color: "#374151", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}>
+                  ⇒ 関数を追加
+                </span>
+              </div>
+
+              {/* 関数間 */}
+              {liveSeparatorEntries.map(({ lineNum, afterNodeId }) => {
+                const y = editorRef.current ? editorRef.current.getTopForLineNumber(lineNum) - editorScrollTop : (lineNum - 1) * lh - editorScrollTop;
+                return (
+                  <div
+                    key={lineNum}
+                    style={{
+                      position: "absolute",
+                      top: y,
+                      left: 0,
+                      right: 0,
+                      height: lh,
+                      zIndex: 5,
+                      display: "flex",
+                      alignItems: "center",
+                      paddingLeft: 64,
+                      cursor: "pointer",
+                      userSelect: "none",
+                      pointerEvents: "auto",
+                    }}
+                    className="group"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      setAddPopup({
+                        screenX: e.clientX,
+                        screenY: e.clientY + 8,
+                        afterNodeId,
+                      });
+                    }}
+                  >
+                    <span className="opacity-70 group-hover:opacity-110 transition-opacity" style={{ color: "#374151", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}>
+                      ⇒ 関数を追加
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* 一番下：bottomパディング領域 */}
+              {nodes.length > 0 && editorScrollHeight > 0 && (
                 <div
-                  key={lineNum}
                   style={{
                     position: "absolute",
-                    top: y,
+                    top: editorScrollHeight - 19 - editorScrollTop,
                     left: 0,
                     right: 0,
-                    height: lh,
+                    height: 19,
                     zIndex: 5,
                     display: "flex",
                     alignItems: "center",
@@ -420,19 +487,16 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
                   className="group"
                   onMouseDown={(e) => {
                     e.stopPropagation();
-                    setAddPopup({
-                      screenX: e.clientX,
-                      screenY: e.clientY + 8,
-                      afterNodeId,
-                    });
+                    setAddPopup({ screenX: e.clientX, screenY: e.clientY + 8, afterNodeId: nodes[nodes.length - 1].id });
                   }}
                 >
                   <span className="opacity-70 group-hover:opacity-110 transition-opacity" style={{ color: "#374151", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}>
                     ⇒ 関数を追加
                   </span>
                 </div>
-              );
-            })}
+              )}
+            </>
+          )}
         </div>
 
         {/* リサイズハンドル */}
