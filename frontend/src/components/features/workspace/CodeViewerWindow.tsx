@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { flushSync } from "react-dom";
 import Editor from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 import { X, FileCode, Copy, Check, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
@@ -328,10 +327,8 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
 
               setEditorScrollHeight(editor.getScrollHeight());
               editor.onDidScrollChange((e) => {
-                flushSync(() => {
-                  setEditorScrollTop(e.scrollTop);
-                  if (e.scrollHeightChanged) setEditorScrollHeight(e.scrollHeight);
-                });
+                setEditorScrollTop(e.scrollTop);
+                if (e.scrollHeightChanged) setEditorScrollHeight(e.scrollHeight);
               });
 
               editor.onMouseMove((e) => {
