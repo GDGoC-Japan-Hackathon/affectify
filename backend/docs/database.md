@@ -38,8 +38,10 @@ Compose では `postgres` だけを起動する。
 - `DB_PASSWORD`
 - `DB_NAME`
 - `DB_SSLMODE`
+- `INSTANCE_CONNECTION_NAME`
 
 `DATABASE_URL` があればそれを優先し、未設定なら分解された `DB_*` から DSN を組み立てる。
+`INSTANCE_CONNECTION_NAME` がある場合は Cloud SQL の Unix socket (`/cloudsql/...`) を使って接続する。
 
 ローカル実行時は `backend/.env` を Go アプリが読む。
 
@@ -96,6 +98,33 @@ Atlas migration 適用:
 ```bash
 cd backend && atlas migrate apply --env local
 ```
+
+Cloud SQL へ migration 適用:
+
+```bash
+cd backend && DB_PASSWORD=... ./scripts/migrate-cloud-sql.sh
+```
+
+このスクリプトは次をまとめて行う。
+
+1. `cloud-sql-proxy` をバックグラウンドで起動する
+2. `atlas migrate apply` を Cloud SQL に対して実行する
+3. 終了時に proxy を停止する
+
+必要なもの:
+
+- `cloud-sql-proxy`
+- `atlas`
+- `DB_PASSWORD`
+
+必要に応じて次の環境変数で上書きできる。
+
+- `INSTANCE_CONNECTION_NAME`
+- `DB_NAME`
+- `DB_USER`
+- `PROXY_PORT`
+
+デフォルトでは `PROXY_PORT=15432` を使う。
 
 `data.external_schema` を使っているため、Atlas CLI は公式版を前提にする。
 
