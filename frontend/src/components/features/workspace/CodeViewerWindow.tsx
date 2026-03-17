@@ -19,6 +19,7 @@ interface CodeViewerWindowProps {
   onDetachTab?: (filePath: string) => void;
   onNodeHover?: (nodeId: string | null) => void;
   onNodeClick?: (nodeId: string) => void;
+  onCodeSync?: (nodeId: string, code: string) => void;
   initialPosition?: { x: number; y: number };
   zIndex?: number;
   onFocus?: () => void;
@@ -33,6 +34,7 @@ export function CodeViewerWindow({
   onDetachTab,
   onNodeHover,
   onNodeClick,
+  onCodeSync,
   initialPosition,
   zIndex = 9999,
   onFocus,
@@ -41,6 +43,8 @@ export function CodeViewerWindow({
   onNodeHoverRef.current = onNodeHover;
   const onNodeClickRef = useRef(onNodeClick);
   onNodeClickRef.current = onNodeClick;
+  const onCodeSyncRef = useRef(onCodeSync);
+  onCodeSyncRef.current = onCodeSync;
 
   const [copied, setCopied] = useState(false);
   const [position, setPosition] = useState(() => {
@@ -57,8 +61,18 @@ export function CodeViewerWindow({
   const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
   const headerRef = useRef<HTMLDivElement>(null);
 
+
+  // Editor ref for bidirectional sync
+  const editorRef = useRef<any>(null);
+  const isEditingRef = useRef(false);
+  const editingTimeoutRef = useRef<any>(null);
+  const isProgrammaticRef = useRef(false);
+  const decorationsRef = useRef<any>(null);
+
   const activeFile = tabs.find((t) => t.filePath === activeTab);
   const nodes = activeFile?.nodes ?? [];
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
 
   // コード結合 + 行マッピング
   const codeLines: string[] = [];
@@ -84,6 +98,30 @@ export function CodeViewerWindow({
   });
 
   const fileContent = codeLines.join("\n");
+
+  // Ref for lineNodeMap to avoid stale closures
+  const lineNodeMapRef = useRef(lineNodeMap);
+  lineNodeMapRef.current = lineNodeMap;
+
+  // External sync effect: when fileContent changes, update editor value and reapply decorations
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (editorRef.current.getValue() !== fileContent) {
+      isProgrammaticRef.current = true;
+      editorRef.current.setValue(fileContent);
+      isProgrammaticRef.current = false;
+    }
+    // デコレーションを再適用（setValue後に消えるため）
+    if (decorationsRef.current) {
+      decorationsRef.current.set(
+        lineNodeMap
+          .map((node, i) =>
+            node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null
+          )
+          .filter(Boolean)
+      );
+    }
+  }, [fileContent]);
 
   // ドラッグ処理
   const handleMouseDown = useCallback(
@@ -269,39 +307,25 @@ export function CodeViewerWindow({
         <Editor
           key={activeTab}
           language="go"
-          value={fileContent}
+          defaultValue={fileContent}
           theme="vs"
           onMount={(editor) => {
-            // 関数ごとの背景色デコレーション
-            const decorations: { range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number }; options: { isWholeLine: boolean; className: string } }[] = [];
-            lineNodeMap.forEach((node, i) => {
-              if (node) {
-                decorations.push({
-                  range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 },
-                  options: { isWholeLine: true, className: "bg-blue-50" },
-                });
-              }
-            });
-            editor.createDecorationsCollection(decorations);
+            editorRef.current = editor;
 
-            // クリックでノードにジャンプ
-            editor.onMouseDown((e) => {
-              const lineNumber = e.target.position?.lineNumber;
-              if (lineNumber != null) {
-                const node = lineNodeMap[lineNumber - 1];
-                if (node) {
-                  onNodeClickRef.current?.(node.id);
-                  setSize({ width: 360, height: 250 });
-                  setIsSmall(true);
-                }
-              }
-            });
+            // 関数ごとの背景色デコレーション
+            const buildDecorations = () =>
+              lineNodeMapRef.current
+                .map((node, i) =>
+                  node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null
+                )
+                .filter(Boolean) as any[];
+            decorationsRef.current = editor.createDecorationsCollection(buildDecorations());
 
             // ホバーでハイライト
             editor.onMouseMove((e) => {
               const lineNumber = e.target.position?.lineNumber;
               if (lineNumber != null) {
-                const node = lineNodeMap[lineNumber - 1];
+                const node = lineNodeMapRef.current[lineNumber - 1];
                 onNodeHoverRef.current?.(node?.id ?? null);
               }
             });
@@ -309,9 +333,71 @@ export function CodeViewerWindow({
             editor.onMouseLeave(() => {
               onNodeHoverRef.current?.(null);
             });
+
+            // ダブルクリックでノードにジャンプ
+            editor.onMouseDown((e) => {
+              if (e.event.detail === 2) {
+                const lineNumber = e.target.position?.lineNumber;
+                if (lineNumber != null) {
+                  const node = lineNodeMapRef.current[lineNumber - 1];
+                  if (node) onNodeClickRef.current?.(node.id);
+                }
+              }
+            });
+
+            // Bidirectional sync: parse content and call onCodeSync for each node
+            editor.onDidChangeModelContent(() => {
+              if (isProgrammaticRef.current) return;
+              isEditingRef.current = true;
+              if (editingTimeoutRef.current) {
+                clearTimeout(editingTimeoutRef.current);
+              }
+              editingTimeoutRef.current = setTimeout(() => {
+                isEditingRef.current = false;
+                editingTimeoutRef.current = null;
+              }, 2000);
+
+              const content = editor.getValue();
+              const contentLines = content.split("\n");
+              const currentNodes = nodesRef.current;
+
+              // Build a map of header -> nodeId for quick lookup
+              const headerToNode: Map<string, BoardNode> = new Map();
+              for (const n of currentNodes) {
+                const header =
+                  n.kind === "method"
+                    ? `// (${n.receiver}).${n.title}`
+                    : `// ${n.title}`;
+                headerToNode.set(header, n);
+              }
+
+              // Find each node's header in the content and extract its code
+              interface NodeSection {
+                nodeId: string;
+                startLine: number; // 0-indexed, line after header
+              }
+              const sections: NodeSection[] = [];
+
+              contentLines.forEach((line, idx) => {
+                const node = headerToNode.get(line.trim());
+                if (node) {
+                  sections.push({ nodeId: node.id, startLine: idx + 1 });
+                }
+              });
+
+              sections.forEach((section, sIdx) => {
+                const endLine = sIdx + 1 < sections.length ? sections[sIdx + 1].startLine - 2 : contentLines.length - 1;
+                const codeSlice = contentLines.slice(section.startLine, endLine + 1);
+                // Trim trailing blank lines
+                while (codeSlice.length > 0 && codeSlice[codeSlice.length - 1].trim() === "") {
+                  codeSlice.pop();
+                }
+                const code = codeSlice.join("\n");
+                onCodeSyncRef.current?.(section.nodeId, code);
+              });
+            });
           }}
           options={{
-            readOnly: true,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             fontSize: 14,
@@ -319,7 +405,6 @@ export function CodeViewerWindow({
             scrollbar: { verticalScrollbarSize: 6 },
             automaticLayout: true,
             renderLineHighlight: "none",
-            domReadOnly: true,
           }}
         />
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback, useEffect, useRef } from "react";
+import { memo, useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { ChevronDown, ChevronRight, FunctionSquare, Cog, Puzzle, Folder, StickyNote, Image } from "lucide-react";
@@ -31,6 +31,11 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
     }
   }, [closeAllCounter]);
 
+  // ファイルビューアからの編集を反映
+  useEffect(() => {
+    setCode(data.code_text ?? "");
+  }, [data.code_text]);
+
   const lineCount = (data.code_text ?? "").split("\n").length;
 
   const kindIcons: Record<string, React.ReactNode> = {
@@ -41,10 +46,6 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
     note: <StickyNote className="size-4" />,
     image: <Image className="size-4" />,
   };
-
-  const handleSave = useCallback(() => {
-    onCodeChange?.(data.id, code);
-  }, [data.id, code, onCodeChange]);
 
   return (
     <motion.div
@@ -133,7 +134,10 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
                 height="100%"
                 language="go"
                 value={code}
-                onChange={(v) => setCode(v ?? "")}
+                onChange={(v) => {
+                  setCode(v ?? "");
+                  onCodeChange?.(data.id, v ?? "");
+                }}
                 theme="vs"
                 options={{
                   minimap: { enabled: false },
@@ -146,20 +150,6 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
               />
             </div>
 
-            {/* 変更があるときだけ保存ボタン（右下） */}
-            {code !== (data.code_text ?? "") && (
-              <div className="flex justify-end px-3 py-2">
-                <button
-                  className="text-sm text-white bg-green-500 hover:bg-green-600 transition-colors px-4 py-1.5 rounded-md font-medium shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSave();
-                  }}
-                >
-                  保存
-                </button>
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>

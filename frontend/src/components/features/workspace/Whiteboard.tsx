@@ -397,6 +397,7 @@ onEdgesChange={onEdgesChange}
             bringToFront(nodeId);
             fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500, maxZoom: 0.8 });
           }}
+          onCodeSync={handleCodeChange}
         />
       ))}
     </div>
