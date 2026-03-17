@@ -1,21 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef } from "react";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  ReactFlowProvider,
-  type Node,
-  type Edge,
-  type NodeTypes,
-  type EdgeTypes,
-  MarkerType,
-} from "@xyflow/react";
+import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
@@ -66,14 +52,11 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
       target: e.to_node_id,
       type: "animated",
       style: {
-        strokeDasharray:
-          e.kind === "import" ? "6 3" : e.kind === "implement" ? "2 2" : undefined,
+        strokeDasharray: e.kind === "import" ? "6 3" : e.kind === "implement" ? "2 2" : undefined,
         stroke: edgeColor,
         strokeWidth: 2,
       },
-      markerEnd: hasArrow
-        ? { type: MarkerType.ArrowClosed, color: edgeColor }
-        : undefined,
+      markerEnd: hasArrow ? { type: MarkerType.ArrowClosed, color: edgeColor } : undefined,
     };
   });
 }
@@ -101,11 +84,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       if (hoverNodeId.current === nodeId) {
         hoverSavedZ.current = z;
       }
-      setNodes((nds) =>
-        nds.map((n) => (n.id === nodeId ? { ...n, zIndex: z } : n))
-      );
+      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, zIndex: z } : n)));
     },
-    [setNodes]
+    [setNodes],
   );
 
   // ホバー時：zMaxは変えず仮に最前面にする。ホバー解除で元に戻す
@@ -132,11 +113,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             ...e,
             style: {
               ...e.style,
-              opacity: nodeId
-                ? (e.source === nodeId || e.target === nodeId ? 1 : 0.1)
-                : 1,
+              opacity: nodeId ? (e.source === nodeId || e.target === nodeId ? 1 : 0.1) : 1,
             },
-          }))
+          })),
         );
       }
 
@@ -169,7 +148,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         });
       });
     },
-    [setNodes, setEdges, edges, focusMode]
+    [setNodes, setEdges, edges, focusMode],
   );
 
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
@@ -191,7 +170,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       nds.map((n) => {
         const pos = positions.get(n.id);
         return pos ? { ...n, position: pos } : n;
-      })
+      }),
     );
     setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 50);
     // TODO: APIが追加されたら以下でDBのx,yを保存する
@@ -201,7 +180,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
-
   // 新規ノード追加
   const newNodeCounter = useRef(0);
   const handleAddNode = useCallback(
@@ -209,9 +187,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       newNodeCounter.current += 1;
       const newId = `new-node-${Date.now()}-${newNodeCounter.current}`;
       const funcName = name || "newFunction";
-      const refNode = afterNodeId
-        ? nodes.find((n) => n.id === afterNodeId)
-        : nodes.find((n) => (n.data as unknown as BoardNode).file_path === filePath);
+      const refNode = afterNodeId ? nodes.find((n) => n.id === afterNodeId) : nodes.find((n) => (n.data as unknown as BoardNode).file_path === filePath);
       const x = refNode?.position.x ?? 100;
       const y = refNode ? refNode.position.y + 250 : 100;
       const newBoardNode: BoardNode = {
@@ -233,21 +209,15 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         return [...nds.slice(0, afterIdx + 1), newNode, ...nds.slice(afterIdx + 1)];
       });
     },
-    [nodes, setNodes]
+    [nodes, setNodes],
   );
 
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
     (nodeId: string, code: string) => {
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === nodeId
-            ? { ...n, data: { ...n.data, code_text: code } }
-            : n
-        )
-      );
+      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, code_text: code } } : n)));
     },
-    [setNodes]
+    [setNodes],
   );
 
   // ノード展開時にzIndexを上げる + フィットして全体表示
@@ -256,12 +226,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       if (isExpanded) {
         bringToFront(nodeId);
       } else {
-        setNodes((nds) =>
-          nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n))
-        );
+        setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n)));
       }
     },
-    [setNodes, fitView, bringToFront]
+    [setNodes, fitView, bringToFront],
   );
 
   // 各ノードのエッジ数を計算
@@ -281,10 +249,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         ...n,
         data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand, edgeCount: edgeCounts[n.id] ?? 0, closeAllCounter },
       })),
-    [nodes, handleCodeChange, handleExpand, edgeCounts, closeAllCounter]
+    [nodes, handleCodeChange, handleExpand, edgeCounts, closeAllCounter],
   );
-
-
 
   // ファイル選択 → 最初のウィンドウにタブ追加（なければ新規ウィンドウ作成）
   const handleFileSelect = useCallback(
@@ -297,23 +263,17 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         // 既にどこかのウィンドウに開いていたらそこをアクティブに
         const existing = prev.find((w) => w.tabs.includes(filePath));
         if (existing) {
-          return prev.map((w) =>
-            w.id === existing.id ? { ...w, activeTab: filePath } : w
-          );
+          return prev.map((w) => (w.id === existing.id ? { ...w, activeTab: filePath } : w));
         }
         // 最初のウィンドウにタブ追加
-        return prev.map((w, i) =>
-          i === 0 ? { ...w, tabs: [...w.tabs, filePath], activeTab: filePath } : w
-        );
+        return prev.map((w, i) => (i === 0 ? { ...w, tabs: [...w.tabs, filePath], activeTab: filePath } : w));
       });
-      const ids = nodes
-        .filter((n) => (n.data as unknown as BoardNode).file_path === filePath)
-        .map((n) => n.id);
+      const ids = nodes.filter((n) => (n.data as unknown as BoardNode).file_path === filePath).map((n) => n.id);
       if (ids.length > 0) {
         fitView({ nodes: ids.map((id) => ({ id })), padding: 0.3, duration: 500 });
       }
     },
-    [nodes, fitView]
+    [nodes, fitView],
   );
 
   const miniMapNodeColor = useCallback((node: Node) => {
@@ -334,74 +294,31 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     <div className="w-full h-full relative">
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
-        <button
-          onClick={handleAutoLayout}
-          className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
-          title="自動レイアウト"
-        >
+        <button onClick={handleAutoLayout} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="自動レイアウト">
           <LayoutDashboard className="size-5 text-gray-700" />
         </button>
 
-        <button
-          onClick={() => setCloseAllCounter((c) => c + 1)}
-          className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
-          title="すべてのノードを閉じる"
-        >
+        <button onClick={() => setCloseAllCounter((c) => c + 1)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="すべてのノードを閉じる">
           <FoldVertical className="size-5 text-gray-700" />
         </button>
 
-        <button
-          onClick={() => setFocusMode((prev) => !prev)}
-          className={`border rounded-lg p-2 shadow-md transition-colors ${
-            focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-          }`}
-          title="フォーカスモード"
-        >
+        <button onClick={() => setFocusMode((prev) => !prev)} className={`border rounded-lg p-2 shadow-md transition-colors ${focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`} title="フォーカスモード">
           <Focus className="size-5" />
         </button>
 
-        <button
-          onClick={() => setFileTreeOpen((prev) => !prev)}
-          className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
-          title="ファイルツリー"
-        >
+        <button onClick={() => setFileTreeOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
           <FolderTree className="size-5 text-gray-700" />
         </button>
       </div>
 
-      <ReactFlow
-        nodes={nodesWithCallbacks}
-        edges={edges}
-        onNodesChange={onNodesChange}
-onEdgesChange={onEdgesChange}
-        onNodeMouseEnter={(_, node) => handleNodeHover(node.id)}
-        onNodeMouseLeave={() => handleNodeHover(null)}
-        onNodeDragStart={(_, node) => bringToFront(node.id)}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.1}
-        maxZoom={2}
-        proOptions={{ hideAttribution: true }}
-      >
+      <ReactFlow nodes={nodesWithCallbacks} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeMouseEnter={(_, node) => handleNodeHover(node.id)} onNodeMouseLeave={() => handleNodeHover(null)} onNodeDragStart={(_, node) => bringToFront(node.id)} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
         <Background gap={20} size={1} />
         <Controls />
-        <MiniMap
-          nodeColor={miniMapNodeColor}
-          maskColor="rgba(0,0,0,0.08)"
-          pannable
-          zoomable
-        />
+        <MiniMap nodeColor={miniMapNodeColor} maskColor="rgba(0,0,0,0.08)" pannable zoomable />
       </ReactFlow>
 
       {/* ファイルツリーパネル */}
-      <FileTreePanel
-        nodes={boardNodes}
-        isOpen={fileTreeOpen}
-        onClose={() => setFileTreeOpen(false)}
-        onFileSelect={handleFileSelect}
-      />
+      <FileTreePanel nodes={boardNodes} isOpen={fileTreeOpen} onClose={() => setFileTreeOpen(false)} onFileSelect={handleFileSelect} />
 
       {/* ファイル全体表示ウィンドウ（複数ウィンドウ対応） */}
       {viewerWindows.map((win, idx) => (
@@ -414,9 +331,7 @@ onEdgesChange={onEdgesChange}
           }}
           tabs={win.tabs.map((fp) => ({
             filePath: fp,
-            nodes: nodes
-              .map((n) => n.data as unknown as BoardNode)
-              .filter((n) => n.file_path === fp),
+            nodes: nodes.map((n) => n.data as unknown as BoardNode).filter((n) => n.file_path === fp),
           }))}
           activeTab={win.activeTab}
           initialPosition={{
@@ -424,9 +339,7 @@ onEdgesChange={onEdgesChange}
             y: 80 + idx * 40,
           }}
           onTabChange={(fp) => {
-            setViewerWindows((prev) =>
-              prev.map((w) => (w.id === win.id ? { ...w, activeTab: fp } : w))
-            );
+            setViewerWindows((prev) => prev.map((w) => (w.id === win.id ? { ...w, activeTab: fp } : w)));
           }}
           onTabClose={(fp) => {
             setViewerWindows((prev) => {

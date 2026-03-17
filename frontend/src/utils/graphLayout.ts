@@ -3,8 +3,8 @@ import type { BoardNode, BoardEdge } from "@/types/type";
 // ノードサイズ定数
 const NODE_W = 260;
 const NODE_H = 200;
-const X_GAP = 80;
-const Y_GAP = 100;
+const X_GAP = 200;
+const Y_GAP = 200;
 
 // =========================================================
 // 1. Tarjan法による強連結成分（SCC）分解
