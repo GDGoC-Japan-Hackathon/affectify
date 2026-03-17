@@ -23,7 +23,8 @@ import { CodeCard } from "./CodeCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard } from "lucide-react";
+import { computeLayout } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -175,6 +176,28 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const windowZMax = useRef(9999);
   const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
 
+  // 自動レイアウト
+  const handleAutoLayout = useCallback(() => {
+    const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
+    const boardEdges = edges.map((e) => ({
+      id: e.id,
+      from_node_id: e.source,
+      to_node_id: e.target,
+      kind: "call" as const,
+      style: "solid" as const,
+    }));
+    const positions = computeLayout(boardNodes, boardEdges);
+    setNodes((nds) =>
+      nds.map((n) => {
+        const pos = positions.get(n.id);
+        return pos ? { ...n, position: pos } : n;
+      })
+    );
+    setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 50);
+    // TODO: APIが追加されたら以下でDBのx,yを保存する
+    // positions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
+  }, [nodes, edges, setNodes, fitView]);
+
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
@@ -309,32 +332,42 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   return (
     <div className="w-full h-full relative">
-      {/* ファイルツリー開閉ボタン */}
-      <button
-        onClick={() => setFileTreeOpen((prev) => !prev)}
-        className="absolute top-4 right-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
-        title="ファイルツリー"
-      >
-        <FolderTree className="size-5 text-gray-700" />
-      </button>
+      {/* 右上コントロール */}
+      <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
+        <button
+          onClick={handleAutoLayout}
+          className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+          title="自動レイアウト"
+        >
+          <LayoutDashboard className="size-5 text-gray-700" />
+        </button>
 
-      <button
-        onClick={() => setFocusMode((prev) => !prev)}
-        className={`absolute top-4 right-16 z-40 border rounded-lg p-2 shadow-md transition-colors ${
-          focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-        }`}
-        title="フォーカスモード"
-      >
-        <Focus className="size-5" />
-      </button>
+        <button
+          onClick={() => setCloseAllCounter((c) => c + 1)}
+          className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+          title="すべてのノードを閉じる"
+        >
+          <FoldVertical className="size-5 text-gray-700" />
+        </button>
 
-      <button
-        onClick={() => setCloseAllCounter((c) => c + 1)}
-        className="absolute top-4 right-28 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
-        title="すべてのノードを閉じる"
-      >
-        <FoldVertical className="size-5 text-gray-700" />
-      </button>
+        <button
+          onClick={() => setFocusMode((prev) => !prev)}
+          className={`border rounded-lg p-2 shadow-md transition-colors ${
+            focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+          }`}
+          title="フォーカスモード"
+        >
+          <Focus className="size-5" />
+        </button>
+
+        <button
+          onClick={() => setFileTreeOpen((prev) => !prev)}
+          className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+          title="ファイルツリー"
+        >
+          <FolderTree className="size-5 text-gray-700" />
+        </button>
+      </div>
 
       <ReactFlow
         nodes={nodesWithCallbacks}
