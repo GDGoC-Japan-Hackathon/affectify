@@ -41,6 +41,8 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
 
   const [copied, setCopied] = useState(false);
   const [isDoubleClickViewEnabled, setIsDoubleClickViewEnabled] = useState(true);
+  const isDoubleClickViewEnabledRef = useRef(isDoubleClickViewEnabled);
+  isDoubleClickViewEnabledRef.current = isDoubleClickViewEnabled;
   const [position, setPosition] = useState(() => {
     if (initialPosition) return initialPosition;
     const x = typeof window !== "undefined" ? Math.max(100, window.innerWidth - 600) : 100;
@@ -345,7 +347,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
               editor.onMouseDown((e) => {
                 const lineNumber = e.target.position?.lineNumber;
                 if (lineNumber == null) return;
-                if (isDoubleClickViewEnabled && e.event.detail === 2) {
+                if (isDoubleClickViewEnabledRef.current && e.event.detail === 2) {
                   const node = lineNodeMapRef.current[lineNumber - 1];
                   if (node) onNodeClickRef.current?.(node.id);
                 }
