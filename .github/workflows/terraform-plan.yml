@@ -1,0 +1,44 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-plan.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform-plan-dev:
+    name: Terraform plan (dev)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/452456627550/locations/global/workloadIdentityPools/github-actions/providers/github-provider
+          service_account: whitecoder-github-deployer@hackathon-2e83a.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        env:
+          TF_VAR_cloud_sql_user_password: ${{ secrets.DEV_CLOUD_SQL_USER_PASSWORD }}
+          TF_VAR_firebase_admin_credentials_json: ${{ secrets.DEV_FIREBASE_ADMIN_CREDENTIALS_JSON }}
+          TF_VAR_backend_image_tag: ${{ github.event.pull_request.head.sha }}
+        run: terraform plan
