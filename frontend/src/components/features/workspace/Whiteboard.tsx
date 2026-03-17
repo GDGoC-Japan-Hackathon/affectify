@@ -9,7 +9,7 @@ import { CodeCard } from "./CodeCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, RotateCcw, RotateCw } from "lucide-react";
 import { computeLayout, computeSCCs } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
@@ -94,6 +94,61 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const zMax = useRef(100);
   const hoverNodeId = useRef<string | null>(null);
   const hoverSavedZ = useRef<number>(0);
+  const historyPastRef = useRef<Node[][]>([]);
+  const historyFutureRef = useRef<Node[][]>([]);
+  const [, setHistoryTick] = useState(0);
+  const suppressHistoryRef = useRef(false);
+  const isLayoutAdjustingRef = useRef(false);
+  const isCodeEditSessionRef = useRef(false);
+  const codeEditSessionTimerRef = useRef<number | null>(null);
+
+  const cloneNodesSnapshot = useCallback((list: Node[]): Node[] => {
+    return list.map((n) => ({
+      ...n,
+      position: { ...n.position },
+      data: { ...(n.data as Record<string, unknown>) },
+      style: n.style ? { ...n.style } : undefined,
+    }));
+  }, []);
+
+  const pushHistorySnapshot = useCallback(
+    (snapshot: Node[]) => {
+      if (suppressHistoryRef.current) return;
+      historyPastRef.current.push(cloneNodesSnapshot(snapshot));
+      if (historyPastRef.current.length > 100) historyPastRef.current.shift();
+      historyFutureRef.current = [];
+      setHistoryTick((v) => v + 1);
+    },
+    [cloneNodesSnapshot],
+  );
+
+  const undo = useCallback(() => {
+    if (historyPastRef.current.length === 0) return;
+    const prev = historyPastRef.current.pop();
+    if (!prev) return;
+
+    historyFutureRef.current.push(cloneNodesSnapshot(nodes));
+    suppressHistoryRef.current = true;
+    setNodes(cloneNodesSnapshot(prev));
+    queueMicrotask(() => {
+      suppressHistoryRef.current = false;
+    });
+    setHistoryTick((v) => v + 1);
+  }, [nodes, setNodes, cloneNodesSnapshot]);
+
+  const redo = useCallback(() => {
+    if (historyFutureRef.current.length === 0) return;
+    const next = historyFutureRef.current.pop();
+    if (!next) return;
+
+    historyPastRef.current.push(cloneNodesSnapshot(nodes));
+    suppressHistoryRef.current = true;
+    setNodes(cloneNodesSnapshot(next));
+    queueMicrotask(() => {
+      suppressHistoryRef.current = false;
+    });
+    setHistoryTick((v) => v + 1);
+  }, [nodes, setNodes, cloneNodesSnapshot]);
 
   // zMaxを+1してノードを最前面にする（展開・クリック・ドラッグ用）
   const bringToFront = useCallback(
@@ -181,6 +236,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   const applyLayoutInstant = useCallback(
     (xGap: number, yGap: number) => {
+      if (!isLayoutAdjustingRef.current) {
+        pushHistorySnapshot(nodes);
+        isLayoutAdjustingRef.current = true;
+      }
       const currentBoardEdges = edges.map((e) => ({
         id: e.id,
         from_node_id: e.source,
@@ -199,12 +258,14 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         });
       });
     },
-    [edges, setNodes],
+    [edges, setNodes, nodes, pushHistorySnapshot],
   );
 
   // 自動レイアウト
   const handleAutoLayout = useCallback((xGap = layoutXGap, yGap = layoutYGap) => {
     if (isLayoutAnimatingRef.current) return;
+
+    pushHistorySnapshot(nodes);
 
     const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
     const boardEdges = edges.map((e) => ({
@@ -265,7 +326,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
     // TODO: APIが追加されたら以下でDBのx,yを保存する
     // targetPositions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
-  }, [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap]);
+  }, [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap, pushHistorySnapshot]);
 
   useEffect(() => {
     if (!isLayoutPanelOpen || isLayoutAnimatingRef.current) return;
@@ -281,9 +342,45 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   }, [isLayoutPanelOpen, layoutXGap, layoutYGap, applyLayoutInstant]);
 
   useEffect(() => {
+    if (!isLayoutPanelOpen) {
+      isLayoutAdjustingRef.current = false;
+    }
+  }, [isLayoutPanelOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+
+      if (e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [undo, redo]);
+
+  useEffect(() => {
     return () => {
       if (layoutClickTimeoutRef.current !== null) {
         window.clearTimeout(layoutClickTimeoutRef.current);
+      }
+      if (codeEditSessionTimerRef.current !== null) {
+        window.clearTimeout(codeEditSessionTimerRef.current);
       }
     };
   }, []);
@@ -312,6 +409,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const newNodeCounter = useRef(0);
   const handleAddNode = useCallback(
     (afterNodeId: string | null, filePath: string, name: string) => {
+      pushHistorySnapshot(nodes);
       newNodeCounter.current += 1;
       const newId = `new-node-${Date.now()}-${newNodeCounter.current}`;
       const funcName = name || "newFunction";
@@ -341,15 +439,27 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         return [...nds.slice(0, afterIdx + 1), newNode, ...nds.slice(afterIdx + 1)];
       });
     },
-    [nodes, setNodes],
+    [nodes, setNodes, pushHistorySnapshot],
   );
 
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
     (nodeId: string, code: string) => {
+      if (!isCodeEditSessionRef.current) {
+        pushHistorySnapshot(nodes);
+        isCodeEditSessionRef.current = true;
+      }
+      if (codeEditSessionTimerRef.current !== null) {
+        window.clearTimeout(codeEditSessionTimerRef.current);
+      }
+      codeEditSessionTimerRef.current = window.setTimeout(() => {
+        isCodeEditSessionRef.current = false;
+        codeEditSessionTimerRef.current = null;
+      }, 700);
+
       setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, code_text: code } } : n)));
     },
-    [setNodes],
+    [setNodes, nodes, pushHistorySnapshot],
   );
 
   // ノード展開時にzIndexを上げる + フィットして全体表示
@@ -427,6 +537,24 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
+          <button
+            onClick={undo}
+            disabled={historyPastRef.current.length === 0}
+            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Undo (Ctrl/Cmd+Z)"
+          >
+            <RotateCcw className="size-5 text-gray-700" />
+          </button>
+
+          <button
+            onClick={redo}
+            disabled={historyFutureRef.current.length === 0}
+            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Redo (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)"
+          >
+            <RotateCw className="size-5 text-gray-700" />
+          </button>
+
           <button
             ref={layoutButtonRef}
             onClick={() => {
@@ -523,7 +651,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         onEdgesChange={onEdgesChange}
         onNodeMouseEnter={(_, node) => handleNodeHover(node.id)}
         onNodeMouseLeave={() => handleNodeHover(null)}
-        onNodeDragStart={(_, node) => bringToFront(node.id)}
+        onNodeDragStart={(_, node) => {
+          pushHistorySnapshot(nodes);
+          bringToFront(node.id);
+        }}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
