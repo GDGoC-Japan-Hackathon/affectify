@@ -32,9 +32,7 @@ func newDesignGuide(db *gorm.DB, opts ...gen.DOOption) designGuide {
 	_designGuide.Name = field.NewString(tableName, "name")
 	_designGuide.Description = field.NewString(tableName, "description")
 	_designGuide.Content = field.NewString(tableName, "content")
-	_designGuide.Visibility = field.NewString(tableName, "visibility")
 	_designGuide.CreatedBy = field.NewInt64(tableName, "created_by")
-	_designGuide.TeamID = field.NewInt64(tableName, "team_id")
 	_designGuide.CreatedAt = field.NewTime(tableName, "created_at")
 	_designGuide.UpdatedAt = field.NewTime(tableName, "updated_at")
 
@@ -51,9 +49,7 @@ type designGuide struct {
 	Name        field.String
 	Description field.String
 	Content     field.String
-	Visibility  field.String
 	CreatedBy   field.Int64
-	TeamID      field.Int64
 	CreatedAt   field.Time
 	UpdatedAt   field.Time
 
@@ -76,9 +72,7 @@ func (d *designGuide) updateTableName(table string) *designGuide {
 	d.Name = field.NewString(table, "name")
 	d.Description = field.NewString(table, "description")
 	d.Content = field.NewString(table, "content")
-	d.Visibility = field.NewString(table, "visibility")
 	d.CreatedBy = field.NewInt64(table, "created_by")
-	d.TeamID = field.NewInt64(table, "team_id")
 	d.CreatedAt = field.NewTime(table, "created_at")
 	d.UpdatedAt = field.NewTime(table, "updated_at")
 
@@ -107,14 +101,12 @@ func (d *designGuide) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (d *designGuide) fillFieldMap() {
-	d.fieldMap = make(map[string]field.Expr, 9)
+	d.fieldMap = make(map[string]field.Expr, 7)
 	d.fieldMap["id"] = d.ID
 	d.fieldMap["name"] = d.Name
 	d.fieldMap["description"] = d.Description
 	d.fieldMap["content"] = d.Content
-	d.fieldMap["visibility"] = d.Visibility
 	d.fieldMap["created_by"] = d.CreatedBy
-	d.fieldMap["team_id"] = d.TeamID
 	d.fieldMap["created_at"] = d.CreatedAt
 	d.fieldMap["updated_at"] = d.UpdatedAt
 }

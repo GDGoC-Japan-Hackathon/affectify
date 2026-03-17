@@ -24,9 +24,7 @@ var (
 	Edge            *edge
 	Node            *node
 	Project         *project
-	ProjectShare    *projectShare
-	Team            *team
-	TeamMember      *teamMember
+	ProjectMember   *projectMember
 	User            *user
 	Variant         *variant
 )
@@ -40,9 +38,7 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	Edge = &Q.Edge
 	Node = &Q.Node
 	Project = &Q.Project
-	ProjectShare = &Q.ProjectShare
-	Team = &Q.Team
-	TeamMember = &Q.TeamMember
+	ProjectMember = &Q.ProjectMember
 	User = &Q.User
 	Variant = &Q.Variant
 }
@@ -57,9 +53,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		Edge:            newEdge(db, opts...),
 		Node:            newNode(db, opts...),
 		Project:         newProject(db, opts...),
-		ProjectShare:    newProjectShare(db, opts...),
-		Team:            newTeam(db, opts...),
-		TeamMember:      newTeamMember(db, opts...),
+		ProjectMember:   newProjectMember(db, opts...),
 		User:            newUser(db, opts...),
 		Variant:         newVariant(db, opts...),
 	}
@@ -75,9 +69,7 @@ type Query struct {
 	Edge            edge
 	Node            node
 	Project         project
-	ProjectShare    projectShare
-	Team            team
-	TeamMember      teamMember
+	ProjectMember   projectMember
 	User            user
 	Variant         variant
 }
@@ -94,9 +86,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		Edge:            q.Edge.clone(db),
 		Node:            q.Node.clone(db),
 		Project:         q.Project.clone(db),
-		ProjectShare:    q.ProjectShare.clone(db),
-		Team:            q.Team.clone(db),
-		TeamMember:      q.TeamMember.clone(db),
+		ProjectMember:   q.ProjectMember.clone(db),
 		User:            q.User.clone(db),
 		Variant:         q.Variant.clone(db),
 	}
@@ -120,9 +110,7 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		Edge:            q.Edge.replaceDB(db),
 		Node:            q.Node.replaceDB(db),
 		Project:         q.Project.replaceDB(db),
-		ProjectShare:    q.ProjectShare.replaceDB(db),
-		Team:            q.Team.replaceDB(db),
-		TeamMember:      q.TeamMember.replaceDB(db),
+		ProjectMember:   q.ProjectMember.replaceDB(db),
 		User:            q.User.replaceDB(db),
 		Variant:         q.Variant.replaceDB(db),
 	}
@@ -136,9 +124,7 @@ type queryCtx struct {
 	Edge            IEdgeDo
 	Node            INodeDo
 	Project         IProjectDo
-	ProjectShare    IProjectShareDo
-	Team            ITeamDo
-	TeamMember      ITeamMemberDo
+	ProjectMember   IProjectMemberDo
 	User            IUserDo
 	Variant         IVariantDo
 }
@@ -152,9 +138,7 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		Edge:            q.Edge.WithContext(ctx),
 		Node:            q.Node.WithContext(ctx),
 		Project:         q.Project.WithContext(ctx),
-		ProjectShare:    q.ProjectShare.WithContext(ctx),
-		Team:            q.Team.WithContext(ctx),
-		TeamMember:      q.TeamMember.WithContext(ctx),
+		ProjectMember:   q.ProjectMember.WithContext(ctx),
 		User:            q.User.WithContext(ctx),
 		Variant:         q.Variant.WithContext(ctx),
 	}

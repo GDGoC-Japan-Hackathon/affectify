@@ -19,7 +19,6 @@ type ActivityLog struct {
 	ID                int64          `gorm:"column:id;primaryKey;autoIncrement"`
 	UserID            int64          `gorm:"column:user_id;not null;index"`
 	ProjectID         *int64         `gorm:"column:project_id;index"`
-	TeamID            *int64         `gorm:"column:team_id;index"`
 	ActionType        string         `gorm:"column:action_type;type:varchar(100);not null"`
 	ActionDescription *string        `gorm:"column:action_description;type:text"`
 	Metadata          datatypes.JSON `gorm:"column:metadata;type:jsonb"`
