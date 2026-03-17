@@ -13,7 +13,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import { DesignGuideVisibility } from '@/types';
+import { DesignGuideVisibility } from '@/types/type';
 
 type ViewMode = 'edit' | 'preview' | 'split';
 

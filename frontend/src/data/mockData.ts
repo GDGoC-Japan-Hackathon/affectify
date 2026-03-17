@@ -1,4 +1,4 @@
-import { User, Team, Project } from '@/types';
+import { User, Project } from '@/types/type';
 
 export const mockUser: User = {
   id: 'user-1',
@@ -7,44 +7,61 @@ export const mockUser: User = {
   avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Tanaka',
 };
 
-export const mockTeams: Team[] = [
+export const mockUsers: User[] = [
+  mockUser,
   {
-    id: 'team-1',
-    name: 'デザインチーム',
-    description: 'UI/UX設計とフロントエンド開発',
-    createdBy: 'user-1',
-    members: [
-      mockUser,
-      {
-        id: 'user-2',
-        name: '佐藤 花子',
-        email: 'sato@example.com',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sato',
-      },
-      {
-        id: 'user-3',
-        name: '鈴木 一郎',
-        email: 'suzuki@example.com',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Suzuki',
-      },
-    ],
-    createdAt: new Date('2024-01-15'),
+    id: 'user-2',
+    name: '佐藤 花子',
+    email: 'sato@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sato',
   },
   {
-    id: 'team-2',
-    name: '開発チーム',
-    description: 'バックエンド開発とインフラ',
-    createdBy: 'user-1',
-    members: [
-      mockUser,
-      {
-        id: 'user-4',
-        name: '山田 次郎',
-        email: 'yamada@example.com',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Yamada',
-      },
-    ],
-    createdAt: new Date('2024-02-01'),
+    id: 'user-3',
+    name: '鈴木 一郎',
+    email: 'suzuki@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Suzuki',
+  },
+  {
+    id: 'user-4',
+    name: '山田 次郎',
+    email: 'yamada@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Yamada',
+  },
+  {
+    id: 'user-5',
+    name: '高橋 美咲',
+    email: 'takahashi@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Takahashi',
+  },
+  {
+    id: 'user-6',
+    name: '伊藤 健太',
+    email: 'ito@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ito',
+  },
+  {
+    id: 'user-7',
+    name: '渡辺 あかり',
+    email: 'watanabe@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Watanabe',
+  },
+  {
+    id: 'user-8',
+    name: '中村 大輔',
+    email: 'nakamura@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Nakamura',
+  },
+  {
+    id: 'user-9',
+    name: '小林 さくら',
+    email: 'kobayashi@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kobayashi',
+  },
+  {
+    id: 'user-10',
+    name: '加藤 翔太',
+    email: 'kato@example.com',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kato',
   },
 ];
 
@@ -59,10 +76,7 @@ export const mockProjects: Project[] = [
     nodeCount: 24,
     analysisScore: 85,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-1'],
-    },
+    members: ['user-1', 'user-2', 'user-3', 'user-4', 'user-5', 'user-6', 'user-7', 'user-8', 'user-9', 'user-10'],
     variants: [
       {
         id: 'variant-1',
@@ -114,10 +128,7 @@ export const mockProjects: Project[] = [
     nodeCount: 18,
     analysisScore: 92,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-1'],
-    },
+    members: ['user-1', 'user-2'],
     variants: [
       {
         id: 'variant-4',
@@ -154,9 +165,7 @@ export const mockProjects: Project[] = [
     nodeCount: 32,
     analysisScore: 78,
 
-    shareSettings: {
-      visibility: 'private',
-    },
+    members: ['user-1'],
     variants: [
       {
         id: 'variant-6',
@@ -181,10 +190,7 @@ export const mockProjects: Project[] = [
     nodeCount: 15,
     analysisScore: 88,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-2'],
-    },
+    members: ['user-1', 'user-4'],
     variants: [
       {
         id: 'variant-7',
@@ -209,10 +215,7 @@ export const mockProjects: Project[] = [
     nodeCount: 21,
     analysisScore: 95,
 
-    shareSettings: {
-      visibility: 'teams',
-      sharedWithTeams: ['team-1'],
-    },
+    members: ['user-1', 'user-2'],
     variants: [
       {
         id: 'variant-8',
@@ -237,9 +240,7 @@ export const mockProjects: Project[] = [
     nodeCount: 28,
     analysisScore: 72,
 
-    shareSettings: {
-      visibility: 'private',
-    },
+    members: ['user-1'],
     variants: [
       {
         id: 'variant-9',

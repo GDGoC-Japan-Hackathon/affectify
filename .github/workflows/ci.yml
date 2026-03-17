@@ -38,6 +38,8 @@ jobs:
         with:
           go-version-file: backend/go.mod
       - uses: bufbuild/buf-setup-action@v1
+      - name: Install Atlas CLI
+        run: curl -sSf https://atlasgo.sh | sh
       - name: Install protoc plugins
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
@@ -48,6 +50,15 @@ jobs:
         working-directory: proto
       - name: Generate GORM query code
         run: go run ./cmd/genorm
+        working-directory: backend
+      - name: Verify Atlas schema loader
+        run: go run ./cmd/atlasschema > /dev/null
+        working-directory: backend
+      - name: Verify Atlas migration hashes(マイグレーションファイルが不正に書き換えられてたりの対策)
+        run: atlas migrate hash --dir file://migrations
+        working-directory: backend
+      - name: Verify Atlas migrations are up to date(entityからのマイグレーションを忘れていないか確認)
+        run: atlas migrate diff ci_drift_check --env local
         working-directory: backend
       - name: Verify generated code is committed
         run: git diff --exit-code

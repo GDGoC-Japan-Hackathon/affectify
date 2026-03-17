@@ -29,6 +29,7 @@ func newUser(db *gorm.DB, opts ...gen.DOOption) user {
 	tableName := _user.userDo.TableName()
 	_user.ALL = field.NewAsterisk(tableName)
 	_user.ID = field.NewInt64(tableName, "id")
+	_user.FirebaseUID = field.NewString(tableName, "firebase_uid")
 	_user.Email = field.NewString(tableName, "email")
 	_user.Name = field.NewString(tableName, "name")
 	_user.AvatarURL = field.NewString(tableName, "avatar_url")
@@ -46,6 +47,7 @@ type user struct {
 
 	ALL         field.Asterisk
 	ID          field.Int64
+	FirebaseUID field.String
 	Email       field.String
 	Name        field.String
 	AvatarURL   field.String
@@ -69,6 +71,7 @@ func (u user) As(alias string) *user {
 func (u *user) updateTableName(table string) *user {
 	u.ALL = field.NewAsterisk(table)
 	u.ID = field.NewInt64(table, "id")
+	u.FirebaseUID = field.NewString(table, "firebase_uid")
 	u.Email = field.NewString(table, "email")
 	u.Name = field.NewString(table, "name")
 	u.AvatarURL = field.NewString(table, "avatar_url")
@@ -99,8 +102,9 @@ func (u *user) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (u *user) fillFieldMap() {
-	u.fieldMap = make(map[string]field.Expr, 7)
+	u.fieldMap = make(map[string]field.Expr, 8)
 	u.fieldMap["id"] = u.ID
+	u.fieldMap["firebase_uid"] = u.FirebaseUID
 	u.fieldMap["email"] = u.Email
 	u.fieldMap["name"] = u.Name
 	u.fieldMap["avatar_url"] = u.AvatarURL

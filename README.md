@@ -1,6 +1,6 @@
-# affectify
+# WhiteCoder
 
-ハッカソンチーム: affectify
+ハッカソンチーム: WhiteCoder
 
 ## セットアップ
 

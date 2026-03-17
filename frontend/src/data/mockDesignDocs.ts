@@ -1,4 +1,4 @@
-import { AnalysisReport } from '@/types';
+import { AnalysisReport } from '@/types/type';
 
 export const mockAnalysisReports: Record<string, AnalysisReport> = {
   'variant-1': {

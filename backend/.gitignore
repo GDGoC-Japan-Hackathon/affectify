@@ -2,3 +2,5 @@
 /gen
 .env
 /genorm
+/*firebase-adminsdk*.json
+server

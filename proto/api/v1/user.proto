@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+service UserService {
+  // 認証済みユーザーに対応するアプリ内ユーザー情報を取得する。
+  rpc GetMe(GetMeRequest) returns (GetMeResponse) {}
+  // Firebase の認証情報を users テーブルへ同期する。
+  rpc SyncMe(SyncMeRequest) returns (SyncMeResponse) {}
+}
+
+message User {
+  int64 id = 1;
+  string email = 2;
+  string name = 3;
+  string avatar_url = 4;
+}
+
+message GetMeRequest {}
+
+message GetMeResponse {
+  User user = 1;
+}
+
+message SyncMeRequest {}
+
+message SyncMeResponse {
+  User user = 1;
+  bool created = 2;
+}
