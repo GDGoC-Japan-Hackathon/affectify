@@ -278,7 +278,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {/* ファイルツリー開閉ボタン */}
       <button
         onClick={() => setFileTreeOpen((prev) => !prev)}
-        className="absolute top-4 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+        className="absolute top-4 right-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
         title="ファイルツリー"
       >
         <FolderTree className="size-5 text-gray-700" />
@@ -286,7 +286,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
       <button
         onClick={() => setFocusMode((prev) => !prev)}
-        className={`absolute top-4 left-16 z-40 border rounded-lg p-2 shadow-md transition-colors ${
+        className={`absolute top-4 right-16 z-40 border rounded-lg p-2 shadow-md transition-colors ${
           focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
         }`}
         title="フォーカスモード"
@@ -296,7 +296,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
       <button
         onClick={() => setCloseAllCounter((c) => c + 1)}
-        className="absolute top-4 left-28 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+        className="absolute top-4 right-28 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
         title="すべてのノードを閉じる"
       >
         <FoldVertical className="size-5 text-gray-700" />
@@ -306,7 +306,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         nodes={nodesWithCallbacks}
         edges={edges}
         onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+onEdgesChange={onEdgesChange}
         onNodeMouseEnter={(_, node) => handleNodeHover(node.id)}
         onNodeMouseLeave={() => handleNodeHover(null)}
         onNodeDragStart={(_, node) => bringToFront(node.id)}
