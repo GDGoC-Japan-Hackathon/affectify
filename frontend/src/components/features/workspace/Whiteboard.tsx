@@ -23,6 +23,18 @@ interface ViewerWindow {
   activeTab: string;
 }
 
+interface NamedCheckpoint {
+  id: string;
+  name: string;
+  nodes: Node[];
+}
+
+interface HistorySnapshot {
+  nodes: Node[];
+  checkpoints: NamedCheckpoint[];
+  selectedCheckpointId: string;
+}
+
 const nodeTypes: NodeTypes = {
   codeCard: CodeCard,
 };
@@ -88,15 +100,20 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [layoutXGap, setLayoutXGap] = useState(200);
   const [layoutYGap, setLayoutYGap] = useState(200);
   const [isLayoutPanelOpen, setIsLayoutPanelOpen] = useState(false);
+  const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
   const layoutClickTimeoutRef = useRef<number | null>(null);
   const layoutButtonRef = useRef<HTMLButtonElement | null>(null);
   const layoutPanelRef = useRef<HTMLDivElement | null>(null);
+  const saveMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const saveMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const zMax = useRef(100);
   const hoverNodeId = useRef<string | null>(null);
   const hoverSavedZ = useRef<number>(0);
-  const historyPastRef = useRef<Node[][]>([]);
-  const historyFutureRef = useRef<Node[][]>([]);
+  const historyPastRef = useRef<HistorySnapshot[]>([]);
+  const historyFutureRef = useRef<HistorySnapshot[]>([]);
   const [, setHistoryTick] = useState(0);
+  const [checkpoints, setCheckpoints] = useState<NamedCheckpoint[]>([]);
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState("");
   const suppressHistoryRef = useRef(false);
   const isLayoutAdjustingRef = useRef(false);
   const isCodeEditSessionRef = useRef(false);
@@ -111,15 +128,38 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     }));
   }, []);
 
+  const cloneCheckpointsSnapshot = useCallback(
+    (list: NamedCheckpoint[]): NamedCheckpoint[] => {
+      return list.map((cp) => ({
+        ...cp,
+        nodes: cloneNodesSnapshot(cp.nodes),
+      }));
+    },
+    [cloneNodesSnapshot],
+  );
+
+  const makeHistorySnapshot = useCallback(
+    (
+      sourceNodes: Node[] = nodes,
+      sourceCheckpoints: NamedCheckpoint[] = checkpoints,
+      sourceSelectedCheckpointId: string = selectedCheckpointId,
+    ): HistorySnapshot => ({
+      nodes: cloneNodesSnapshot(sourceNodes),
+      checkpoints: cloneCheckpointsSnapshot(sourceCheckpoints),
+      selectedCheckpointId: sourceSelectedCheckpointId,
+    }),
+    [nodes, checkpoints, selectedCheckpointId, cloneNodesSnapshot, cloneCheckpointsSnapshot],
+  );
+
   const pushHistorySnapshot = useCallback(
-    (snapshot: Node[]) => {
+    (snapshot?: HistorySnapshot) => {
       if (suppressHistoryRef.current) return;
-      historyPastRef.current.push(cloneNodesSnapshot(snapshot));
+      historyPastRef.current.push(snapshot ?? makeHistorySnapshot());
       if (historyPastRef.current.length > 100) historyPastRef.current.shift();
       historyFutureRef.current = [];
       setHistoryTick((v) => v + 1);
     },
-    [cloneNodesSnapshot],
+    [makeHistorySnapshot],
   );
 
   const undo = useCallback(() => {
@@ -127,28 +167,67 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     const prev = historyPastRef.current.pop();
     if (!prev) return;
 
-    historyFutureRef.current.push(cloneNodesSnapshot(nodes));
+    historyFutureRef.current.push(makeHistorySnapshot());
     suppressHistoryRef.current = true;
-    setNodes(cloneNodesSnapshot(prev));
+    setNodes(cloneNodesSnapshot(prev.nodes));
+    setCheckpoints(cloneCheckpointsSnapshot(prev.checkpoints));
+    setSelectedCheckpointId(prev.selectedCheckpointId);
     queueMicrotask(() => {
       suppressHistoryRef.current = false;
     });
     setHistoryTick((v) => v + 1);
-  }, [nodes, setNodes, cloneNodesSnapshot]);
+  }, [setNodes, cloneNodesSnapshot, makeHistorySnapshot, cloneCheckpointsSnapshot]);
 
   const redo = useCallback(() => {
     if (historyFutureRef.current.length === 0) return;
     const next = historyFutureRef.current.pop();
     if (!next) return;
 
-    historyPastRef.current.push(cloneNodesSnapshot(nodes));
+    historyPastRef.current.push(makeHistorySnapshot());
     suppressHistoryRef.current = true;
-    setNodes(cloneNodesSnapshot(next));
+    setNodes(cloneNodesSnapshot(next.nodes));
+    setCheckpoints(cloneCheckpointsSnapshot(next.checkpoints));
+    setSelectedCheckpointId(next.selectedCheckpointId);
     queueMicrotask(() => {
       suppressHistoryRef.current = false;
     });
     setHistoryTick((v) => v + 1);
-  }, [nodes, setNodes, cloneNodesSnapshot]);
+  }, [setNodes, cloneNodesSnapshot, makeHistorySnapshot, cloneCheckpointsSnapshot]);
+
+  const saveCheckpoint = useCallback(() => {
+    const now = new Date();
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const suggested = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
+    const input = window.prompt("スナップショット名を入力", suggested);
+    if (input === null) return;
+    const name = input.trim() || suggested;
+    const id = `cp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const snapshot = cloneNodesSnapshot(nodes);
+
+    pushHistorySnapshot();
+    setCheckpoints((prev) => [{ id, name, nodes: snapshot }, ...prev]);
+    setSelectedCheckpointId(id);
+  }, [nodes, cloneNodesSnapshot, pushHistorySnapshot]);
+
+  const restoreCheckpoint = useCallback(() => {
+    const target = checkpoints.find((cp) => cp.id === selectedCheckpointId);
+    if (!target) return;
+
+    // 復元操作自体をUndo可能にするため、復元前状態を履歴に積む
+    pushHistorySnapshot();
+    setNodes(cloneNodesSnapshot(target.nodes));
+  }, [checkpoints, selectedCheckpointId, nodes, setNodes, cloneNodesSnapshot, pushHistorySnapshot]);
+
+  const deleteCheckpoint = useCallback(
+    (checkpointId?: string) => {
+      const targetId = checkpointId ?? selectedCheckpointId;
+      if (!targetId) return;
+      pushHistorySnapshot();
+      setCheckpoints((prev) => prev.filter((cp) => cp.id !== targetId));
+      setSelectedCheckpointId((prev) => (prev === targetId ? "" : prev));
+    },
+    [selectedCheckpointId, pushHistorySnapshot],
+  );
 
   // zMaxを+1してノードを最前面にする（展開・クリック・ドラッグ用）
   const bringToFront = useCallback(
@@ -237,7 +316,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const applyLayoutInstant = useCallback(
     (xGap: number, yGap: number) => {
       if (!isLayoutAdjustingRef.current) {
-        pushHistorySnapshot(nodes);
+        pushHistorySnapshot();
         isLayoutAdjustingRef.current = true;
       }
       const currentBoardEdges = edges.map((e) => ({
@@ -258,14 +337,14 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         });
       });
     },
-    [edges, setNodes, nodes, pushHistorySnapshot],
+    [edges, setNodes, pushHistorySnapshot],
   );
 
   // 自動レイアウト
   const handleAutoLayout = useCallback((xGap = layoutXGap, yGap = layoutYGap) => {
     if (isLayoutAnimatingRef.current) return;
 
-    pushHistorySnapshot(nodes);
+    pushHistorySnapshot();
 
     const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
     const boardEdges = edges.map((e) => ({
@@ -402,6 +481,23 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     };
   }, [isLayoutPanelOpen]);
 
+  useEffect(() => {
+    if (!isSaveMenuOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof globalThis.Element)) return;
+      if (saveMenuButtonRef.current?.contains(target)) return;
+      if (saveMenuPanelRef.current?.contains(target)) return;
+      setIsSaveMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [isSaveMenuOpen]);
+
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
@@ -409,7 +505,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const newNodeCounter = useRef(0);
   const handleAddNode = useCallback(
     (afterNodeId: string | null, filePath: string, name: string) => {
-      pushHistorySnapshot(nodes);
+      pushHistorySnapshot();
       newNodeCounter.current += 1;
       const newId = `new-node-${Date.now()}-${newNodeCounter.current}`;
       const funcName = name || "newFunction";
@@ -446,7 +542,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const handleCodeChange = useCallback(
     (nodeId: string, code: string) => {
       if (!isCodeEditSessionRef.current) {
-        pushHistorySnapshot(nodes);
+        pushHistorySnapshot();
         isCodeEditSessionRef.current = true;
       }
       if (codeEditSessionTimerRef.current !== null) {
@@ -459,7 +555,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
       setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, code_text: code } } : n)));
     },
-    [setNodes, nodes, pushHistorySnapshot],
+    [setNodes, pushHistorySnapshot],
   );
 
   // ノード展開時にzIndexを上げる + フィットして全体表示
@@ -554,6 +650,76 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           >
             <RotateCw className="size-5 text-gray-700" />
           </button>
+
+          <div className="relative">
+            <button
+              ref={saveMenuButtonRef}
+              onClick={() => setIsSaveMenuOpen((prev) => !prev)}
+              className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 shadow-md hover:bg-gray-50 transition-colors"
+              title="セーブメニュー"
+            >
+              セーブ
+            </button>
+
+            {isSaveMenuOpen && (
+              <div
+                ref={saveMenuPanelRef}
+                className="absolute right-0 mt-2 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
+              >
+                <button
+                  onClick={saveCheckpoint}
+                  className="mb-2 w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  title="名前付きで現在地点を保存"
+                >
+                  名前付きで保存
+                </button>
+
+                <div className="mb-2 max-h-40 overflow-y-auto rounded-md border border-gray-200">
+                  {checkpoints.length === 0 ? (
+                    <div className="px-2 py-2 text-xs text-gray-500">セーブ地点はまだありません</div>
+                  ) : (
+                    checkpoints.map((cp) => {
+                      const selected = cp.id === selectedCheckpointId;
+                      return (
+                        <div
+                          key={cp.id}
+                          className={`flex items-center justify-between gap-2 border-b border-gray-100 px-2 py-1.5 last:border-b-0 ${
+                            selected ? "bg-blue-50" : ""
+                          }`}
+                        >
+                          <button
+                            onClick={() => setSelectedCheckpointId(cp.id)}
+                            className="min-w-0 flex-1 truncate text-left text-xs text-gray-700"
+                            title={cp.name}
+                          >
+                            {cp.name}
+                          </button>
+                          <button
+                            onClick={() => deleteCheckpoint(cp.id)}
+                            className="h-5 w-5 rounded text-xs leading-5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                            title="このセーブ地点を削除（Undo可能）"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="flex">
+                  <button
+                    onClick={restoreCheckpoint}
+                    disabled={!selectedCheckpointId}
+                    className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="セーブ地点に戻る（この操作はUndo可能）"
+                  >
+                    戻る
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <button
             ref={layoutButtonRef}
@@ -652,7 +818,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         onNodeMouseEnter={(_, node) => handleNodeHover(node.id)}
         onNodeMouseLeave={() => handleNodeHover(null)}
         onNodeDragStart={(_, node) => {
-          pushHistorySnapshot(nodes);
+          pushHistorySnapshot();
           bringToFront(node.id);
         }}
         nodeTypes={nodeTypes}
