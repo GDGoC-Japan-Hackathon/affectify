@@ -154,9 +154,13 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const windowZMax = useRef(9999);
   const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
+  const layoutAnimFrameRef = useRef<number | null>(null);
+  const isLayoutAnimatingRef = useRef(false);
 
   // 自動レイアウト
   const handleAutoLayout = useCallback(() => {
+    if (isLayoutAnimatingRef.current) return;
+
     const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
     const boardEdges = edges.map((e) => ({
       id: e.id,
@@ -165,16 +169,54 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       kind: "call" as const,
       style: "solid" as const,
     }));
-    const positions = computeLayout(boardNodes, boardEdges);
-    setNodes((nds) =>
-      nds.map((n) => {
-        const pos = positions.get(n.id);
-        return pos ? { ...n, position: pos } : n;
-      }),
-    );
-    setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 50);
+    const targetPositions = computeLayout(boardNodes, boardEdges);
+    const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
+
+    const durationMs = 700;
+    const startAt = performance.now();
+    isLayoutAnimatingRef.current = true;
+
+    // 開始時に少し引いて全体が動く余地を作る
+    fitView({ padding: 0.35, duration: 220 });
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startAt) / durationMs);
+      const p = easeOutCubic(t);
+
+      setNodes((nds) =>
+        nds.map((n) => {
+          const from = startPositions.get(n.id);
+          const to = targetPositions.get(n.id);
+          if (!from || !to) return n;
+          return {
+            ...n,
+            position: {
+              x: from.x + (to.x - from.x) * p,
+              y: from.y + (to.y - from.y) * p,
+            },
+          };
+        }),
+      );
+
+      if (t < 1) {
+        layoutAnimFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      isLayoutAnimatingRef.current = false;
+      layoutAnimFrameRef.current = null;
+      fitView({ padding: 0.2, duration: 420 });
+    };
+
+    if (layoutAnimFrameRef.current !== null) {
+      cancelAnimationFrame(layoutAnimFrameRef.current);
+    }
+    layoutAnimFrameRef.current = requestAnimationFrame(tick);
+
     // TODO: APIが追加されたら以下でDBのx,yを保存する
-    // positions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
+    // targetPositions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
   }, [nodes, edges, setNodes, fitView]);
 
   const windowIdCounter = useRef(0);
