@@ -8,6 +8,7 @@ resource "google_cloud_run_v2_service" "this" {
   template {
     service_account = var.service_account_email
 
+    # Cloud SQL 接続情報は Cloud Run 側で volume として提供される。
     dynamic "volumes" {
       for_each = length(var.cloud_sql_instances) > 0 ? [1] : []
       content {
@@ -22,6 +23,7 @@ resource "google_cloud_run_v2_service" "this" {
     containers {
       image = var.image
 
+      # backend は /cloudsql/<INSTANCE_CONNECTION_NAME> を host として DSN を組み立てる。
       dynamic "volume_mounts" {
         for_each = length(var.cloud_sql_instances) > 0 ? [1] : []
         content {
@@ -60,6 +62,7 @@ resource "google_cloud_run_v2_service" "this" {
   ingress = "INGRESS_TRAFFIC_ALL"
 
   lifecycle {
+    # provider が 0 値を毎回返してくるため、未指定の scaling 差分は無視する。
     ignore_changes = [
       scaling,
     ]

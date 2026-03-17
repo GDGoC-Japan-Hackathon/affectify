@@ -36,6 +36,7 @@ module "secret_manager" {
 
   project_id      = var.project_id
   secret_ids      = var.secret_ids
+  # DB パスワードと Firebase Admin JSON の実体は Terraform 入力から Secret Manager へ流す。
   secret_versions = {
     "db-password"                  = var.cloud_sql_user_password
     "firebase-admin-credentials"   = var.firebase_admin_credentials_json
@@ -124,6 +125,7 @@ module "cloud_run" {
   service_name          = var.cloud_run_service_name
   service_account_email = google_service_account.backend.email
   image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.backend_image_name}:${var.backend_image_tag}"
+  # backend は Cloud SQL の Unix socket (/cloudsql/...) で接続する。
   cloud_sql_instances   = [module.cloud_sql.instance_connection_name]
   secret_env = {
     DB_PASSWORD                 = "db-password"

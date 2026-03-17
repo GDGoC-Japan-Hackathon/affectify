@@ -23,6 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # サービスアカウント鍵を配らず、WIF 経由で deploy 権限を借りる。
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/452456627550/locations/global/workloadIdentityPools/github-actions/providers/github-provider
@@ -47,6 +48,7 @@ jobs:
           chmod +x /usr/local/bin/cloud-sql-proxy
 
       - name: Set image tag
+        # どの commit から作った image か追えるように、git sha をそのまま tag に使う。
         run: echo "GIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
 
       - name: Generate protobuf code
@@ -72,6 +74,7 @@ jobs:
           INSTANCE_CONNECTION_NAME: ${{ env.CLOUD_SQL_INSTANCE_CONNECTION_NAME }}
           DB_NAME: ${{ env.DB_NAME }}
           DB_USER: ${{ env.DB_USER }}
+        # deploy 前に schema を進めて、アプリ本体と DB 構造のズレを減らす。
         run: ./scripts/migrate-cloud-sql.sh
 
       - name: Terraform init
@@ -84,4 +87,5 @@ jobs:
           TF_VAR_cloud_sql_user_password: ${{ secrets.DEV_CLOUD_SQL_USER_PASSWORD }}
           TF_VAR_firebase_admin_credentials_json: ${{ secrets.DEV_FIREBASE_ADMIN_CREDENTIALS_JSON }}
           TF_VAR_backend_image_tag: ${{ env.GIT_SHA }}
+        # image push 後の sha を Cloud Run に反映する。build 自体は Terraform では行わない。
         run: terraform apply -auto-approve
