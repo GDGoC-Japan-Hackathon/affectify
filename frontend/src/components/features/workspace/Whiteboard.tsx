@@ -179,6 +179,40 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
 
+  // 新規ノード追加
+  const newNodeCounter = useRef(0);
+  const handleAddNode = useCallback(
+    (afterNodeId: string | null, filePath: string, name: string) => {
+      newNodeCounter.current += 1;
+      const newId = `new-node-${Date.now()}-${newNodeCounter.current}`;
+      const funcName = name || "newFunction";
+      const refNode = afterNodeId
+        ? nodes.find((n) => n.id === afterNodeId)
+        : nodes.find((n) => (n.data as unknown as BoardNode).file_path === filePath);
+      const x = refNode?.position.x ?? 100;
+      const y = refNode ? refNode.position.y + 250 : 100;
+      const newBoardNode: BoardNode = {
+        id: newId,
+        title: funcName,
+        kind: "function",
+        code_text: `func ${funcName}() {\n\t\n}`,
+        file_path: filePath,
+        signature: "",
+        receiver: "",
+        x,
+        y,
+      };
+      setNodes((nds) => {
+        const newNode = { id: newId, type: "codeCard" as const, position: { x, y }, data: { ...newBoardNode }, zIndex: 0 };
+        if (!afterNodeId) return [...nds, newNode];
+        const afterIdx = nds.findIndex((n) => n.id === afterNodeId);
+        if (afterIdx === -1) return [...nds, newNode];
+        return [...nds.slice(0, afterIdx + 1), newNode, ...nds.slice(afterIdx + 1)];
+      });
+    },
+    [nodes, setNodes]
+  );
+
   // コード編集時にノードデータを更新
   const handleCodeChange = useCallback(
     (nodeId: string, code: string) => {
@@ -398,6 +432,7 @@ onEdgesChange={onEdgesChange}
             fitView({ nodes: [{ id: nodeId }], padding: 2.5, duration: 500, maxZoom: 0.8 });
           }}
           onCodeSync={handleCodeChange}
+          onAddNode={handleAddNode}
         />
       ))}
     </div>
