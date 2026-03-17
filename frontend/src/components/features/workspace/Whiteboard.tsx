@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ReactFlow, Background, Controls, MiniMap, SelectionMode, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
+import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
@@ -137,6 +137,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isLassoDrawing, setIsLassoDrawing] = useState(false);
   const [lassoScreenPoints, setLassoScreenPoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [isOverFlowElement, setIsOverFlowElement] = useState(false);
   const lassoFlowPointsRef = useRef<Array<{ x: number; y: number }>>([]);
   const lassoScreenPointsRef = useRef<Array<{ x: number; y: number }>>([]);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -158,8 +159,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const isCodeEditSessionRef = useRef(false);
   const codeEditSessionTimerRef = useRef<number | null>(null);
   const suppressSelectChangeRef = useRef(false);
-  const lassoDragRef = useRef(false);
-  const lassoMouseDownRef = useRef(false);
+  const isOverFlowElementRef = useRef(false);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -639,16 +639,20 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   // コールバック・エッジ数をノードデータに注入
   const nodesWithCallbacks = useMemo(
     () =>
-      nodes.map((n) => ({
-        ...n,
-        style: {
-          ...n.style,
-          // Make selected elements visually obvious with a soft glow.
-          boxShadow: n.selected ? "0 0 0 2px rgba(59,130,246,0.9), 0 0 20px rgba(59,130,246,0.45)" : n.style?.boxShadow,
-          transition: "box-shadow 120ms ease-out",
-        },
-        data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand, edgeCount: edgeCounts[n.id] ?? 0, closeAllCounter },
-      })),
+      nodes.map((n) => {
+        const baseFilter = n.style?.filter;
+        const glowFilter = "drop-shadow(0 0 2px rgba(59,130,246,0.95)) drop-shadow(0 0 10px rgba(59,130,246,0.6))";
+        return {
+          ...n,
+          style: {
+            ...n.style,
+            // drop-shadow follows the rendered silhouette better than box-shadow.
+            filter: n.selected ? (baseFilter ? `${baseFilter} ${glowFilter}` : glowFilter) : baseFilter,
+            transition: "filter 120ms ease-out",
+          },
+          data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand, edgeCount: edgeCounts[n.id] ?? 0, closeAllCounter },
+        };
+      }),
     [nodes, handleCodeChange, handleExpand, edgeCounts, closeAllCounter],
   );
 
@@ -697,7 +701,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       setLassoScreenPoints([]);
       lassoFlowPointsRef.current = [];
       lassoScreenPointsRef.current = [];
-      lassoDragRef.current = false;
       return;
     }
 
@@ -735,7 +738,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     setLassoScreenPoints([]);
     lassoFlowPointsRef.current = [];
     lassoScreenPointsRef.current = [];
-    lassoDragRef.current = false;
   }, [setNodes]);
 
   const appendLassoPointFromMouse = useCallback(
@@ -769,12 +771,42 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [reactFlow],
   );
 
+  const updateOverlayCursorTarget = useCallback((clientX: number, clientY: number) => {
+    const elements = document.elementsFromPoint(clientX, clientY);
+    const overFlowElement = elements.some((el) => el.closest(".react-flow__node"));
+    if (overFlowElement === isOverFlowElementRef.current) return;
+    isOverFlowElementRef.current = overFlowElement;
+    setIsOverFlowElement(overFlowElement);
+  }, []);
+
+  useEffect(() => {
+    if (!isSelectionMode) {
+      isOverFlowElementRef.current = false;
+      setIsOverFlowElement(false);
+      return;
+    }
+
+    const onWindowMouseMove = (event: MouseEvent) => {
+      updateOverlayCursorTarget(event.clientX, event.clientY);
+    };
+
+    const onWindowPointerMove = (event: PointerEvent) => {
+      updateOverlayCursorTarget(event.clientX, event.clientY);
+    };
+
+    window.addEventListener("mousemove", onWindowMouseMove);
+    window.addEventListener("pointermove", onWindowPointerMove);
+    return () => {
+      window.removeEventListener("mousemove", onWindowMouseMove);
+      window.removeEventListener("pointermove", onWindowPointerMove);
+    };
+  }, [isSelectionMode, updateOverlayCursorTarget]);
+
   const handleLassoOverlayMouseDown = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       if (!isSelectionMode) return;
       if (event.button === 2) return;
-
-      lassoMouseDownRef.current = true;
+      updateOverlayCursorTarget(event.clientX, event.clientY);
 
       const paneElement = boardRef.current;
       if (!paneElement) return;
@@ -793,24 +825,22 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       lassoFlowPointsRef.current = [firstFlowPoint];
       setLassoScreenPoints([firstScreenPoint]);
       setIsLassoDrawing(true);
-      lassoDragRef.current = false;
       event.preventDefault();
     },
-    [isSelectionMode, reactFlow],
+    [isSelectionMode, reactFlow, updateOverlayCursorTarget],
   );
 
   const handleLassoOverlayMouseMove = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
+      updateOverlayCursorTarget(event.clientX, event.clientY);
       if (!isSelectionMode || !isLassoDrawing) return;
       if ((event.buttons & 1) !== 1) return;
-      lassoDragRef.current = true;
       appendLassoPointFromMouse(event);
     },
-    [isSelectionMode, isLassoDrawing, appendLassoPointFromMouse],
+    [isSelectionMode, isLassoDrawing, appendLassoPointFromMouse, updateOverlayCursorTarget],
   );
 
   const handleLassoOverlayMouseUp = useCallback(() => {
-    lassoMouseDownRef.current = false;
     if (!isSelectionMode || !isLassoDrawing) return;
 
     finalizeLassoSelection();
@@ -839,28 +869,26 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
     const onWindowMouseMove = (event: MouseEvent) => {
       if (!isSelectionMode) return;
+      updateOverlayCursorTarget(event.clientX, event.clientY);
       if ((event.buttons & 1) !== 1) return;
-      lassoDragRef.current = true;
       appendLassoPointFromMouse(event);
     };
 
     const onWindowMouseUp = () => {
-      lassoMouseDownRef.current = false;
-      if (lassoDragRef.current) {
+      if (isLassoDrawing) {
         finalizeLassoSelection();
       }
     };
 
     const onWindowPointerMove = (event: PointerEvent) => {
       if (!isSelectionMode) return;
+      updateOverlayCursorTarget(event.clientX, event.clientY);
       if ((event.buttons & 1) !== 1) return;
-      lassoDragRef.current = true;
       appendLassoPointFromMouse(event);
     };
 
     const onWindowPointerUp = () => {
-      lassoMouseDownRef.current = false;
-      if (lassoDragRef.current) {
+      if (isLassoDrawing) {
         finalizeLassoSelection();
       }
     };
@@ -875,7 +903,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       window.removeEventListener("pointermove", onWindowPointerMove);
       window.removeEventListener("pointerup", onWindowPointerUp);
     };
-  }, [isLassoDrawing, finalizeLassoSelection, appendLassoPointFromMouse, isSelectionMode]);
+  }, [isLassoDrawing, finalizeLassoSelection, appendLassoPointFromMouse, isSelectionMode, updateOverlayCursorTarget]);
 
   const lassoPathD = useMemo(() => {
     if (lassoScreenPoints.length === 0) return "";
@@ -890,7 +918,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   return (
     <div ref={boardRef} className={`w-full h-full relative ${isSelectionMode ? "select-none" : ""}`}>
       {/* 右上コントロール */}
-      <div data-lasso-ignore="true" className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
+      <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
           <button onClick={undo} disabled={historyPastRef.current.length === 0} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
             <RotateCcw className="size-5 text-gray-700" />
@@ -1045,7 +1073,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         maxZoom={2}
         selectionOnDrag={false}
         panOnDrag={!isSelectionMode}
-        selectionMode={SelectionMode.Partial}
         multiSelectionKeyCode={["Shift", "Meta", "Control"]}
         proOptions={{ hideAttribution: true }}
         onInit={() => {
@@ -1064,7 +1091,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
       {isSelectionMode && (
         <div
-          className="absolute inset-0 z-30 touch-none cursor-crosshair"
+          className={`absolute inset-0 z-30 touch-none ${isOverFlowElement ? "pointer-events-none cursor-default" : "cursor-crosshair"}`}
           onMouseDown={handleLassoOverlayMouseDown}
           onMouseMove={handleLassoOverlayMouseMove}
           onMouseUp={handleLassoOverlayMouseUp}
