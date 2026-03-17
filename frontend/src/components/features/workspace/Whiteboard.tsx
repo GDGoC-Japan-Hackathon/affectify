@@ -10,7 +10,7 @@ import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
 import { FolderTree, Focus, FoldVertical, LayoutDashboard } from "lucide-react";
-import { computeLayout } from "@/utils/graphLayout";
+import { computeLayout, computeSCCs } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -40,11 +40,11 @@ function toFlowNodes(boardNodes: BoardNode[]): Node[] {
   }));
 }
 
-function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
+function toFlowEdges(boardEdges: BoardEdge[], sccEdgeIds?: Set<string>): Edge[] {
   return boardEdges.map((e) => {
     const hasArrow = e.kind === "call" || e.kind === "import";
-
-    const edgeColor = "#94a3b8";
+    const isScc = sccEdgeIds?.has(e.id) ?? false;
+    const edgeColor = isScc ? "#ef4444" : "#94a3b8";
 
     return {
       id: e.id,
@@ -54,7 +54,7 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
       style: {
         strokeDasharray: e.kind === "import" ? "6 3" : e.kind === "implement" ? "2 2" : undefined,
         stroke: edgeColor,
-        strokeWidth: 2,
+        strokeWidth: isScc ? 2.5 : 2,
       },
       markerEnd: hasArrow ? { type: MarkerType.ArrowClosed, color: edgeColor } : undefined,
     };
@@ -63,7 +63,21 @@ function toFlowEdges(boardEdges: BoardEdge[]): Edge[] {
 
 function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
-  const initialEdges = useMemo(() => toFlowEdges(boardEdges), [boardEdges]);
+
+  const sccEdgeIds = useMemo(() => {
+    const sccs = computeSCCs(boardNodes.map((n) => n.id), boardEdges);
+    const nodeToScc = new Map<string, number>();
+    sccs.forEach((scc, i) => { if (scc.length > 1) scc.forEach((id) => nodeToScc.set(id, i)); });
+    const ids = new Set<string>();
+    for (const e of boardEdges) {
+      const si = nodeToScc.get(e.from_node_id);
+      const ti = nodeToScc.get(e.to_node_id);
+      if (si !== undefined && ti !== undefined && si === ti) ids.add(e.id);
+    }
+    return ids;
+  }, [boardNodes, boardEdges]);
+
+  const initialEdges = useMemo(() => toFlowEdges(boardEdges, sccEdgeIds), [boardEdges, sccEdgeIds]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);

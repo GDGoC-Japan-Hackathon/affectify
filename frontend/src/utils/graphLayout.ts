@@ -9,7 +9,7 @@ const Y_GAP = 200;
 // =========================================================
 // 1. Tarjan法による強連結成分（SCC）分解
 // =========================================================
-function computeSCCs(nodeIds: string[], edges: BoardEdge[]): string[][] {
+export function computeSCCs(nodeIds: string[], edges: BoardEdge[]): string[][] {
   const idx = new Map(nodeIds.map((id, i) => [id, i]));
   const n = nodeIds.length;
   const graph: number[][] = Array.from({ length: n }, () => []);
