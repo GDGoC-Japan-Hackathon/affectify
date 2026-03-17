@@ -50,8 +50,9 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   const [isSmall, setIsSmall] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const resizeDir = useRef<"se" | "e" | "s" | "sw" | "w" | "n" | "ne" | "nw">("se");
   const dragOffset = useRef({ x: 0, y: 0 });
-  const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
+  const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0, px: 0, py: 0 });
   const headerRef = useRef<HTMLDivElement>(null);
   const editorWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -172,19 +173,30 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   );
 
   const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
+    (dir: typeof resizeDir.current) => (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      resizeDir.current = dir;
       setIsResizing(true);
-      resizeStart.current = { x: e.clientX, y: e.clientY, w: size.width, h: size.height };
+      resizeStart.current = { x: e.clientX, y: e.clientY, w: size.width, h: size.height, px: position.x, py: position.y };
     },
-    [size],
+    [size, position],
   );
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging) setPosition({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y });
-      if (isResizing) setSize({ width: Math.max(360, resizeStart.current.w + e.clientX - resizeStart.current.x), height: Math.max(200, resizeStart.current.h + e.clientY - resizeStart.current.y) });
+      if (isResizing) {
+        const dx = e.clientX - resizeStart.current.x;
+        const dy = e.clientY - resizeStart.current.y;
+        const dir = resizeDir.current;
+        const newW = Math.max(360, resizeStart.current.w + (dir.includes("e") ? dx : dir.includes("w") ? -dx : 0));
+        const newH = Math.max(200, resizeStart.current.h + (dir.includes("s") ? dy : dir.includes("n") ? -dy : 0));
+        const newX = dir.includes("w") ? resizeStart.current.px + resizeStart.current.w - newW : resizeStart.current.px;
+        const newY = dir.includes("n") ? resizeStart.current.py + resizeStart.current.h - newH : resizeStart.current.py;
+        setSize({ width: newW, height: newH });
+        if (dir.includes("w") || dir.includes("n")) setPosition({ x: newX, y: newY });
+      }
     };
     const handleMouseUp = () => {
       setIsDragging(false);
@@ -500,8 +512,23 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
           )}
         </div>
 
-        {/* リサイズハンドル */}
-        <div onMouseDown={handleResizeStart} className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize" style={{ background: "linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%)" }} />
+        {/* リサイズハンドル（各辺＋各角） */}
+        {/* 右辺 */}
+        <div onMouseDown={handleResizeStart("e")} className="absolute top-4 bottom-4 right-0 w-3 cursor-e-resize hover:bg-blue-300/30" />
+        {/* 左辺 */}
+        <div onMouseDown={handleResizeStart("w")} className="absolute top-4 bottom-4 left-0 w-3 cursor-w-resize hover:bg-blue-300/30" />
+        {/* 下辺 */}
+        <div onMouseDown={handleResizeStart("s")} className="absolute bottom-0 left-4 right-4 h-3 cursor-s-resize hover:bg-blue-300/30" />
+        {/* 上辺 */}
+        <div onMouseDown={handleResizeStart("n")} className="absolute top-0 left-4 right-4 h-3 cursor-n-resize hover:bg-blue-300/30" />
+        {/* 右下角 */}
+        <div onMouseDown={handleResizeStart("se")} className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize" style={{ background: "linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%)" }} />
+        {/* 左下角 */}
+        <div onMouseDown={handleResizeStart("sw")} className="absolute bottom-0 left-0 w-4 h-4 cursor-sw-resize" />
+        {/* 右上角 */}
+        <div onMouseDown={handleResizeStart("ne")} className="absolute top-0 right-0 w-4 h-4 cursor-ne-resize" />
+        {/* 左上角 */}
+        <div onMouseDown={handleResizeStart("nw")} className="absolute top-0 left-0 w-4 h-4 cursor-nw-resize" />
       </div>
 
       {/* 関数追加ポップアップ */}
