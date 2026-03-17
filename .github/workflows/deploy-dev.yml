@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GCP_PROJECT_ID: hackathon-2e83a
+      TF_VAR_project_id: hackathon-2e83a
+      TF_VAR_project_number: "452456627550"
+      TF_VAR_github_owner: GDGoC-Japan-Hackathon
+      TF_VAR_github_repository: affectify
       GCP_REGION: asia-northeast1
       ARTIFACT_REPOSITORY: whitecoder-backend
       BACKEND_IMAGE_NAME: backend
