@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState, useMemo, useRef, useEffect } from "react";
-import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, MarkerType } from "@xyflow/react";
+import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { ReactFlow, Background, Controls, MiniMap, SelectionMode, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
@@ -9,7 +9,7 @@ import { CodeCard } from "./CodeCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard, RotateCcw, RotateCw } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw } from "lucide-react";
 import { computeLayout, computeSCCs } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
@@ -73,13 +73,45 @@ function toFlowEdges(boardEdges: BoardEdge[], sccEdgeIds?: Set<string>): Edge[] 
   });
 }
 
+function isPointInPolygon(point: { x: number; y: number }, polygon: Array<{ x: number; y: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const intersects = yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || 1e-9) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function getPolygonBounds(points: Array<{ x: number; y: number }>) {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
 function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
 
   const sccEdgeIds = useMemo(() => {
-    const sccs = computeSCCs(boardNodes.map((n) => n.id), boardEdges);
+    const sccs = computeSCCs(
+      boardNodes.map((n) => n.id),
+      boardEdges,
+    );
     const nodeToScc = new Map<string, number>();
-    sccs.forEach((scc, i) => { if (scc.length > 1) scc.forEach((id) => nodeToScc.set(id, i)); });
+    sccs.forEach((scc, i) => {
+      if (scc.length > 1) scc.forEach((id) => nodeToScc.set(id, i));
+    });
     const ids = new Set<string>();
     for (const e of boardEdges) {
       const si = nodeToScc.get(e.from_node_id);
@@ -91,9 +123,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   const initialEdges = useMemo(() => toFlowEdges(boardEdges, sccEdgeIds), [boardEdges, sccEdgeIds]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const { fitView } = useReactFlow();
+  const reactFlow = useReactFlow();
+  const { fitView } = reactFlow;
 
   const [focusMode, setFocusMode] = useState(false);
   const [closeAllCounter, setCloseAllCounter] = useState(0);
@@ -101,6 +134,12 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [layoutYGap, setLayoutYGap] = useState(200);
   const [isLayoutPanelOpen, setIsLayoutPanelOpen] = useState(false);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isLassoDrawing, setIsLassoDrawing] = useState(false);
+  const [lassoScreenPoints, setLassoScreenPoints] = useState<Array<{ x: number; y: number }>>([]);
+  const lassoFlowPointsRef = useRef<Array<{ x: number; y: number }>>([]);
+  const lassoScreenPointsRef = useRef<Array<{ x: number; y: number }>>([]);
+  const boardRef = useRef<HTMLDivElement | null>(null);
   const layoutClickTimeoutRef = useRef<number | null>(null);
   const layoutButtonRef = useRef<HTMLButtonElement | null>(null);
   const layoutPanelRef = useRef<HTMLDivElement | null>(null);
@@ -118,6 +157,24 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const isLayoutAdjustingRef = useRef(false);
   const isCodeEditSessionRef = useRef(false);
   const codeEditSessionTimerRef = useRef<number | null>(null);
+  const suppressSelectChangeRef = useRef(false);
+  const lassoDragRef = useRef(false);
+  const lassoMouseDownRef = useRef(false);
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      if (!suppressSelectChangeRef.current) {
+        if (isSelectionMode) {
+          onNodesChangeBase(changes.filter((change) => !(change.type === "select" && change.selected === false)));
+          return;
+        }
+        onNodesChangeBase(changes);
+        return;
+      }
+      onNodesChangeBase(changes.filter((change) => change.type !== "select"));
+    },
+    [onNodesChangeBase, isSelectionMode],
+  );
 
   const cloneNodesSnapshot = useCallback((list: Node[]): Node[] => {
     return list.map((n) => ({
@@ -139,11 +196,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   );
 
   const makeHistorySnapshot = useCallback(
-    (
-      sourceNodes: Node[] = nodes,
-      sourceCheckpoints: NamedCheckpoint[] = checkpoints,
-      sourceSelectedCheckpointId: string = selectedCheckpointId,
-    ): HistorySnapshot => ({
+    (sourceNodes: Node[] = nodes, sourceCheckpoints: NamedCheckpoint[] = checkpoints, sourceSelectedCheckpointId: string = selectedCheckpointId): HistorySnapshot => ({
       nodes: cloneNodesSnapshot(sourceNodes),
       checkpoints: cloneCheckpointsSnapshot(sourceCheckpoints),
       selectedCheckpointId: sourceSelectedCheckpointId,
@@ -341,71 +394,74 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   );
 
   // 自動レイアウト
-  const handleAutoLayout = useCallback((xGap = layoutXGap, yGap = layoutYGap) => {
-    if (isLayoutAnimatingRef.current) return;
+  const handleAutoLayout = useCallback(
+    (xGap = layoutXGap, yGap = layoutYGap) => {
+      if (isLayoutAnimatingRef.current) return;
 
-    pushHistorySnapshot();
+      pushHistorySnapshot();
 
-    const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
-    const boardEdges = edges.map((e) => ({
-      id: e.id,
-      from_node_id: e.source,
-      to_node_id: e.target,
-      kind: "call" as const,
-      style: "solid" as const,
-    }));
-    const targetPositions = computeLayout(boardNodes, boardEdges, {
-      xGap,
-      yGap,
-    });
-    const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
+      const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
+      const boardEdges = edges.map((e) => ({
+        id: e.id,
+        from_node_id: e.source,
+        to_node_id: e.target,
+        kind: "call" as const,
+        style: "solid" as const,
+      }));
+      const targetPositions = computeLayout(boardNodes, boardEdges, {
+        xGap,
+        yGap,
+      });
+      const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
 
-    const durationMs = 700;
-    const startAt = performance.now();
-    isLayoutAnimatingRef.current = true;
+      const durationMs = 700;
+      const startAt = performance.now();
+      isLayoutAnimatingRef.current = true;
 
-    // 開始時に少し引いて全体が動く余地を作る
-    fitView({ padding: 0.35, duration: 220 });
+      // 開始時に少し引いて全体が動く余地を作る
+      fitView({ padding: 0.35, duration: 220 });
 
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - startAt) / durationMs);
-      const p = easeOutCubic(t);
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - startAt) / durationMs);
+        const p = easeOutCubic(t);
 
-      setNodes((nds) =>
-        nds.map((n) => {
-          const from = startPositions.get(n.id);
-          const to = targetPositions.get(n.id);
-          if (!from || !to) return n;
-          return {
-            ...n,
-            position: {
-              x: from.x + (to.x - from.x) * p,
-              y: from.y + (to.y - from.y) * p,
-            },
-          };
-        }),
-      );
+        setNodes((nds) =>
+          nds.map((n) => {
+            const from = startPositions.get(n.id);
+            const to = targetPositions.get(n.id);
+            if (!from || !to) return n;
+            return {
+              ...n,
+              position: {
+                x: from.x + (to.x - from.x) * p,
+                y: from.y + (to.y - from.y) * p,
+              },
+            };
+          }),
+        );
 
-      if (t < 1) {
-        layoutAnimFrameRef.current = requestAnimationFrame(tick);
-        return;
+        if (t < 1) {
+          layoutAnimFrameRef.current = requestAnimationFrame(tick);
+          return;
+        }
+
+        isLayoutAnimatingRef.current = false;
+        layoutAnimFrameRef.current = null;
+        fitView({ padding: 0.2, duration: 420 });
+      };
+
+      if (layoutAnimFrameRef.current !== null) {
+        cancelAnimationFrame(layoutAnimFrameRef.current);
       }
+      layoutAnimFrameRef.current = requestAnimationFrame(tick);
 
-      isLayoutAnimatingRef.current = false;
-      layoutAnimFrameRef.current = null;
-      fitView({ padding: 0.2, duration: 420 });
-    };
-
-    if (layoutAnimFrameRef.current !== null) {
-      cancelAnimationFrame(layoutAnimFrameRef.current);
-    }
-    layoutAnimFrameRef.current = requestAnimationFrame(tick);
-
-    // TODO: APIが追加されたら以下でDBのx,yを保存する
-    // targetPositions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
-  }, [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap, pushHistorySnapshot]);
+      // TODO: APIが追加されたら以下でDBのx,yを保存する
+      // targetPositions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
+    },
+    [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap, pushHistorySnapshot],
+  );
 
   useEffect(() => {
     if (!isLayoutPanelOpen || isLayoutAnimatingRef.current) return;
@@ -585,6 +641,12 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     () =>
       nodes.map((n) => ({
         ...n,
+        style: {
+          ...n.style,
+          // Make selected elements visually obvious with a soft glow.
+          boxShadow: n.selected ? "0 0 0 2px rgba(59,130,246,0.9), 0 0 20px rgba(59,130,246,0.45)" : n.style?.boxShadow,
+          transition: "box-shadow 120ms ease-out",
+        },
         data: { ...n.data, onCodeChange: handleCodeChange, onExpand: handleExpand, edgeCount: edgeCounts[n.id] ?? 0, closeAllCounter },
       })),
     [nodes, handleCodeChange, handleExpand, edgeCounts, closeAllCounter],
@@ -628,49 +690,224 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     return colorMap[data.kind] ?? "#94a3b8";
   }, []);
 
+  const finalizeLassoSelection = useCallback(() => {
+    const polygon = lassoFlowPointsRef.current;
+    if (polygon.length < 3) {
+      setIsLassoDrawing(false);
+      setLassoScreenPoints([]);
+      lassoFlowPointsRef.current = [];
+      lassoScreenPointsRef.current = [];
+      lassoDragRef.current = false;
+      return;
+    }
+
+    const bounds = getPolygonBounds(polygon);
+
+    suppressSelectChangeRef.current = true;
+    setNodes((nds) =>
+      nds.map((n) => {
+        const width = n.width ?? 220;
+        const height = n.height ?? 120;
+        const pos = n.position;
+        const center = {
+          x: pos.x + width / 2,
+          y: pos.y + height / 2,
+        };
+        const corners = [
+          { x: pos.x, y: pos.y },
+          { x: pos.x + width, y: pos.y },
+          { x: pos.x + width, y: pos.y + height },
+          { x: pos.x, y: pos.y + height },
+        ];
+        const intersectsBounds = !(pos.x + width < bounds.minX || pos.x > bounds.maxX || pos.y + height < bounds.minY || pos.y > bounds.maxY);
+        const selectedByPolygon = isPointInPolygon(center, polygon) || corners.some((pt) => isPointInPolygon(pt, polygon));
+        return {
+          ...n,
+          selected: selectedByPolygon || intersectsBounds,
+        };
+      }),
+    );
+    window.setTimeout(() => {
+      suppressSelectChangeRef.current = false;
+    }, 0);
+
+    setIsLassoDrawing(false);
+    setLassoScreenPoints([]);
+    lassoFlowPointsRef.current = [];
+    lassoScreenPointsRef.current = [];
+    lassoDragRef.current = false;
+  }, [setNodes]);
+
+  const appendLassoPointFromMouse = useCallback(
+    (event: Pick<ReactMouseEvent<HTMLDivElement>, "clientX" | "clientY">) => {
+      const paneElement = boardRef.current;
+      if (!paneElement) return;
+
+      const rect = paneElement.getBoundingClientRect();
+      const screenPoint = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+      const lastScreen = lassoScreenPointsRef.current[lassoScreenPointsRef.current.length - 1];
+      if (lastScreen) {
+        const dx = screenPoint.x - lastScreen.x;
+        const dy = screenPoint.y - lastScreen.y;
+        if (dx * dx + dy * dy < 9) return;
+      }
+
+      const flowPoint = reactFlow.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const nextScreen = [...lassoScreenPointsRef.current, screenPoint];
+      const nextFlow = [...lassoFlowPointsRef.current, flowPoint];
+      lassoScreenPointsRef.current = nextScreen;
+      lassoFlowPointsRef.current = nextFlow;
+      setLassoScreenPoints(nextScreen);
+    },
+    [reactFlow],
+  );
+
+  const handleLassoOverlayMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isSelectionMode) return;
+      if (event.button === 2) return;
+
+      lassoMouseDownRef.current = true;
+
+      const paneElement = boardRef.current;
+      if (!paneElement) return;
+
+      const rect = paneElement.getBoundingClientRect();
+      const firstScreenPoint = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+      const firstFlowPoint = reactFlow.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      lassoScreenPointsRef.current = [firstScreenPoint];
+      lassoFlowPointsRef.current = [firstFlowPoint];
+      setLassoScreenPoints([firstScreenPoint]);
+      setIsLassoDrawing(true);
+      lassoDragRef.current = false;
+      event.preventDefault();
+    },
+    [isSelectionMode, reactFlow],
+  );
+
+  const handleLassoOverlayMouseMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isSelectionMode || !isLassoDrawing) return;
+      if ((event.buttons & 1) !== 1) return;
+      lassoDragRef.current = true;
+      appendLassoPointFromMouse(event);
+    },
+    [isSelectionMode, isLassoDrawing, appendLassoPointFromMouse],
+  );
+
+  const handleLassoOverlayMouseUp = useCallback(() => {
+    lassoMouseDownRef.current = false;
+    if (!isSelectionMode || !isLassoDrawing) return;
+
+    finalizeLassoSelection();
+  }, [isSelectionMode, isLassoDrawing, finalizeLassoSelection]);
+
+  const handleLassoOverlayPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      handleLassoOverlayMouseDown(event as unknown as ReactMouseEvent<HTMLDivElement>);
+    },
+    [handleLassoOverlayMouseDown],
+  );
+
+  const handleLassoOverlayPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      handleLassoOverlayMouseMove(event as unknown as ReactMouseEvent<HTMLDivElement>);
+    },
+    [handleLassoOverlayMouseMove],
+  );
+
+  const handleLassoOverlayPointerUp = useCallback(() => {
+    handleLassoOverlayMouseUp();
+  }, [handleLassoOverlayMouseUp]);
+
+  useEffect(() => {
+    if (!isLassoDrawing) return;
+
+    const onWindowMouseMove = (event: MouseEvent) => {
+      if (!isSelectionMode) return;
+      if ((event.buttons & 1) !== 1) return;
+      lassoDragRef.current = true;
+      appendLassoPointFromMouse(event);
+    };
+
+    const onWindowMouseUp = () => {
+      lassoMouseDownRef.current = false;
+      if (lassoDragRef.current) {
+        finalizeLassoSelection();
+      }
+    };
+
+    const onWindowPointerMove = (event: PointerEvent) => {
+      if (!isSelectionMode) return;
+      if ((event.buttons & 1) !== 1) return;
+      lassoDragRef.current = true;
+      appendLassoPointFromMouse(event);
+    };
+
+    const onWindowPointerUp = () => {
+      lassoMouseDownRef.current = false;
+      if (lassoDragRef.current) {
+        finalizeLassoSelection();
+      }
+    };
+
+    window.addEventListener("mousemove", onWindowMouseMove);
+    window.addEventListener("mouseup", onWindowMouseUp);
+    window.addEventListener("pointermove", onWindowPointerMove);
+    window.addEventListener("pointerup", onWindowPointerUp);
+    return () => {
+      window.removeEventListener("mousemove", onWindowMouseMove);
+      window.removeEventListener("mouseup", onWindowMouseUp);
+      window.removeEventListener("pointermove", onWindowPointerMove);
+      window.removeEventListener("pointerup", onWindowPointerUp);
+    };
+  }, [isLassoDrawing, finalizeLassoSelection, appendLassoPointFromMouse, isSelectionMode]);
+
+  const lassoPathD = useMemo(() => {
+    if (lassoScreenPoints.length === 0) return "";
+    const [first, ...rest] = lassoScreenPoints;
+    const path = [`M ${first.x} ${first.y}`, ...rest.map((p) => `L ${p.x} ${p.y}`)];
+    if (lassoScreenPoints.length > 2) {
+      path.push("Z");
+    }
+    return path.join(" ");
+  }, [lassoScreenPoints]);
+
   return (
-    <div className="w-full h-full relative">
+    <div ref={boardRef} className={`w-full h-full relative ${isSelectionMode ? "select-none" : ""}`}>
       {/* 右上コントロール */}
-      <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
+      <div data-lasso-ignore="true" className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
-          <button
-            onClick={undo}
-            disabled={historyPastRef.current.length === 0}
-            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Undo (Ctrl/Cmd+Z)"
-          >
+          <button onClick={undo} disabled={historyPastRef.current.length === 0} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
             <RotateCcw className="size-5 text-gray-700" />
           </button>
 
-          <button
-            onClick={redo}
-            disabled={historyFutureRef.current.length === 0}
-            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Redo (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)"
-          >
+          <button onClick={redo} disabled={historyFutureRef.current.length === 0} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Redo (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)">
             <RotateCw className="size-5 text-gray-700" />
           </button>
 
           <div className="relative">
-            <button
-              ref={saveMenuButtonRef}
-              onClick={() => setIsSaveMenuOpen((prev) => !prev)}
-              className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 shadow-md hover:bg-gray-50 transition-colors"
-              title="セーブメニュー"
-            >
+            <button ref={saveMenuButtonRef} onClick={() => setIsSaveMenuOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 shadow-md hover:bg-gray-50 transition-colors" title="セーブメニュー">
               セーブ
             </button>
 
             {isSaveMenuOpen && (
-              <div
-                ref={saveMenuPanelRef}
-                className="absolute right-0 mt-2 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg"
-              >
-                <button
-                  onClick={saveCheckpoint}
-                  className="mb-2 w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                  title="名前付きで現在地点を保存"
-                >
+              <div ref={saveMenuPanelRef} className="absolute right-0 mt-2 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                <button onClick={saveCheckpoint} className="mb-2 w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" title="名前付きで現在地点を保存">
                   名前付きで保存
                 </button>
 
@@ -681,24 +918,11 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                     checkpoints.map((cp) => {
                       const selected = cp.id === selectedCheckpointId;
                       return (
-                        <div
-                          key={cp.id}
-                          className={`flex items-center justify-between gap-2 border-b border-gray-100 px-2 py-1.5 last:border-b-0 ${
-                            selected ? "bg-blue-50" : ""
-                          }`}
-                        >
-                          <button
-                            onClick={() => setSelectedCheckpointId(cp.id)}
-                            className="min-w-0 flex-1 truncate text-left text-xs text-gray-700"
-                            title={cp.name}
-                          >
+                        <div key={cp.id} className={`flex items-center justify-between gap-2 border-b border-gray-100 px-2 py-1.5 last:border-b-0 ${selected ? "bg-blue-50" : ""}`}>
+                          <button onClick={() => setSelectedCheckpointId(cp.id)} className="min-w-0 flex-1 truncate text-left text-xs text-gray-700" title={cp.name}>
                             {cp.name}
                           </button>
-                          <button
-                            onClick={() => deleteCheckpoint(cp.id)}
-                            className="h-5 w-5 rounded text-xs leading-5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                            title="このセーブ地点を削除（Undo可能）"
-                          >
+                          <button onClick={() => deleteCheckpoint(cp.id)} className="h-5 w-5 rounded text-xs leading-5 text-gray-500 hover:bg-gray-100 hover:text-gray-700" title="このセーブ地点を削除（Undo可能）">
                             ×
                           </button>
                         </div>
@@ -708,12 +932,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 </div>
 
                 <div className="flex">
-                  <button
-                    onClick={restoreCheckpoint}
-                    disabled={!selectedCheckpointId}
-                    className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="選択中のスナップショットを復元（Undo可能）"
-                  >
+                  <button onClick={restoreCheckpoint} disabled={!selectedCheckpointId} className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed" title="選択中のスナップショットを復元（Undo可能）">
                     このスナップショットを復元
                   </button>
                 </div>
@@ -765,19 +984,16 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             <Focus className="size-5" />
           </button>
 
+          <button onClick={() => setIsSelectionMode((prev) => !prev)} className={`border rounded-lg p-2 shadow-md transition-colors ${isSelectionMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`} title={isSelectionMode ? "範囲選択モード ON" : "範囲選択モード OFF"}>
+            <MousePointer2 className="size-5" />
+          </button>
+
           <button onClick={() => setFileTreeOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
             <FolderTree className="size-5 text-gray-700" />
           </button>
         </div>
 
-        <div
-          ref={layoutPanelRef}
-          className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${
-            isLayoutPanelOpen
-              ? "max-h-48 translate-y-0 scale-100 border-gray-200 p-3 opacity-100"
-              : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"
-          }`}
-        >
+        <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-48 translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
           <div className="mb-2 text-xs font-semibold text-gray-700">レイアウト間隔</div>
 
           <label className="mb-1 block text-xs text-gray-600">X間隔: {layoutXGap}px</label>
@@ -827,6 +1043,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}
         maxZoom={2}
+        selectionOnDrag={false}
+        panOnDrag={!isSelectionMode}
+        selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode={["Shift", "Meta", "Control"]}
         proOptions={{ hideAttribution: true }}
         onInit={() => {
           if (hasAutoLayoutedRef.current) return;
@@ -841,6 +1061,32 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         <Controls />
         <MiniMap nodeColor={miniMapNodeColor} maskColor="rgba(0,0,0,0.08)" pannable zoomable />
       </ReactFlow>
+
+      {isSelectionMode && (
+        <div
+          className="absolute inset-0 z-30 touch-none cursor-crosshair"
+          onMouseDown={handleLassoOverlayMouseDown}
+          onMouseMove={handleLassoOverlayMouseMove}
+          onMouseUp={handleLassoOverlayMouseUp}
+          onPointerDown={handleLassoOverlayPointerDown}
+          onPointerMove={handleLassoOverlayPointerMove}
+          onPointerUp={handleLassoOverlayPointerUp}
+        />
+      )}
+
+      {isSelectionMode && lassoScreenPoints.length > 0 && (
+        <svg className="pointer-events-none absolute inset-0 z-50 h-full w-full" style={{ zIndex: 10000 }}>
+          <path
+            d={lassoPathD}
+            fill="rgba(59, 130, 246, 0.12)"
+            stroke="rgba(59, 130, 246, 0.9)"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          <circle cx={lassoScreenPoints[0].x} cy={lassoScreenPoints[0].y} r={3} fill="rgba(59, 130, 246, 0.95)" />
+        </svg>
+      )}
 
       {/* ファイルツリーパネル */}
       <FileTreePanel nodes={boardNodes} isOpen={fileTreeOpen} onClose={() => setFileTreeOpen(false)} onFileSelect={handleFileSelect} />
