@@ -30,6 +30,12 @@ interface WhiteboardProps {
   boardEdges: BoardEdge[];
 }
 
+interface ViewerWindow {
+  id: number;
+  tabs: string[];
+  activeTab: string;
+}
+
 const nodeTypes: NodeTypes = {
   codeCard: CodeCard,
 };
