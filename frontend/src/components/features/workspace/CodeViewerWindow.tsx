@@ -397,6 +397,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
               automaticLayout: true,
               renderLineHighlight: "none",
               padding: { top: 19, bottom: 19 },
+              stickyScroll: { enabled: false },
             }}
           />
 
