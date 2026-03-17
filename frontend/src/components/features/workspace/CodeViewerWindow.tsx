@@ -529,13 +529,13 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
 
         {/* リサイズハンドル（各辺＋各角） */}
         {/* 右辺 */}
-        <div onMouseDown={handleResizeStart("e")} className="absolute top-4 bottom-4 right-0 w-3 cursor-e-resize hover:bg-blue-300/30" />
+        <div onMouseDown={handleResizeStart("e")} className="absolute top-4 bottom-4 right-0 w-2 cursor-e-resize hover:bg-blue-300/30" />
         {/* 左辺 */}
-        <div onMouseDown={handleResizeStart("w")} className="absolute top-4 bottom-4 left-0 w-3 cursor-w-resize hover:bg-blue-300/30" />
+        <div onMouseDown={handleResizeStart("w")} className="absolute top-4 bottom-4 left-0 w-2 cursor-w-resize hover:bg-blue-300/30" />
         {/* 下辺 */}
-        <div onMouseDown={handleResizeStart("s")} className="absolute bottom-0 left-4 right-4 h-3 cursor-s-resize hover:bg-blue-300/30" />
+        <div onMouseDown={handleResizeStart("s")} className="absolute bottom-0 left-4 right-4 h-2 cursor-s-resize hover:bg-blue-300/30" />
         {/* 上辺 */}
-        <div onMouseDown={handleResizeStart("n")} className="absolute top-0 left-4 right-4 h-3 cursor-n-resize hover:bg-blue-300/30" />
+        <div onMouseDown={handleResizeStart("n")} className="absolute top-0 left-4 right-4 h-2 cursor-n-resize hover:bg-blue-300/30" />
         {/* 右下角 */}
         <div onMouseDown={handleResizeStart("se")} className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize" style={{ background: "linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%)" }} />
         {/* 左下角 */}
