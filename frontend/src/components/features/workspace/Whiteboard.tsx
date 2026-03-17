@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useMemo, useRef } from "react";
+import { useCallback, useState, useMemo, useRef, useEffect } from "react";
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -85,6 +85,12 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   const [focusMode, setFocusMode] = useState(false);
   const [closeAllCounter, setCloseAllCounter] = useState(0);
+  const [layoutXGap, setLayoutXGap] = useState(200);
+  const [layoutYGap, setLayoutYGap] = useState(200);
+  const [isLayoutPanelOpen, setIsLayoutPanelOpen] = useState(false);
+  const layoutClickTimeoutRef = useRef<number | null>(null);
+  const layoutButtonRef = useRef<HTMLButtonElement | null>(null);
+  const layoutPanelRef = useRef<HTMLDivElement | null>(null);
   const zMax = useRef(100);
   const hoverNodeId = useRef<string | null>(null);
   const hoverSavedZ = useRef<number>(0);
@@ -169,11 +175,35 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const windowZMax = useRef(9999);
   const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
   const layoutAnimFrameRef = useRef<number | null>(null);
+  const layoutViewFrameRef = useRef<number | null>(null);
   const isLayoutAnimatingRef = useRef(false);
   const hasAutoLayoutedRef = useRef(false);
 
+  const applyLayoutInstant = useCallback(
+    (xGap: number, yGap: number) => {
+      const currentBoardEdges = edges.map((e) => ({
+        id: e.id,
+        from_node_id: e.source,
+        to_node_id: e.target,
+        kind: "call" as const,
+        style: "solid" as const,
+      }));
+      setNodes((nds) => {
+        const currentBoardNodes = nds.map((n) => n.data as unknown as BoardNode);
+        const targetPositions = computeLayout(currentBoardNodes, currentBoardEdges, { xGap, yGap });
+
+        return nds.map((n) => {
+          const to = targetPositions.get(n.id);
+          if (!to) return n;
+          return { ...n, position: { x: to.x, y: to.y } };
+        });
+      });
+    },
+    [edges, setNodes],
+  );
+
   // 自動レイアウト
-  const handleAutoLayout = useCallback(() => {
+  const handleAutoLayout = useCallback((xGap = layoutXGap, yGap = layoutYGap) => {
     if (isLayoutAnimatingRef.current) return;
 
     const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
@@ -184,7 +214,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       kind: "call" as const,
       style: "solid" as const,
     }));
-    const targetPositions = computeLayout(boardNodes, boardEdges);
+    const targetPositions = computeLayout(boardNodes, boardEdges, {
+      xGap,
+      yGap,
+    });
     const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
 
     const durationMs = 700;
@@ -232,7 +265,45 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
     // TODO: APIが追加されたら以下でDBのx,yを保存する
     // targetPositions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
-  }, [nodes, edges, setNodes, fitView]);
+  }, [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap]);
+
+  useEffect(() => {
+    if (!isLayoutPanelOpen || isLayoutAnimatingRef.current) return;
+    applyLayoutInstant(layoutXGap, layoutYGap);
+
+    if (layoutViewFrameRef.current !== null) {
+      cancelAnimationFrame(layoutViewFrameRef.current);
+    }
+    layoutViewFrameRef.current = requestAnimationFrame(() => {
+      fitView({ padding: 0.2, duration: 180 });
+      layoutViewFrameRef.current = null;
+    });
+  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, applyLayoutInstant]);
+
+  useEffect(() => {
+    return () => {
+      if (layoutClickTimeoutRef.current !== null) {
+        window.clearTimeout(layoutClickTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLayoutPanelOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof globalThis.Element)) return;
+      if (layoutButtonRef.current?.contains(target)) return;
+      if (layoutPanelRef.current?.contains(target)) return;
+      setIsLayoutPanelOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [isLayoutPanelOpen]);
 
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
@@ -350,22 +421,95 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   return (
     <div className="w-full h-full relative">
       {/* 右上コントロール */}
-      <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
-        <button onClick={handleAutoLayout} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="自動レイアウト">
-          <LayoutDashboard className="size-5 text-gray-700" />
-        </button>
+      <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            ref={layoutButtonRef}
+            onClick={() => {
+              if (layoutClickTimeoutRef.current !== null) {
+                window.clearTimeout(layoutClickTimeoutRef.current);
+              }
 
-        <button onClick={() => setCloseAllCounter((c) => c + 1)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="すべてのノードを閉じる">
-          <FoldVertical className="size-5 text-gray-700" />
-        </button>
+              if (isLayoutPanelOpen) {
+                setIsLayoutPanelOpen(false);
+                return;
+              }
 
-        <button onClick={() => setFocusMode((prev) => !prev)} className={`border rounded-lg p-2 shadow-md transition-colors ${focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`} title="フォーカスモード">
-          <Focus className="size-5" />
-        </button>
+              layoutClickTimeoutRef.current = window.setTimeout(() => {
+                setIsLayoutPanelOpen(false);
+                handleAutoLayout(layoutXGap, layoutYGap);
+                layoutClickTimeoutRef.current = null;
+              }, 220);
+            }}
+            onDoubleClick={() => {
+              if (layoutClickTimeoutRef.current !== null) {
+                window.clearTimeout(layoutClickTimeoutRef.current);
+                layoutClickTimeoutRef.current = null;
+              }
+              const opening = !isLayoutPanelOpen;
+              setIsLayoutPanelOpen(opening);
+              if (opening) {
+                applyLayoutInstant(layoutXGap, layoutYGap);
+                fitView({ padding: 0.2, duration: 220 });
+              }
+            }}
+            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+            title="自動レイアウト"
+          >
+            <LayoutDashboard className="size-5 text-gray-700" />
+          </button>
 
-        <button onClick={() => setFileTreeOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
-          <FolderTree className="size-5 text-gray-700" />
-        </button>
+          <button onClick={() => setCloseAllCounter((c) => c + 1)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="すべてのノードを閉じる">
+            <FoldVertical className="size-5 text-gray-700" />
+          </button>
+
+          <button onClick={() => setFocusMode((prev) => !prev)} className={`border rounded-lg p-2 shadow-md transition-colors ${focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`} title="フォーカスモード">
+            <Focus className="size-5" />
+          </button>
+
+          <button onClick={() => setFileTreeOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
+            <FolderTree className="size-5 text-gray-700" />
+          </button>
+        </div>
+
+        <div
+          ref={layoutPanelRef}
+          className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${
+            isLayoutPanelOpen
+              ? "max-h-48 translate-y-0 scale-100 border-gray-200 p-3 opacity-100"
+              : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="mb-2 text-xs font-semibold text-gray-700">レイアウト間隔</div>
+
+          <label className="mb-1 block text-xs text-gray-600">X間隔: {layoutXGap}px</label>
+          <input
+            type="range"
+            min={0}
+            max={420}
+            step={10}
+            value={layoutXGap}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              if (Number.isFinite(next)) setLayoutXGap(next);
+            }}
+            className="mb-3 w-full"
+          />
+
+          <label className="mb-1 block text-xs text-gray-600">Y間隔: {layoutYGap}px</label>
+          <input
+            type="range"
+            min={0}
+            max={420}
+            step={10}
+            value={layoutYGap}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              if (Number.isFinite(next)) setLayoutYGap(next);
+            }}
+            className="w-full"
+          />
+        </div>
       </div>
 
       <ReactFlow

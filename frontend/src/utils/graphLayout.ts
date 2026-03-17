@@ -3,8 +3,13 @@ import type { BoardNode, BoardEdge } from "@/types/type";
 // ノードサイズ定数
 const NODE_W = 260;
 const NODE_H = 200;
-const X_GAP = 200;
-const Y_GAP = 200;
+const DEFAULT_X_GAP = 200;
+const DEFAULT_Y_GAP = 200;
+
+interface LayoutOptions {
+  xGap?: number;
+  yGap?: number;
+}
 
 // =========================================================
 // 1. Tarjan法による強連結成分（SCC）分解
@@ -119,8 +124,14 @@ function assignLevels(
 export function computeLayout(
   nodes: BoardNode[],
   edges: BoardEdge[],
+  options: LayoutOptions = {},
 ): Map<string, { x: number; y: number }> {
   if (nodes.length === 0) return new Map();
+
+  const xGapRaw = options.xGap;
+  const yGapRaw = options.yGap;
+  const xGap = Number.isFinite(xGapRaw) ? Math.max(0, xGapRaw as number) : DEFAULT_X_GAP;
+  const yGap = Number.isFinite(yGapRaw) ? Math.max(0, yGapRaw as number) : DEFAULT_Y_GAP;
 
   const nodeIds = nodes.map((n) => n.id);
   const sccs = computeSCCs(nodeIds, edges);
@@ -151,7 +162,7 @@ export function computeLayout(
   for (const lv of sortedLevels) {
     const sccIdxs = levelToSccs.get(lv)!;
     const boxes = sccIdxs.map((i) => sccBoundingBox(sccs[i]));
-    const totalH = boxes.reduce((sum, b) => sum + b.h + Y_GAP, -Y_GAP);
+    const totalH = boxes.reduce((sum, b) => sum + b.h + yGap, -yGap);
     const maxW = Math.max(...boxes.map((b) => b.w));
 
     let cursorY = -totalH / 2;
@@ -162,10 +173,10 @@ export function computeLayout(
         x: cursorX + maxW / 2,
         y: cursorY + box.h / 2,
       });
-      cursorY += box.h + Y_GAP;
+      cursorY += box.h + yGap;
     }
 
-    cursorX += maxW + X_GAP;
+    cursorX += maxW + xGap;
   }
 
   // 各ノードの座標を計算（SCC中心からの相対位置）
