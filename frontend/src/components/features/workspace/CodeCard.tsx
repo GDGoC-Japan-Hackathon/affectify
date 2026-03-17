@@ -27,12 +27,14 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   useEffect(() => {
     if (closeAllCounter !== prevCloseAll.current) {
       prevCloseAll.current = closeAllCounter;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setExpanded(false);
     }
   }, [closeAllCounter]);
 
   // ファイルビューアからの編集を反映
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCode(data.code_text ?? "");
   }, [data.code_text]);
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { flushSync } from "react-dom";
 import Editor from "@monaco-editor/react";
+import type { OnMount } from "@monaco-editor/react";
 import { X, FileCode, Copy, Check, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import type { BoardNode } from "@/types/type";
 
@@ -57,11 +58,12 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   const editorWrapperRef = useRef<HTMLDivElement>(null);
 
   // Editor refs
-  const editorRef = useRef<any>(null);
+  type IEditor = Parameters<OnMount>[0];
+  const editorRef = useRef<IEditor | null>(null);
   const isEditingRef = useRef(false);
-  const editingTimeoutRef = useRef<any>(null);
+  const editingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProgrammaticRef = useRef(false);
-  const decorationsRef = useRef<any>(null);
+  const decorationsRef = useRef<ReturnType<IEditor["createDecorationsCollection"]> | null>(null);
   const [lh, setLh] = useState(19);
   const [editorScrollTop, setEditorScrollTop] = useState(0);
   const [editorScrollHeight, setEditorScrollHeight] = useState(0);
@@ -309,7 +311,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
               editorRef.current = editor;
               setLh((editor.getOption(63) as unknown as number) || 19);
 
-              decorationsRef.current = editor.createDecorationsCollection(lineNodeMapRef.current.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter(Boolean) as any[]);
+              decorationsRef.current = editor.createDecorationsCollection(lineNodeMapRef.current.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter((d): d is NonNullable<typeof d> => d !== null));
 
               setEditorScrollHeight(editor.getScrollHeight());
               editor.onDidScrollChange((e) => {
@@ -365,7 +367,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
                   isProgrammaticRef.current = false;
                   if (savedPosition) editor.setPosition(savedPosition);
                   if (decorationsRef.current) {
-                    decorationsRef.current.set(lineNodeMapRef.current.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter(Boolean) as any[]);
+                    decorationsRef.current.set(lineNodeMapRef.current.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter((d): d is NonNullable<typeof d> => d !== null));
                   }
                   return;
                 }
