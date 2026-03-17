@@ -34,17 +34,19 @@ jobs:
           service_account: whitecoder-github-deployer@hackathon-2e83a.iam.gserviceaccount.com
 
       - uses: google-github-actions/setup-gcloud@v2
-
       - uses: hashicorp/setup-terraform@v3
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
-
       - uses: bufbuild/buf-setup-action@v1
 
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | sh
+
+      - name: Install protoc plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 
       - name: Install Cloud SQL Auth Proxy
         run: |
@@ -55,9 +57,9 @@ jobs:
         # どの commit から作った image か追えるように、git sha をそのまま tag に使う。
         run: echo "GIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
 
-      - name: Generate protobuf code
+      - name: Generate protobuf code for backend
         working-directory: proto
-        run: buf generate
+        run: buf generate --template buf.gen.go.yaml
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
