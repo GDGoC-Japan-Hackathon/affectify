@@ -712,9 +712,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                     onClick={restoreCheckpoint}
                     disabled={!selectedCheckpointId}
                     className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="セーブ地点に戻る（この操作はUndo可能）"
+                    title="選択中のスナップショットを復元（Undo可能）"
                   >
-                    戻る
+                    このスナップショットを復元
                   </button>
                 </div>
               </div>
