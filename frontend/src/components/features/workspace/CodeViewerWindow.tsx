@@ -144,7 +144,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
       isProgrammaticRef.current = false;
     }
     if (decorationsRef.current) {
-      decorationsRef.current.set(lineNodeMap.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter(Boolean));
+      decorationsRef.current.set(lineNodeMap.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter((d): d is NonNullable<typeof d> => d !== null));
     }
   }, [fileContent]);
 

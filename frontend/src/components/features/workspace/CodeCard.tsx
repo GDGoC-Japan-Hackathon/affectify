@@ -76,62 +76,31 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
           setTimeout(() => onExpand?.(data.id, next), 10);
         }}
       >
-        <div className="shrink-0 pt-0.5">
-          {expanded ? (
-            <ChevronDown className="size-4" />
-          ) : (
-            <ChevronRight className="size-4" />
-          )}
-        </div>
+        <div className="shrink-0 pt-0.5">{expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Badge
-              className="text-[10px] font-bold uppercase px-1.5 py-0 bg-transparent border"
-              style={{ color: colors.badge, borderColor: colors.badge }}
-            >
+            <Badge className="text-[10px] font-bold uppercase px-1.5 py-0 bg-transparent border" style={{ color: colors.badge, borderColor: colors.badge }}>
               {data.kind}
             </Badge>
-            {lineCount > 0 && (
-              <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">
-                {lineCount} 行
-              </Badge>
-            )}
-            {edgeCount > 0 && (
-              <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">
-                依存 {edgeCount}
-              </Badge>
-            )}
+            {lineCount > 0 && <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">{lineCount} 行</Badge>}
+            {edgeCount > 0 && <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border border-gray-200">依存 {edgeCount}</Badge>}
           </div>
           <h3 className="font-mono font-semibold truncate text-sm flex items-center gap-1.5">
             <span className="text-gray-500">{kindIcons[data.kind]}</span>
             {data.receiver ? `(${data.receiver}).` : ""}
             {data.title}
           </h3>
-          {data.file_path && (
-            <p className="text-xs text-gray-500 truncate">{data.file_path}</p>
-          )}
+          {data.file_path && <p className="text-xs text-gray-500 truncate">{data.file_path}</p>}
         </div>
       </div>
 
       {/* 展開部分 */}
       <AnimatePresence>
         {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-t"
-            style={{ borderColor: colors.border }}
-          >
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t" style={{ borderColor: colors.border }}>
             {/* コードエディタ（常にMonaco） */}
-            <div
-              className="nowheel nodrag"
-              style={{ height: Math.min(Math.max(code.split("\n").length * 20 + 20, 80), 400) }}
-              onWheel={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-            >
+            <div className="nowheel nodrag" style={{ height: Math.min(Math.max(code.split("\n").length * 20 + 20, 80), 400) }} onWheel={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
               <Editor
                 height="100%"
                 language="go"
@@ -151,7 +120,6 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
                 }}
               />
             </div>
-
           </motion.div>
         )}
       </AnimatePresence>
