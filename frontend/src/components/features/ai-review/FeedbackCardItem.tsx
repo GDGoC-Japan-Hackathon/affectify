@@ -1,0 +1,131 @@
+"use client";
+
+import { motion } from "motion/react";
+import { AlertCircle, AlertTriangle, Info, MessageSquare, ScanSearch } from "lucide-react";
+import type { FeedbackCard } from "@/types/ai-review";
+
+interface FeedbackCardItemProps {
+  card: FeedbackCard;
+  isSelected: boolean;
+  onClick: () => void;
+  onChatOpen: () => void;
+  onViewNodes?: () => void;
+  compact?: boolean;
+}
+
+const severityConfig = {
+  high: {
+    icon: AlertCircle,
+    label: "HIGH SEVERITY",
+    dot: "bg-red-500",
+    badge: "bg-red-950 text-red-400 border-red-800",
+    border: "border-red-800",
+  },
+  medium: {
+    icon: AlertTriangle,
+    label: "MEDIUM SEVERITY",
+    dot: "bg-yellow-500",
+    badge: "bg-yellow-950 text-yellow-400 border-yellow-800",
+    border: "border-yellow-800",
+  },
+  low: {
+    icon: Info,
+    label: "OPTIMIZATION",
+    dot: "bg-blue-500",
+    badge: "bg-blue-950 text-blue-400 border-blue-800",
+    border: "border-blue-800",
+  },
+};
+
+export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onViewNodes, compact }: FeedbackCardItemProps) {
+  const { icon: Icon, label, dot, badge, border } = severityConfig[card.severity];
+
+  if (compact) {
+    return (
+      <motion.div
+        layoutId={`card-${card.id}`}
+        onClick={onClick}
+        className={`cursor-pointer rounded-lg border p-3 transition-colors ${
+          isSelected
+            ? "border-blue-500 bg-blue-950/40"
+            : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className={`size-2 shrink-0 rounded-full ${dot}`} />
+          <span className="truncate text-sm font-medium text-slate-200">{card.title}</span>
+        </div>
+        {isSelected && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mt-2"
+          >
+            <button
+              onClick={(e) => { e.stopPropagation(); onChatOpen(); }}
+              className="flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              <MessageSquare className="size-3" />
+              チャットで議論
+            </button>
+          </motion.div>
+        )}
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      layoutId={`card-${card.id}`}
+      onClick={onClick}
+      className={`cursor-pointer rounded-xl border-l-4 ${border} bg-[#1a2035] p-4 transition-all hover:bg-[#1e2540] ${
+        isSelected ? "ring-1 ring-blue-500" : ""
+      }`}
+    >
+      {/* severityバッジ */}
+      <div className="mb-2">
+        <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badge}`}>
+          <span className={`size-1.5 rounded-full ${dot}`} />
+          {label}
+        </span>
+      </div>
+
+      {/* タイトル */}
+      <h4 className="mb-1.5 font-semibold text-slate-100">{card.title}</h4>
+
+      {/* 説明 */}
+      <p className="mb-3 text-sm text-slate-400 line-clamp-2">{card.description}</p>
+
+      {/* ファイルパス */}
+      {card.filePaths && card.filePaths.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {card.filePaths.map((fp) => (
+            <span key={fp} className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-400">
+              {fp}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 選択時: ノードを見る */}
+      {isSelected && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="mt-3 border-t border-slate-700 pt-3"
+        >
+          <p className="mb-3 text-xs text-slate-400">{card.suggestion}</p>
+          {onViewNodes && (card.nodeIds?.length ?? 0) > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onViewNodes(); }}
+              className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:border-slate-500 hover:bg-slate-700 transition-colors"
+            >
+              <ScanSearch className="size-3.5 text-blue-400" />
+              ホワイトボードで確認
+            </button>
+          )}
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}

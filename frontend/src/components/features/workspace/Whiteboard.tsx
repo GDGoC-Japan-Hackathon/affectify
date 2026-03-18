@@ -19,6 +19,8 @@ import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
   boardEdges: BoardEdge[];
+  highlightedNodeIds?: Set<string>;
+  highlightedEdgeIds?: Set<string>;
 }
 
 interface ViewerWindow {
@@ -161,7 +163,7 @@ function getPolygonBounds(points: Array<{ x: number; y: number }>) {
   return { minX, minY, maxX, maxY };
 }
 
-function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
+function WhiteboardInner({ boardNodes, boardEdges, highlightedNodeIds, highlightedEdgeIds }: WhiteboardProps) {
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
 
   const sccEdgeIds = useMemo(() => buildSccEdgeIds(boardNodes, boardEdges), [boardNodes, boardEdges]);
@@ -170,6 +172,20 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // AIレビューハイライト
+  useEffect(() => {
+    if (!highlightedNodeIds || highlightedNodeIds.size === 0) {
+      setNodes((nds) => nds.map((n) => ({ ...n, style: { ...n.style, opacity: 1 } })));
+      return;
+    }
+    setNodes((nds) =>
+      nds.map((n) => ({
+        ...n,
+        style: { ...n.style, opacity: highlightedNodeIds.has(n.id) ? 1 : 0.2 },
+      }))
+    );
+  }, [highlightedNodeIds, setNodes]);
   const reactFlow = useReactFlow();
   const { fitView } = reactFlow;
 
