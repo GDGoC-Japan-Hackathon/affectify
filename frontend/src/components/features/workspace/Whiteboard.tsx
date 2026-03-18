@@ -737,11 +737,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           { x: pos.x + width, y: pos.y + height },
           { x: pos.x, y: pos.y + height },
         ];
-        const intersectsBounds = !(pos.x + width < bounds.minX || pos.x > bounds.maxX || pos.y + height < bounds.minY || pos.y > bounds.maxY);
         const selectedByPolygon = isPointInPolygon(center, polygon) || corners.some((pt) => isPointInPolygon(pt, polygon));
         return {
           ...n,
-          selected: selectedByPolygon || intersectsBounds,
+          selected: selectedByPolygon,
         };
       }),
     );
