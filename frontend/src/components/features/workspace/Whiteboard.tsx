@@ -1,15 +1,19 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
+import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, useViewport, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
 import { CodeCard } from "./CodeCard";
+import { MemoCard } from "./MemoCard";
+import { ImageCard } from "./ImageCard";
+import { DrawingCard } from "./DrawingCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, Shapes, PenTool, Wand2, LayoutGrid, Component, Save, BookmarkPlus, Clock, SaveAll, SaveAllIcon, Clock1, Eraser } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { computeLayout, computeSCCs } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
@@ -33,10 +37,26 @@ interface HistorySnapshot {
   nodes: Node[];
   checkpoints: NamedCheckpoint[];
   selectedCheckpointId: string;
+  boardDrawPaths: BoardDrawPath[];
 }
+
+interface BoardDrawPath {
+  points: Array<{ x: number; y: number }>;
+  color: string;
+  width: number;
+}
+
+const kindToNodeType: Record<string, string> = {
+  memo: "memoCard",
+  image: "imageCard",
+  drawing: "drawingCard",
+};
 
 const nodeTypes: NodeTypes = {
   codeCard: CodeCard,
+  memoCard: MemoCard,
+  imageCard: ImageCard,
+  drawingCard: DrawingCard,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -46,7 +66,7 @@ const edgeTypes: EdgeTypes = {
 function toFlowNodes(boardNodes: BoardNode[]): Node[] {
   return boardNodes.map((n) => ({
     id: n.id,
-    type: "codeCard",
+    type: kindToNodeType[n.kind] ?? "codeCard",
     position: { x: n.x, y: n.y },
     data: { ...n },
   }));
@@ -80,7 +100,7 @@ function isPointInPolygon(point: { x: number; y: number }, polygon: Array<{ x: n
     const yi = polygon[i].y;
     const xj = polygon[j].x;
     const yj = polygon[j].y;
-    const intersects = yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || 1e-9) + xi;
+    const intersects = yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi || 1e-9) + xi;
     if (intersects) inside = !inside;
   }
   return inside;
@@ -134,7 +154,16 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [layoutYGap, setLayoutYGap] = useState(200);
   const [isLayoutPanelOpen, setIsLayoutPanelOpen] = useState(false);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [fabOffset, setFabOffset] = useState({ x: 0, y: 0 });
+  const fabDragRef = useRef({ dragging: false, startClientX: 0, startClientY: 0, startOffsetX: 0, startOffsetY: 0, moved: false });
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isFreeDrawMode, setIsFreeDrawMode] = useState(false);
+  const [isEraseMode, setIsEraseMode] = useState(false);
+  const isErasingRef = useRef(false);
+  const [boardDrawPaths, setBoardDrawPaths] = useState<BoardDrawPath[]>([]);
+  const [liveBoardDrawPath, setLiveBoardDrawPath] = useState<BoardDrawPath | null>(null);
+  const [drawColor, setDrawColor] = useState("#2563eb");
   const [isLassoDrawing, setIsLassoDrawing] = useState(false);
   const [lassoScreenPoints, setLassoScreenPoints] = useState<Array<{ x: number; y: number }>>([]);
   const [isOverFlowElement, setIsOverFlowElement] = useState(false);
@@ -162,6 +191,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const codeEditSessionTimerRef = useRef<number | null>(null);
   const suppressSelectChangeRef = useRef(false);
   const isOverFlowElementRef = useRef(false);
+  const isBoardDrawingRef = useRef(false);
+  const liveBoardDrawPathRef = useRef<BoardDrawPath | null>(null);
+  const { x: viewportX, y: viewportY, zoom: viewportZoom } = useViewport();
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -198,12 +230,13 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   );
 
   const makeHistorySnapshot = useCallback(
-    (sourceNodes: Node[] = nodes, sourceCheckpoints: NamedCheckpoint[] = checkpoints, sourceSelectedCheckpointId: string = selectedCheckpointId): HistorySnapshot => ({
+    (sourceNodes: Node[] = nodes, sourceCheckpoints: NamedCheckpoint[] = checkpoints, sourceSelectedCheckpointId: string = selectedCheckpointId, sourceBoardDrawPaths: BoardDrawPath[] = boardDrawPaths): HistorySnapshot => ({
       nodes: cloneNodesSnapshot(sourceNodes),
       checkpoints: cloneCheckpointsSnapshot(sourceCheckpoints),
       selectedCheckpointId: sourceSelectedCheckpointId,
+      boardDrawPaths: sourceBoardDrawPaths.map((p) => ({ ...p, points: [...p.points] })),
     }),
-    [nodes, checkpoints, selectedCheckpointId, cloneNodesSnapshot, cloneCheckpointsSnapshot],
+    [nodes, checkpoints, selectedCheckpointId, boardDrawPaths, cloneNodesSnapshot, cloneCheckpointsSnapshot],
   );
 
   const syncHistoryAvailability = useCallback(() => {
@@ -233,6 +266,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     setNodes(cloneNodesSnapshot(prev.nodes));
     setCheckpoints(cloneCheckpointsSnapshot(prev.checkpoints));
     setSelectedCheckpointId(prev.selectedCheckpointId);
+    setBoardDrawPaths(prev.boardDrawPaths.map((p) => ({ ...p, points: [...p.points] })));
     queueMicrotask(() => {
       suppressHistoryRef.current = false;
     });
@@ -250,6 +284,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     setNodes(cloneNodesSnapshot(next.nodes));
     setCheckpoints(cloneCheckpointsSnapshot(next.checkpoints));
     setSelectedCheckpointId(next.selectedCheckpointId);
+    setBoardDrawPaths(next.boardDrawPaths.map((p) => ({ ...p, points: [...p.points] })));
     queueMicrotask(() => {
       suppressHistoryRef.current = false;
     });
@@ -569,6 +604,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     };
   }, [isSaveMenuOpen]);
 
+
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
@@ -607,6 +643,32 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       });
     },
     [nodes, setNodes, pushHistorySnapshot],
+  );
+
+  // メモ・画像ノードをビューポート中央に挿入
+  const insertNodeAtCenter = useCallback(
+    (kind: "note" | "memo" | "image" | "drawing", title: string, initialCode = "") => {
+      const rect = boardRef.current?.getBoundingClientRect();
+      const cx = rect ? rect.left + rect.width / 2 : typeof window !== "undefined" ? window.innerWidth / 2 : 400;
+      const cy = rect ? rect.top + rect.height / 2 : typeof window !== "undefined" ? window.innerHeight / 2 : 300;
+      const center = reactFlow.screenToFlowPosition({ x: cx, y: cy });
+
+      pushHistorySnapshot();
+      const id = `${kind}-${Date.now()}`;
+      const newBoardNode: BoardNode = {
+        id,
+        kind,
+        title,
+        file_path: "",
+        signature: "",
+        receiver: "",
+        x: center.x,
+        y: center.y,
+        code_text: initialCode,
+      };
+      setNodes((prev) => [...prev, { id, type: kindToNodeType[kind], position: center, data: { ...newBoardNode }, zIndex: 0 }]);
+    },
+    [reactFlow, setNodes, pushHistorySnapshot, boardRef],
   );
 
   // コード編集時にノードデータを更新
@@ -705,6 +767,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       group: "#f59e0b",
       note: "#eab308",
       image: "#ec4899",
+      drawing: "#7c3aed",
     };
     return colorMap[data.kind] ?? "#94a3b8";
   }, []);
@@ -795,15 +858,18 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   }, []);
 
   useEffect(() => {
-    if (!isSelectionMode) {
-      isOverFlowElementRef.current = false;
-      const frameId = requestAnimationFrame(() => {
-        setIsOverFlowElement(false);
-      });
-      return () => {
-        cancelAnimationFrame(frameId);
-      };
-    }
+    if (isSelectionMode || isFreeDrawMode) return;
+    isOverFlowElementRef.current = false;
+    const frameId = requestAnimationFrame(() => {
+      setIsOverFlowElement(false);
+    });
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [isSelectionMode, isFreeDrawMode]);
+
+  useEffect(() => {
+    if (!isSelectionMode) return;
 
     const onWindowMouseMove = (event: MouseEvent) => {
       updateOverlayCursorTarget(event.clientX, event.clientY);
@@ -820,6 +886,25 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       window.removeEventListener("pointermove", onWindowPointerMove);
     };
   }, [isSelectionMode, updateOverlayCursorTarget]);
+
+  useEffect(() => {
+    if (!isFreeDrawMode) return;
+
+    const onWindowMouseMove = (event: MouseEvent) => {
+      updateOverlayCursorTarget(event.clientX, event.clientY);
+    };
+
+    const onWindowPointerMove = (event: PointerEvent) => {
+      updateOverlayCursorTarget(event.clientX, event.clientY);
+    };
+
+    window.addEventListener("mousemove", onWindowMouseMove);
+    window.addEventListener("pointermove", onWindowPointerMove);
+    return () => {
+      window.removeEventListener("mousemove", onWindowMouseMove);
+      window.removeEventListener("pointermove", onWindowPointerMove);
+    };
+  }, [isFreeDrawMode, updateOverlayCursorTarget]);
 
   const handleLassoOverlayMouseDown = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -934,8 +1019,215 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     return path.join(" ");
   }, [lassoScreenPoints]);
 
+  const toSvgPath = useCallback(
+    (points: Array<{ x: number; y: number }>) => {
+      if (points.length < 2) return "";
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (!rect) return "";
+
+      const firstScreen = reactFlow.flowToScreenPosition(points[0]);
+      const commands = [`M ${firstScreen.x - rect.left} ${firstScreen.y - rect.top}`];
+      for (const point of points.slice(1)) {
+        const screen = reactFlow.flowToScreenPosition(point);
+        commands.push(`L ${screen.x - rect.left} ${screen.y - rect.top}`);
+      }
+      return commands.join(" ");
+    },
+    [reactFlow],
+  );
+
+  const boardDrawPathsForRender = useMemo(() => {
+    const allPaths = liveBoardDrawPath ? [...boardDrawPaths, liveBoardDrawPath] : boardDrawPaths;
+    return allPaths.map((path) => ({ ...path, d: toSvgPath(path.points) })).filter((path) => path.d.length > 0);
+  }, [boardDrawPaths, liveBoardDrawPath, toSvgPath, viewportX, viewportY, viewportZoom]);
+
+  const appendBoardDrawPoint = useCallback(
+    (event: Pick<ReactPointerEvent<HTMLDivElement>, "clientX" | "clientY">) => {
+      if (!isBoardDrawingRef.current) return;
+      const flowPoint = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      setLiveBoardDrawPath((prev) => {
+        if (!prev) return prev;
+        const last = prev.points[prev.points.length - 1];
+        if (last) {
+          const dx = flowPoint.x - last.x;
+          const dy = flowPoint.y - last.y;
+          if (dx * dx + dy * dy < 1.5) return prev;
+        }
+        const updated = { ...prev, points: [...prev.points, flowPoint] };
+        liveBoardDrawPathRef.current = updated;
+        return updated;
+      });
+    },
+    [reactFlow],
+  );
+
+  const handleBoardDrawPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isFreeDrawMode) return;
+      if (event.button === 2) return;
+      event.stopPropagation();
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      isBoardDrawingRef.current = true;
+      const flowPoint = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const newPath = { points: [flowPoint], color: drawColor, width: 2.5 };
+      liveBoardDrawPathRef.current = newPath;
+      setLiveBoardDrawPath(newPath);
+    },
+    [isFreeDrawMode, reactFlow, drawColor],
+  );
+
+  const handleBoardDrawPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isFreeDrawMode || !isBoardDrawingRef.current) return;
+      event.stopPropagation();
+      appendBoardDrawPoint(event);
+    },
+    [isFreeDrawMode, appendBoardDrawPoint],
+  );
+
+  const finalizeBoardDraw = useCallback(() => {
+    if (!isBoardDrawingRef.current) return;
+    isBoardDrawingRef.current = false;
+    const livePath = liveBoardDrawPathRef.current;
+    liveBoardDrawPathRef.current = null;
+    setLiveBoardDrawPath(null);
+    if (!livePath || livePath.points.length < 2) return;
+    pushHistorySnapshot();
+    setBoardDrawPaths((paths) => [...paths, livePath]);
+  }, [pushHistorySnapshot]);
+
+  const clearBoardDrawings = useCallback(() => {
+    setBoardDrawPaths([]);
+    setLiveBoardDrawPath(null);
+    isBoardDrawingRef.current = false;
+    liveBoardDrawPathRef.current = null;
+  }, []);
+
+  const eraseAtPoint = useCallback((clientX: number, clientY: number) => {
+    const ERASE_RADIUS = 20;
+    setBoardDrawPaths((prev) =>
+      prev.filter((path) =>
+        !path.points.some((point) => {
+          const screen = reactFlow.flowToScreenPosition(point);
+          const dx = screen.x - clientX;
+          const dy = screen.y - clientY;
+          return dx * dx + dy * dy < ERASE_RADIUS * ERASE_RADIUS;
+        }),
+      ),
+    );
+  }, [reactFlow]);
+
+  const handleErasePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button === 2) return;
+    pushHistorySnapshot();
+    isErasingRef.current = true;
+    eraseAtPoint(e.clientX, e.clientY);
+  }, [eraseAtPoint, pushHistorySnapshot]);
+
+  const handleErasePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isErasingRef.current) return;
+    eraseAtPoint(e.clientX, e.clientY);
+  }, [eraseAtPoint]);
+
+  const handleErasePointerUp = useCallback(() => {
+    isErasingRef.current = false;
+  }, []);
+
+  const onFabPointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    fabDragRef.current = { dragging: true, startClientX: e.clientX, startClientY: e.clientY, startOffsetX: fabOffset.x, startOffsetY: fabOffset.y, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  }, [fabOffset]);
+
+  const onFabPointerMove = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!fabDragRef.current.dragging) return;
+    const dx = e.clientX - fabDragRef.current.startClientX;
+    const dy = e.clientY - fabDragRef.current.startClientY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) fabDragRef.current.moved = true;
+    if (fabDragRef.current.moved) setFabOffset({ x: fabDragRef.current.startOffsetX + dx, y: fabDragRef.current.startOffsetY + dy });
+    e.stopPropagation();
+  }, []);
+
+  const onFabPointerUp = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!fabDragRef.current.moved) setFabOpen((prev) => !prev);
+    fabDragRef.current.dragging = false;
+    e.stopPropagation();
+  }, []);
+
   return (
     <div ref={boardRef} className={`w-full h-full relative ${isSelectionMode ? "select-none" : ""}`}>
+      {/* 左上：ファイルツリーボタン（パネル閉時のみ表示） */}
+      <AnimatePresence>
+        {!fileTreeOpen && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            style={{ transformOrigin: "top left" }}
+            onClick={() => setFileTreeOpen(true)}
+            className="absolute top-4 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
+            title="ファイルツリー"
+          >
+            <FolderTree className="size-5 text-gray-700" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* ドラッグ可能な挿入FAB */}
+      <div
+        className="absolute z-50"
+        style={{ right: 16, top: 68, transform: `translate(${fabOffset.x}px, ${fabOffset.y}px)` }}
+      >
+        <div className="relative flex flex-col items-end">
+          {/* サブボタン（下に展開） */}
+          <AnimatePresence>
+            {fabOpen && (
+              <div className="absolute top-14 right-0 flex flex-col items-end gap-2">
+                {([
+                  { id: "memo",   icon: <StickyNote className="size-4" />,    label: "メモ",    active: false,            color: "text-yellow-500", onClick: () => { insertNodeAtCenter("memo",  "メモ"); setFabOpen(false); } },
+                  { id: "image",  icon: <ImageIcon  className="size-4" />,    label: "画像",    active: false,            color: "text-pink-500",   onClick: () => { insertNodeAtCenter("image", "画像"); setFabOpen(false); } },
+                  { id: "draw",   icon: <Pencil     className="size-4" />,    label: "手書き",  active: isFreeDrawMode && !isEraseMode, color: "text-blue-500",  onClick: () => { setIsFreeDrawMode(true); setIsSelectionMode(false); setIsEraseMode(false); setFabOpen(false); } },
+                  { id: "erase",  icon: <Eraser     className="size-4" />,    label: "消しゴム", active: isFreeDrawMode && isEraseMode,  color: "text-sky-500",   onClick: () => { setIsFreeDrawMode(true); setIsSelectionMode(false); setIsEraseMode(true);  setFabOpen(false); } },
+                  { id: "select", icon: <MousePointer2 className="size-4" />, label: "範囲選択", active: isSelectionMode,                color: "text-blue-500",  onClick: () => { setIsSelectionMode((p) => { const n = !p; if (n) setIsFreeDrawMode(false); return n; }); setFabOpen(false); } },
+                ] as const).map((item, i) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: 12, scale: 0.7 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: 12, scale: 0.7 }}
+                    transition={{ delay: i * 0.05, type: "spring", stiffness: 400, damping: 25 }}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="bg-white border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-600 shadow-sm whitespace-nowrap select-none">{item.label}</span>
+                    <button
+                      onClick={item.onClick}
+                      className={`w-10 h-10 rounded-full shadow-md flex items-center justify-center transition-colors border-2 ${item.active ? "bg-blue-500 border-blue-500 text-white" : `bg-white border-gray-200 hover:bg-gray-50 ${item.color}`}`}
+                    >
+                      {item.icon}
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* メインFABボタン */}
+          <button
+            onPointerDown={onFabPointerDown}
+            onPointerMove={onFabPointerMove}
+            onPointerUp={onFabPointerUp}
+            className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors cursor-grab active:cursor-grabbing border-2 ${fabOpen ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+            title="挿入メニュー（ドラッグで移動）"
+          >
+            <motion.div animate={{ rotate: fabOpen ? 45 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+              <PenTool className="size-6" />
+            </motion.div>
+          </button>
+        </div>
+      </div>
+
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
@@ -948,8 +1240,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           </button>
 
           <div className="relative">
-            <button ref={saveMenuButtonRef} onClick={() => setIsSaveMenuOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 shadow-md hover:bg-gray-50 transition-colors" title="セーブメニュー">
-              セーブ
+            <button ref={saveMenuButtonRef} onClick={() => setIsSaveMenuOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="セーブメニュー">
+              <SaveAll className="size-5 text-gray-700" />
             </button>
 
             {isSaveMenuOpen && (
@@ -1031,13 +1323,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             <Focus className="size-5" />
           </button>
 
-          <button onClick={() => setIsSelectionMode((prev) => !prev)} className={`border rounded-lg p-2 shadow-md transition-colors ${isSelectionMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`} title={isSelectionMode ? "範囲選択モード ON" : "範囲選択モード OFF"}>
-            <MousePointer2 className="size-5" />
-          </button>
-
-          <button onClick={() => setFileTreeOpen((prev) => !prev)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
-            <FolderTree className="size-5 text-gray-700" />
-          </button>
         </div>
 
         <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-48 translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
@@ -1071,6 +1356,33 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             className="w-full"
           />
         </div>
+
+        {isFreeDrawMode && (
+          <div className="w-64 rounded-lg border border-gray-200 bg-white/95 p-2 shadow-md backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-gray-700">手書きモード</div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsEraseMode((p) => !p)}
+                  className={`rounded border px-2 py-1 text-[11px] transition-colors ${isEraseMode ? "bg-sky-200 border-sky-300 text-sky-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                  title="消しゴム"
+                >
+                  <Eraser className="size-3 inline mr-1" />消しゴム
+                </button>
+                <button onClick={clearBoardDrawings} className="rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50" title="手書きをすべて消去">
+                  クリア
+                </button>
+              </div>
+            </div>
+            {!isEraseMode && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-[11px] text-gray-600">色</span>
+                <input type="color" value={drawColor} onChange={(e) => setDrawColor(e.target.value)} className="h-6 w-8 cursor-pointer rounded border border-gray-200" title="線の色" />
+                <span className="text-[11px] text-gray-500">画面上のどこでも描けます</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <ReactFlow
@@ -1091,7 +1403,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         minZoom={0.1}
         maxZoom={2}
         selectionOnDrag={false}
-        panOnDrag={!isSelectionMode}
+        panOnDrag={!isSelectionMode && !isFreeDrawMode}
         multiSelectionKeyCode={["Shift", "Meta", "Control"]}
         proOptions={{ hideAttribution: true }}
         onInit={() => {
@@ -1108,31 +1420,24 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         <MiniMap nodeColor={miniMapNodeColor} maskColor="rgba(0,0,0,0.08)" pannable zoomable />
       </ReactFlow>
 
-      {isSelectionMode && (
-        <div
-          className={`absolute inset-0 z-30 touch-none ${isOverFlowElement ? "pointer-events-none cursor-default" : "cursor-crosshair"}`}
-          onMouseDown={handleLassoOverlayMouseDown}
-          onMouseMove={handleLassoOverlayMouseMove}
-          onMouseUp={handleLassoOverlayMouseUp}
-          onPointerDown={handleLassoOverlayPointerDown}
-          onPointerMove={handleLassoOverlayPointerMove}
-          onPointerUp={handleLassoOverlayPointerUp}
-        />
-      )}
+      {isSelectionMode && <div className={`absolute inset-0 z-30 touch-none ${isOverFlowElement ? "pointer-events-none cursor-default" : "cursor-crosshair"}`} onMouseDown={handleLassoOverlayMouseDown} onMouseMove={handleLassoOverlayMouseMove} onMouseUp={handleLassoOverlayMouseUp} onPointerDown={handleLassoOverlayPointerDown} onPointerMove={handleLassoOverlayPointerMove} onPointerUp={handleLassoOverlayPointerUp} />}
 
       {isSelectionMode && lassoScreenPoints.length > 0 && (
         <svg className="pointer-events-none absolute inset-0 z-50 h-full w-full" style={{ zIndex: 10000 }}>
-          <path
-            d={lassoPathD}
-            fill="rgba(59, 130, 246, 0.12)"
-            stroke="rgba(59, 130, 246, 0.9)"
-            strokeWidth={2}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
+          <path d={lassoPathD} fill="rgba(59, 130, 246, 0.12)" stroke="rgba(59, 130, 246, 0.9)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           <circle cx={lassoScreenPoints[0].x} cy={lassoScreenPoints[0].y} r={3} fill="rgba(59, 130, 246, 0.95)" />
         </svg>
       )}
+
+      {boardDrawPathsForRender.length > 0 && (
+        <svg className="pointer-events-none absolute inset-0 z-[70] h-full w-full">
+          {boardDrawPathsForRender.map((path, index) => (
+            <path key={`${index}-${path.points.length}`} d={path.d} stroke={path.color} strokeWidth={path.width} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+        </svg>
+      )}
+
+      {isFreeDrawMode && <div className={`absolute inset-0 z-30 touch-none ${isOverFlowElement ? "pointer-events-none cursor-default" : isEraseMode ? "cursor-cell" : "cursor-crosshair"}`} onPointerDown={isEraseMode ? handleErasePointerDown : handleBoardDrawPointerDown} onPointerMove={isEraseMode ? handleErasePointerMove : handleBoardDrawPointerMove} onPointerUp={isEraseMode ? handleErasePointerUp : finalizeBoardDraw} onPointerCancel={isEraseMode ? handleErasePointerUp : finalizeBoardDraw} />}
 
       {/* ファイルツリーパネル */}
       <FileTreePanel nodes={boardNodes} isOpen={fileTreeOpen} onClose={() => setFileTreeOpen(false)} onFileSelect={handleFileSelect} />

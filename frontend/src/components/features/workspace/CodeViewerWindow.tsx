@@ -458,7 +458,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
                 }}
               >
                 <span className="opacity-70 group-hover:opacity-110 transition-opacity" style={{ color: "#374151", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}>
-                  ⇒ 関数を追加
+                  ⇒ ここに関数を追加
                 </span>
               </div>
 
@@ -493,7 +493,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
                     }}
                   >
                     <span className="opacity-70 group-hover:opacity-110 transition-opacity" style={{ color: "#374151", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}>
-                      ⇒ 関数を追加
+                      ⇒ ここに関数を追加
                     </span>
                   </div>
                 );
@@ -523,7 +523,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
                   }}
                 >
                   <span className="opacity-70 group-hover:opacity-110 transition-opacity" style={{ color: "#374151", fontSize: 12, fontStyle: "italic", pointerEvents: "none" }}>
-                    ⇒ 関数を追加
+                    ⇒ ここに関数を追加
                   </span>
                 </div>
               )}

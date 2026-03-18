@@ -169,10 +169,11 @@ export function FileTreePanel({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ x: -320, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -320, opacity: 0 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          transition={{ type: "spring", damping: 28, stiffness: 320 }}
+          style={{ transformOrigin: "16px 16px" }}
           className="fixed left-0 top-0 bottom-0 w-[320px] bg-white border-r border-gray-200 shadow-2xl z-50"
         >
           <div className="flex flex-col h-full">
