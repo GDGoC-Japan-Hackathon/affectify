@@ -28,8 +28,8 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
-interface BranchCardProps {
-  branch: Variant;
+interface VariantCardProps {
+  variant: Variant;
   projectId: string;
   onCompareToggle: (id: string) => void;
   isComparing: boolean;
@@ -49,14 +49,14 @@ function getScoreBg(score?: number) {
   return 'bg-red-100';
 }
 
-export function BranchCard({
-  branch,
+export function VariantCard({
+  variant,
   projectId,
   onCompareToggle,
   isComparing,
-}: BranchCardProps) {
+}: VariantCardProps) {
   const creator = mockUser;
-  const branchGuide = mockDesignGuides.find(g => g.id === branch.designGuideId);
+  const variantGuide = mockDesignGuides.find(g => g.id === variant.designGuideId);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const analysisReport = mockAnalysisReports[0];
 
@@ -72,37 +72,37 @@ export function BranchCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-semibold text-gray-900 text-lg truncate">
-                {branch.name}
+                {variant.name}
               </h3>
-              {branch.isMain && (
+              {variant.isMain && (
                 <Badge variant="default" className="shrink-0">
                   メイン
                 </Badge>
               )}
             </div>
             <p className="text-sm text-gray-600 line-clamp-2">
-              {branch.description}
+              {variant.description}
             </p>
           </div>
 
           <input
             type="checkbox"
             checked={isComparing}
-            onChange={() => onCompareToggle(branch.id)}
+            onChange={() => onCompareToggle(variant.id)}
             className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
           />
         </div>
 
         {/* Design Guide Badge */}
-        {branchGuide && (
+        {variantGuide && (
           <div className="mb-4 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
             <div className="flex items-center gap-2 mb-1">
               <BookOpen className="w-4 h-4 text-indigo-600" />
               <span className="text-sm font-medium text-gray-900">適用中の設計書</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-indigo-700 font-medium">{branchGuide.name}</span>
-              <Link href={`/design-guides/${branchGuide.id}`}>
+              <span className="text-sm text-indigo-700 font-medium">{variantGuide.name}</span>
+              <Link href={`/design-guides/${variantGuide.id}`}>
                 <Button variant="ghost" size="sm" className="h-auto p-1 text-xs">
                   <ExternalLink className="w-3 h-3" />
                 </Button>
@@ -115,13 +115,13 @@ export function BranchCard({
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center p-3 bg-gray-50 rounded-lg">
             <div className="text-sm text-gray-600 mb-1">ノード数</div>
-            <div className="text-xl font-bold text-gray-900">{branch.nodeCount}</div>
+            <div className="text-xl font-bold text-gray-900">{variant.nodeCount}</div>
           </div>
 
-          <div className={`text-center p-3 rounded-lg relative ${getScoreBg(branch.analysisScore)}`}>
+          <div className={`text-center p-3 rounded-lg relative ${getScoreBg(variant.analysisScore)}`}>
             <div className="text-sm text-gray-600 mb-1 flex items-center justify-center gap-1">
               AI スコア
-              {branch.analysisScore && (
+              {variant.analysisScore && (
                 <button
                   onClick={() => setIsAnalysisOpen(true)}
                   className="text-blue-600 hover:text-blue-700 transition-colors"
@@ -131,15 +131,15 @@ export function BranchCard({
                 </button>
               )}
             </div>
-            <div className={`text-xl font-bold ${getScoreColor(branch.analysisScore)}`}>
-              {branch.analysisScore || 'N/A'}
+            <div className={`text-xl font-bold ${getScoreColor(variant.analysisScore)}`}>
+              {variant.analysisScore || 'N/A'}
             </div>
           </div>
 
           <div className="text-center p-3 bg-gray-50 rounded-lg">
             <div className="text-sm text-gray-600 mb-1">更新</div>
             <div className="text-xs font-medium text-gray-900">
-              {formatDistanceToNow(branch.updatedAt, { locale: ja, addSuffix: true })}
+              {formatDistanceToNow(variant.updatedAt, { locale: ja, addSuffix: true })}
             </div>
           </div>
         </div>
@@ -155,14 +155,14 @@ export function BranchCard({
 
         {/* Actions */}
         <div className="flex gap-2">
-          <Link href={`/editor/${projectId}?branch=${branch.id}`} className="flex-1">
+          <Link href={`/workspace/${variant.id}`} className="flex-1">
             <Button variant="default" className="w-full gap-2">
               <Pencil className="w-4 h-4" />
               編集
             </Button>
           </Link>
 
-          {!branch.isMain && (
+          {!variant.isMain && (
             <>
               <Button variant="outline" size="icon" title="複製">
                 <Copy className="w-4 h-4" />
@@ -181,7 +181,7 @@ export function BranchCard({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-600" />
-              AI分析レポート - {branch.name}
+              AI分析レポート - {variant.name}
             </DialogTitle>
             <DialogDescription>
               この設計案をAIが分析した結果です
