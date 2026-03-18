@@ -396,7 +396,173 @@ export function computeCircularLayout(nodes: BoardNode[], edges: BoardEdge[], op
 }
 
 // =========================================================
-// 5. ランダムレイアウト（ノード非接触保証）
+// 5. ファイルグループレイアウト
+//    - file_path でノードをグループ化
+//    - グループ内はランダム配置（非接触保証）
+//    - ディレクトリ階層を反映して再帰的にグリッド配置
+// =========================================================
+export function computeFileGroupLayout(nodes: BoardNode[], _edges: BoardEdge[], options: { nodeSpacing?: number; groupSpacing?: number } = {}): Map<string, { x: number; y: number }> {
+  if (nodes.length === 0) return new Map();
+
+  const nodeSpacing = options.nodeSpacing ?? 60;
+  const groupSpacing = options.groupSpacing ?? 200;
+  const result = new Map<string, { x: number; y: number }>();
+
+  // 1. file_path でグループ化
+  const fileGroups = new Map<string, BoardNode[]>();
+  const noFile: BoardNode[] = [];
+  for (const node of nodes) {
+    if (!node.file_path) {
+      noFile.push(node);
+      continue;
+    }
+    const arr = fileGroups.get(node.file_path) ?? [];
+    arr.push(node);
+    fileGroups.set(node.file_path, arr);
+  }
+
+  // 2. ファイル内ノードをランダム配置（相対座標）
+  function placeRandom(fileNodes: BoardNode[]): { positions: Map<string, { x: number; y: number }>; w: number; h: number } {
+    const cols = Math.max(1, Math.ceil(Math.sqrt(fileNodes.length)));
+    const rows = Math.ceil(fileNodes.length / cols);
+    const areaW = cols * (NODE_W + nodeSpacing);
+    const areaH = rows * (NODE_H + nodeSpacing);
+    const positions = new Map<string, { x: number; y: number }>();
+    const placed: Array<{ x: number; y: number }> = [];
+
+    for (const node of fileNodes) {
+      let pos: { x: number; y: number } | null = null;
+      for (let attempt = 0; attempt < 300; attempt++) {
+        const x = Math.random() * Math.max(0, areaW - NODE_W);
+        const y = Math.random() * Math.max(0, areaH - NODE_H);
+        let overlaps = false;
+        for (const p of placed) {
+          if (x < p.x + NODE_W + nodeSpacing && x + NODE_W > p.x && y < p.y + NODE_H + nodeSpacing && y + NODE_H > p.y) {
+            overlaps = true;
+            break;
+          }
+        }
+        if (!overlaps) {
+          pos = { x, y };
+          break;
+        }
+      }
+      if (!pos) {
+        // 配置失敗時の戻し方：より多くのスペースを増やしてリトライ
+        const expandedW = areaW * 2;
+        const expandedH = areaH * 2;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const x = Math.random() * Math.max(0, expandedW - NODE_W);
+          const y = Math.random() * Math.max(0, expandedH - NODE_H);
+          let overlaps = false;
+          for (const p of placed) {
+            if (x < p.x + NODE_W + nodeSpacing && x + NODE_W > p.x && y < p.y + NODE_H + nodeSpacing && y + NODE_H > p.y) {
+              overlaps = true;
+              break;
+            }
+          }
+          if (!overlaps) {
+            pos = { x, y };
+            break;
+          }
+        }
+      }
+      if (!pos) pos = { x: Math.random() * areaW * 3, y: Math.random() * areaH * 3 };
+      positions.set(node.id, pos);
+      placed.push(pos);
+    }
+
+    let maxX = NODE_W,
+      maxY = NODE_H;
+    for (const p of placed) {
+      maxX = Math.max(maxX, p.x + NODE_W);
+      maxY = Math.max(maxY, p.y + NODE_H);
+    }
+    return { positions, w: maxX + nodeSpacing, h: maxY + nodeSpacing };
+  }
+
+  // 3. Sized インターフェース：サイズ情報 + 絶対座標コミット
+  interface Sized {
+    w: number;
+    h: number;
+    place(ox: number, oy: number): void;
+  }
+
+  // 4. 子要素リストを sqrt グリッドで配置
+  function layoutChildren(children: Sized[]): Sized {
+    if (children.length === 0) return { w: 0, h: 0, place() {} };
+    const cols = Math.max(1, Math.ceil(Math.sqrt(children.length)));
+    const rows = Math.ceil(children.length / cols);
+    const colWidths = new Array<number>(cols).fill(0);
+    const rowHeights = new Array<number>(rows).fill(0);
+    children.forEach((c, i) => {
+      colWidths[i % cols] = Math.max(colWidths[i % cols], c.w);
+      rowHeights[Math.floor(i / cols)] = Math.max(rowHeights[Math.floor(i / cols)], c.h);
+    });
+    const colOffsets = colWidths.map((_, i) => colWidths.slice(0, i).reduce((a, b) => a + b, 0) + i * groupSpacing);
+    const rowOffsets = rowHeights.map((_, i) => rowHeights.slice(0, i).reduce((a, b) => a + b, 0) + i * groupSpacing);
+    const totalW = colWidths.reduce((a, b) => a + b, 0) + Math.max(0, cols - 1) * groupSpacing;
+    const totalH = rowHeights.reduce((a, b) => a + b, 0) + Math.max(0, rows - 1) * groupSpacing;
+    return {
+      w: totalW,
+      h: totalH,
+      place(ox, oy) {
+        children.forEach((c, i) => c.place(ox + colOffsets[i % cols], oy + rowOffsets[Math.floor(i / cols)]));
+      },
+    };
+  }
+
+  // 5. ディレクトリツリーを構築して再帰処理
+  interface DirEntry {
+    files: Map<string, BoardNode[]>;
+    subdirs: Map<string, DirEntry>;
+  }
+
+  function buildDir(): DirEntry {
+    const root: DirEntry = { files: new Map(), subdirs: new Map() };
+    for (const [filePath, fileNodes] of fileGroups) {
+      const parts = filePath.replace(/\\/g, "/").split("/");
+      let cur = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!cur.subdirs.has(parts[i])) cur.subdirs.set(parts[i], { files: new Map(), subdirs: new Map() });
+        cur = cur.subdirs.get(parts[i])!;
+      }
+      cur.files.set(parts[parts.length - 1], fileNodes);
+    }
+    return root;
+  }
+
+  function processDir(dir: DirEntry): Sized {
+    const children: Sized[] = [];
+    for (const fileNodes of dir.files.values()) {
+      const { positions, w, h } = placeRandom(fileNodes);
+      children.push({
+        w,
+        h,
+        place(ox, oy) {
+          for (const [id, p] of positions) result.set(id, { x: ox + p.x, y: oy + p.y });
+        },
+      });
+    }
+    for (const subdir of dir.subdirs.values()) children.push(processDir(subdir));
+    return layoutChildren(children);
+  }
+
+  const sized = processDir(buildDir());
+  sized.place(0, 0);
+
+  // file_path なしのノードは右端に配置
+  if (noFile.length > 0) {
+    const { positions } = placeRandom(noFile);
+    const ox = sized.w + groupSpacing;
+    for (const [id, p] of positions) result.set(id, { x: ox + p.x, y: p.y });
+  }
+
+  return result;
+}
+
+// =========================================================
+// 6. ランダムレイアウト（ノード非接触保証）
 //    - 各ノードをランダムな位置に配置する
 //    - spacing パラメータでノード間の最小間隔を指定
 // =========================================================

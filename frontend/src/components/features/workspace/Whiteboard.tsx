@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
+import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, useViewport, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
@@ -14,7 +14,7 @@ import { FileTreePanel, exportAsZip } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
 import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, Wand2, SaveAll, Eraser, Download } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs } from "@/utils/graphLayout";
+import { computeLayout, computeCircularLayout, computeRandomLayout, computeFileGroupLayout, computeSCCs } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -147,6 +147,15 @@ function isPointInPolygon(point: { x: number; y: number }, polygon: Array<{ x: n
   return inside;
 }
 
+function fileGroupColor(filePath: string, alpha: number): string {
+  let hash = 5381;
+  for (let i = 0; i < filePath.length; i++) {
+    hash = ((hash << 5) + hash) + filePath.charCodeAt(i);
+    hash |= 0;
+  }
+  return `hsla(${Math.abs(hash) % 360}, 60%, 55%, ${alpha})`;
+}
+
 function getPolygonBounds(points: Array<{ x: number; y: number }>) {
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -172,19 +181,27 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const reactFlow = useReactFlow();
   const { fitView } = reactFlow;
+  const { x: vpX, y: vpY, zoom: vpZoom } = useViewport();
 
   const [focusMode, setFocusMode] = useState(false);
   const [closeAllCounter, setCloseAllCounter] = useState(0);
   const [layoutXGap, setLayoutXGap] = useState(200);
   const [layoutYGap, setLayoutYGap] = useState(200);
-  const [layoutMode, setLayoutMode] = useState<"grid" | "circular" | "random">("grid");
+  const [layoutMode, setLayoutMode] = useState<"grid" | "circular" | "random" | "filegroup">("grid");
   const [randomSpacing, setRandomSpacing] = useState(80);
   const randomSpacingRef = useRef(80);
   randomSpacingRef.current = randomSpacing;
+  const [fileGroupNodeSpacing, setFileGroupNodeSpacing] = useState(60);
+  const fileGroupNodeSpacingRef = useRef(60);
+  fileGroupNodeSpacingRef.current = fileGroupNodeSpacing;
+  const [fileGroupGroupSpacing, setFileGroupGroupSpacing] = useState(200);
+  const fileGroupGroupSpacingRef = useRef(200);
+  fileGroupGroupSpacingRef.current = fileGroupGroupSpacing;
   const [circularBaseRadius, setCircularBaseRadius] = useState(700);
   const [circularLayerDistance, setCircularLayerDistance] = useState(180);
   const [circularNodeRadiusFactor, setCircularNodeRadiusFactor] = useState(35);
   const [isLayoutPanelOpen, setIsLayoutPanelOpen] = useState(false);
+  const [layoutRetrigger, setLayoutRetrigger] = useState(0);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isImportPickerOpen, setIsImportPickerOpen] = useState(false);
@@ -444,6 +461,36 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   const currentBoardNodes = useMemo(() => nodes.map((n) => n.data as unknown as BoardNode), [nodes]);
 
+  const NODE_W = 260;
+  const NODE_H = 200;
+  const fileGroupRects = useMemo(() => {
+    if (layoutMode !== "filegroup") return [];
+    const groups = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>();
+    for (const node of nodes) {
+      const fp = (node.data as { file_path?: string }).file_path;
+      if (!fp) continue;
+      const x = node.position.x;
+      const y = node.position.y;
+      const existing = groups.get(fp);
+      if (!existing) {
+        groups.set(fp, { minX: x, minY: y, maxX: x + NODE_W, maxY: y + NODE_H });
+      } else {
+        if (x < existing.minX) existing.minX = x;
+        if (y < existing.minY) existing.minY = y;
+        if (x + NODE_W > existing.maxX) existing.maxX = x + NODE_W;
+        if (y + NODE_H > existing.maxY) existing.maxY = y + NODE_H;
+      }
+    }
+    const pad = 24;
+    return Array.from(groups.entries()).map(([filePath, bbox]) => ({
+      filePath,
+      x: bbox.minX - pad,
+      y: bbox.minY - pad,
+      w: bbox.maxX - bbox.minX + pad * 2,
+      h: bbox.maxY - bbox.minY + pad * 2,
+    }));
+  }, [nodes, layoutMode]);
+
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const windowZMax = useRef(9999);
   const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
@@ -473,7 +520,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             ? computeCircularLayout(currentBoardNodes, currentBoardEdges, { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor })
             : layoutMode === "random"
               ? computeRandomLayout(currentBoardNodes, currentBoardEdges, { spacing: randomSpacingRef.current })
-              : computeLayout(currentBoardNodes, currentBoardEdges, { xGap, yGap });
+              : layoutMode === "filegroup"
+                ? computeFileGroupLayout(currentBoardNodes, currentBoardEdges, { nodeSpacing: fileGroupNodeSpacingRef.current, groupSpacing: fileGroupGroupSpacingRef.current })
+                : computeLayout(currentBoardNodes, currentBoardEdges, { xGap, yGap });
 
         return nds.map((n) => {
           const to = targetPositions.get(n.id);
@@ -506,7 +555,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           ? computeCircularLayout(boardNodes, boardEdges, { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor })
           : layoutMode === "random"
             ? computeRandomLayout(boardNodes, boardEdges, { spacing: randomSpacingRef.current })
-            : computeLayout(boardNodes, boardEdges, { xGap, yGap });
+            : layoutMode === "filegroup"
+              ? computeFileGroupLayout(boardNodes, boardEdges, { nodeSpacing: fileGroupNodeSpacingRef.current, groupSpacing: fileGroupGroupSpacingRef.current })
+              : computeLayout(boardNodes, boardEdges, { xGap, yGap });
       const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
 
       const durationMs = 700;
@@ -559,7 +610,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   );
 
   useEffect(() => {
-    if (!isLayoutPanelOpen || isLayoutAnimatingRef.current || layoutMode === "random") return;
+    if (!isLayoutPanelOpen || isLayoutAnimatingRef.current || layoutMode === "random" || layoutMode === "filegroup") return;
     const frameId = requestAnimationFrame(() => {
       applyLayoutInstantRef.current(layoutXGap, layoutYGap);
     });
@@ -574,13 +625,20 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor, layoutMode, fitView]);
+  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor, fileGroupNodeSpacing, fileGroupGroupSpacing, layoutMode, fitView]);
 
   useEffect(() => {
     if (!isLayoutPanelOpen) {
       isLayoutAdjustingRef.current = false;
     }
   }, [isLayoutPanelOpen]);
+
+  // ランダム・ファイル別レイアウト選択時に自動で並び替え実行
+  useEffect(() => {
+    if ((layoutMode === "random" || layoutMode === "filegroup") && isLayoutPanelOpen) {
+      handleAutoLayout();
+    }
+  }, [layoutMode, layoutRetrigger, isLayoutPanelOpen]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1552,26 +1610,87 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           </button>
         </div>
 
-        <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-96 translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
+        <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-[480px] translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
           <div className="mb-3 text-xs font-semibold text-gray-700">レイアウト方式</div>
-          <div className="mb-3 flex items-center gap-3">
+          <div className="mb-3 flex flex-col items-start gap-2">
             <label className="flex items-center gap-2 text-xs cursor-pointer">
               <input type="radio" name="layoutMode" value="grid" checked={layoutMode === "grid"} onChange={() => setLayoutMode("grid")} className="accent-blue-500" />
-              <span>グリッド</span>
+              <span>階層</span>
             </label>
             <label className="flex items-center gap-2 text-xs cursor-pointer">
               <input type="radio" name="layoutMode" value="circular" checked={layoutMode === "circular"} onChange={() => setLayoutMode("circular")} className="accent-blue-500" />
               <span>円形</span>
             </label>
             <label className="flex items-center gap-2 text-xs cursor-pointer">
-              <input type="radio" name="layoutMode" value="random" checked={layoutMode === "random"} onChange={() => setLayoutMode("random")} className="accent-blue-500" />
+              <input
+                type="radio"
+                name="layoutMode"
+                value="random"
+                checked={layoutMode === "random"}
+                onChange={() => setLayoutMode("random")}
+                onClick={() => {
+                  if (layoutMode === "random") {
+                    setLayoutRetrigger(prev => prev + 1);
+                  }
+                }}
+                className="accent-blue-500"
+              />
               <span>ランダム</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="layoutMode"
+                value="filegroup"
+                checked={layoutMode === "filegroup"}
+                onChange={() => setLayoutMode("filegroup")}
+                onClick={() => {
+                  if (layoutMode === "filegroup") {
+                    setLayoutRetrigger(prev => prev + 1);
+                  }
+                }}
+                className="accent-blue-500"
+              />
+              <span>ファイル別</span>
             </label>
           </div>
 
           <div className="mb-2 text-xs font-semibold text-gray-700">レイアウト設定</div>
 
-          {layoutMode === "random" ? (
+          {layoutMode === "filegroup" ? (
+            <>
+              <label className="mb-1 block text-xs text-gray-600">ノード間隔（ファイル内）: {fileGroupNodeSpacing}px</label>
+              <input
+                type="range"
+                min={0}
+                max={300}
+                step={10}
+                value={fileGroupNodeSpacing}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v)) {
+                    setFileGroupNodeSpacing(v);
+                  }
+                }}
+                className="mb-3 w-full"
+              />
+              <label className="mb-1 block text-xs text-gray-600">グループ間隔: {fileGroupGroupSpacing}px</label>
+              <input
+                type="range"
+                min={50}
+                max={600}
+                step={10}
+                value={fileGroupGroupSpacing}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v)) {
+                    setFileGroupGroupSpacing(v);
+                  }
+                }}
+                className="w-full"
+              />
+            </>
+          ) : layoutMode === "random" ? (
             <>
               <label className="mb-1 block text-xs text-gray-600">ノード間隔: {randomSpacing}px</label>
               <input
@@ -1582,16 +1701,13 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 value={randomSpacing}
                 onChange={(e) => {
                   const next = Number(e.target.value);
-                  if (Number.isFinite(next)) setRandomSpacing(next);
+                  if (Number.isFinite(next)) {
+                    setRandomSpacing(next);
+                    applyLayoutInstant(0, 0);
+                  }
                 }}
-                className="mb-3 w-full"
+                className="w-full"
               />
-              <button
-                onClick={() => handleAutoLayout()}
-                className="w-full rounded-md border border-blue-300 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
-              >
-                もう一度ランダム配置
-              </button>
             </>
           ) : layoutMode === "grid" ? (
             <>
@@ -1604,7 +1720,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 value={layoutXGap}
                 onChange={(e) => {
                   const next = Number(e.target.value);
-                  if (Number.isFinite(next)) setLayoutXGap(next);
+                  if (Number.isFinite(next)) {
+                    setLayoutXGap(next);
+                    applyLayoutInstant(next, layoutYGap);
+                  }
                 }}
                 className="mb-3 w-full"
               />
@@ -1618,7 +1737,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 value={layoutYGap}
                 onChange={(e) => {
                   const next = Number(e.target.value);
-                  if (Number.isFinite(next)) setLayoutYGap(next);
+                  if (Number.isFinite(next)) {
+                    setLayoutYGap(next);
+                    applyLayoutInstant(layoutXGap, next);
+                  }
                 }}
                 className="w-full"
               />
@@ -1634,7 +1756,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 value={circularBaseRadius}
                 onChange={(e) => {
                   const next = Number(e.target.value);
-                  if (Number.isFinite(next)) setCircularBaseRadius(next);
+                  if (Number.isFinite(next)) {
+                    setCircularBaseRadius(next);
+                    applyLayoutInstant(0, 0);
+                  }
                 }}
                 className="mb-3 w-full"
               />
@@ -1648,7 +1773,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 value={circularLayerDistance}
                 onChange={(e) => {
                   const next = Number(e.target.value);
-                  if (Number.isFinite(next)) setCircularLayerDistance(next);
+                  if (Number.isFinite(next)) {
+                    setCircularLayerDistance(next);
+                    applyLayoutInstant(0, 0);
+                  }
                 }}
                 className="mb-3 w-full"
               />
@@ -1662,7 +1790,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 value={circularNodeRadiusFactor}
                 onChange={(e) => {
                   const next = Number(e.target.value);
-                  if (Number.isFinite(next)) setCircularNodeRadiusFactor(next);
+                  if (Number.isFinite(next)) {
+                    setCircularNodeRadiusFactor(next);
+                    applyLayoutInstant(0, 0);
+                  }
                 }}
                 className="w-full"
               />
@@ -1758,6 +1889,32 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 このフォルダを解析
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {layoutMode === "filegroup" && fileGroupRects.length > 0 && (
+        <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
+          <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "0 0", transform: `translate(${vpX}px,${vpY}px) scale(${vpZoom})` }}>
+            {fileGroupRects.map(({ filePath, x, y, w, h }) => (
+              <div
+                key={filePath}
+                style={{
+                  position: "absolute",
+                  left: x,
+                  top: y,
+                  width: w,
+                  height: h,
+                  background: fileGroupColor(filePath, 0.07),
+                  border: `1.5px solid ${fileGroupColor(filePath, 0.35)}`,
+                  borderRadius: 12,
+                }}
+              >
+                <span style={{ position: "absolute", top: 6, left: 10, fontSize: 11, fontWeight: 600, color: fileGroupColor(filePath, 0.8), whiteSpace: "nowrap", userSelect: "none" }}>
+                  {filePath.split("/").pop()}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
