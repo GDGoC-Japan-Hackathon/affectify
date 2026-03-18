@@ -13,6 +13,7 @@ function MemoCardInner({ data }: NodeProps<MemoCardNode>) {
   const highlighted = (data as Record<string, unknown>).highlighted as boolean | undefined;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setText(data.code_text ?? "");
   }, [data.code_text]);
 

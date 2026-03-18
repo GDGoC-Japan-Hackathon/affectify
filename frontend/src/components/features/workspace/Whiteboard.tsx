@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, useViewport, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
+import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { BoardNode, BoardEdge } from "@/types/type";
@@ -12,7 +12,7 @@ import { DrawingCard } from "./DrawingCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, Shapes, PenTool, Wand2, LayoutGrid, Component, Save, BookmarkPlus, Clock, SaveAll, SaveAllIcon, Clock1, Eraser } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, Wand2, SaveAll, Eraser } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs } from "@/utils/graphLayout";
 
@@ -233,7 +233,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const isOverFlowElementRef = useRef(false);
   const isBoardDrawingRef = useRef(false);
   const liveBoardDrawPathRef = useRef<BoardDrawPath | null>(null);
-  const { x: viewportX, y: viewportY, zoom: viewportZoom } = useViewport();
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -354,7 +353,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     // 復元操作自体をUndo可能にするため、復元前状態を履歴に積む
     pushHistorySnapshot();
     setNodes(cloneNodesSnapshot(target.nodes));
-  }, [checkpoints, selectedCheckpointId, nodes, setNodes, cloneNodesSnapshot, pushHistorySnapshot]);
+  }, [checkpoints, selectedCheckpointId, setNodes, cloneNodesSnapshot, pushHistorySnapshot]);
 
   const deleteCheckpoint = useCallback(
     (checkpointId?: string) => {
@@ -573,7 +572,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLayoutPanelOpen, layoutXGap, layoutYGap, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor, layoutMode, fitView]);
 
   useEffect(() => {
@@ -1202,7 +1200,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const boardDrawPathsForRender = useMemo(() => {
     const allPaths = liveBoardDrawPath ? [...boardDrawPaths, liveBoardDrawPath] : boardDrawPaths;
     return allPaths.map((path) => ({ ...path, d: toSvgPath(path.points) })).filter((path) => path.d.length > 0);
-  }, [boardDrawPaths, liveBoardDrawPath, toSvgPath, viewportX, viewportY, viewportZoom]);
+  }, [boardDrawPaths, liveBoardDrawPath, toSvgPath]);
 
   const appendBoardDrawPoint = useCallback(
     (event: Pick<ReactPointerEvent<HTMLDivElement>, "clientX" | "clientY">) => {

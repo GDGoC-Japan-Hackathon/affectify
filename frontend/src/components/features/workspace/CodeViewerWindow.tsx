@@ -79,7 +79,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   const popupInputRef = useRef<HTMLInputElement>(null);
 
   const activeFile = tabs.find((t) => t.filePath === activeTab);
-  const nodes = activeFile?.nodes ?? [];
+  const nodes = useMemo(() => activeFile?.nodes ?? [], [activeFile]);
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
 

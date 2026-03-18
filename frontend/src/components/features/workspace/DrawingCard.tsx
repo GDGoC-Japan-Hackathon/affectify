@@ -45,6 +45,7 @@ function DrawingCardInner({ data }: NodeProps<DrawingCardNode>) {
   // Sync from external changes (undo/redo) only when not actively drawing
   useEffect(() => {
     if (isDrawingActiveRef.current) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCompletedPaths(parsePaths(data.code_text));
   }, [data.code_text]);
 

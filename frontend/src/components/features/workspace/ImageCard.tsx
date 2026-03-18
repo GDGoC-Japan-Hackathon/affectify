@@ -36,6 +36,7 @@ function ImageCardInner({ data }: NodeProps<ImageCardNode>) {
 
       <div className="nowheel" onWheel={(e) => e.stopPropagation()}>
         {imageData ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imageData}
             alt={data.title || "画像"}

@@ -132,7 +132,8 @@ async function runAnalyzer(analyzerDir: string, folderPath: string): Promise<{ s
 }
 
 // NOTE(team): 現状は no-op。後でここをDB保存実装に差し替える。
-async function persistImportedGraph(_: { variantId?: string; projectId?: string; board: AnalyzerBoard }) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function persistImportedGraph(_params: { variantId?: string; projectId?: string; board: AnalyzerBoard }) {
   return;
 }
 
