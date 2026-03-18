@@ -14,7 +14,7 @@ import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
 import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, Shapes, PenTool, Wand2, LayoutGrid, Component, Save, BookmarkPlus, Clock, SaveAll, SaveAllIcon, Clock1, Eraser } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { computeLayout, computeSCCs } from "@/utils/graphLayout";
+import { computeLayout, computeCircularLayout, computeSCCs } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -38,6 +38,29 @@ interface HistorySnapshot {
   checkpoints: NamedCheckpoint[];
   selectedCheckpointId: string;
   boardDrawPaths: BoardDrawPath[];
+}
+
+interface ImportApiResponse {
+  nodes?: BoardNode[];
+  edges?: BoardEdge[];
+  warnings?: string;
+  error?: string;
+  details?: string;
+}
+
+interface ImportDirectoryEntry {
+  name: string;
+  fullPath: string;
+  relativePath: string;
+}
+
+interface ImportDirectoryApiResponse {
+  root?: string;
+  currentPath?: string;
+  currentRelativePath?: string;
+  parentPath?: string | null;
+  directories?: ImportDirectoryEntry[];
+  error?: string;
 }
 
 interface BoardDrawPath {
@@ -93,6 +116,24 @@ function toFlowEdges(boardEdges: BoardEdge[], sccEdgeIds?: Set<string>): Edge[] 
   });
 }
 
+function buildSccEdgeIds(boardNodes: BoardNode[], boardEdges: BoardEdge[]) {
+  const sccs = computeSCCs(
+    boardNodes.map((n) => n.id),
+    boardEdges,
+  );
+  const nodeToScc = new Map<string, number>();
+  sccs.forEach((scc, i) => {
+    if (scc.length > 1) scc.forEach((id) => nodeToScc.set(id, i));
+  });
+  const ids = new Set<string>();
+  for (const e of boardEdges) {
+    const si = nodeToScc.get(e.from_node_id);
+    const ti = nodeToScc.get(e.to_node_id);
+    if (si !== undefined && ti !== undefined && si === ti) ids.add(e.id);
+  }
+  return ids;
+}
+
 function isPointInPolygon(point: { x: number; y: number }, polygon: Array<{ x: number; y: number }>): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -123,23 +164,7 @@ function getPolygonBounds(points: Array<{ x: number; y: number }>) {
 function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
 
-  const sccEdgeIds = useMemo(() => {
-    const sccs = computeSCCs(
-      boardNodes.map((n) => n.id),
-      boardEdges,
-    );
-    const nodeToScc = new Map<string, number>();
-    sccs.forEach((scc, i) => {
-      if (scc.length > 1) scc.forEach((id) => nodeToScc.set(id, i));
-    });
-    const ids = new Set<string>();
-    for (const e of boardEdges) {
-      const si = nodeToScc.get(e.from_node_id);
-      const ti = nodeToScc.get(e.to_node_id);
-      if (si !== undefined && ti !== undefined && si === ti) ids.add(e.id);
-    }
-    return ids;
-  }, [boardNodes, boardEdges]);
+  const sccEdgeIds = useMemo(() => buildSccEdgeIds(boardNodes, boardEdges), [boardNodes, boardEdges]);
 
   const initialEdges = useMemo(() => toFlowEdges(boardEdges, sccEdgeIds), [boardEdges, sccEdgeIds]);
 
@@ -152,8 +177,20 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [closeAllCounter, setCloseAllCounter] = useState(0);
   const [layoutXGap, setLayoutXGap] = useState(200);
   const [layoutYGap, setLayoutYGap] = useState(200);
+  const [layoutMode, setLayoutMode] = useState<"grid" | "circular">("grid");
+  const [circularBaseRadius, setCircularBaseRadius] = useState(700);
+  const [circularLayerDistance, setCircularLayerDistance] = useState(180);
+  const [circularNodeRadiusFactor, setCircularNodeRadiusFactor] = useState(35);
   const [isLayoutPanelOpen, setIsLayoutPanelOpen] = useState(false);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isImportPickerOpen, setIsImportPickerOpen] = useState(false);
+  const [importPickerLoading, setImportPickerLoading] = useState(false);
+  const [importPickerError, setImportPickerError] = useState<string | null>(null);
+  const [importPickerRoot, setImportPickerRoot] = useState("");
+  const [importPickerCurrentPath, setImportPickerCurrentPath] = useState("");
+  const [importPickerParentPath, setImportPickerParentPath] = useState<string | null>(null);
+  const [importPickerDirectories, setImportPickerDirectories] = useState<ImportDirectoryEntry[]>([]);
   const [fabOpen, setFabOpen] = useState(false);
   const [fabOffset, setFabOffset] = useState({ x: 0, y: 0 });
   const fabDragRef = useRef({ dragging: false, startClientX: 0, startClientY: 0, startOffsetX: 0, startOffsetY: 0, moved: false });
@@ -426,7 +463,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       }));
       setNodes((nds) => {
         const currentBoardNodes = nds.map((n) => n.data as unknown as BoardNode);
-        const targetPositions = computeLayout(currentBoardNodes, currentBoardEdges, { xGap, yGap });
+        const layoutFn = layoutMode === "circular" ? computeCircularLayout : computeLayout;
+        const layoutOptions = layoutMode === "circular" ? { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor } : { xGap, yGap };
+        const targetPositions = layoutFn(currentBoardNodes, currentBoardEdges, layoutOptions);
 
         return nds.map((n) => {
           const to = targetPositions.get(n.id);
@@ -435,7 +474,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         });
       });
     },
-    [edges, setNodes, pushHistorySnapshot],
+    [edges, setNodes, pushHistorySnapshot, layoutMode, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor],
   );
 
   // 自動レイアウト
@@ -453,10 +492,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         kind: "call" as const,
         style: "solid" as const,
       }));
-      const targetPositions = computeLayout(boardNodes, boardEdges, {
-        xGap,
-        yGap,
-      });
+      const layoutFn = layoutMode === "circular" ? computeCircularLayout : computeLayout;
+      const layoutOptions = layoutMode === "circular" ? { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor } : { xGap, yGap };
+      const targetPositions = layoutFn(boardNodes, boardEdges, layoutOptions);
       const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
 
       const durationMs = 700;
@@ -505,7 +543,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       // TODO: APIが追加されたら以下でDBのx,yを保存する
       // targetPositions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
     },
-    [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap, pushHistorySnapshot],
+    [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap, layoutMode, pushHistorySnapshot, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor],
   );
 
   useEffect(() => {
@@ -524,7 +562,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, applyLayoutInstant, fitView]);
+  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor, applyLayoutInstant, fitView]);
 
   useEffect(() => {
     if (!isLayoutPanelOpen) {
@@ -603,7 +641,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [isSaveMenuOpen]);
-
 
   const windowIdCounter = useRef(0);
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
@@ -755,6 +792,120 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       }
     },
     [nodes, fitView],
+  );
+
+  const loadImportDirectories = useCallback(async (targetPath?: string) => {
+    try {
+      setImportPickerLoading(true);
+      setImportPickerError(null);
+      const query = targetPath ? `?path=${encodeURIComponent(targetPath)}` : "";
+      const response = await fetch(`/api/workspace/directories${query}`);
+      const payload = (await response.json()) as ImportDirectoryApiResponse;
+      if (!response.ok) {
+        throw new Error(payload.error || "directory list fetch failed");
+      }
+
+      setImportPickerRoot(payload.root || "");
+      setImportPickerCurrentPath(payload.currentPath || "");
+      setImportPickerParentPath(payload.parentPath ?? null);
+      setImportPickerDirectories(payload.directories || []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "directory list fetch failed";
+      setImportPickerError(message);
+    } finally {
+      setImportPickerLoading(false);
+    }
+  }, []);
+
+  const openImportPicker = useCallback(() => {
+    setIsImportPickerOpen(true);
+    void loadImportDirectories();
+  }, [loadImportDirectories]);
+
+  const handleImportFromFolder = useCallback(
+    async (folderPath: string) => {
+      if (!folderPath) {
+        window.alert("フォルダパスが空です。");
+        return;
+      }
+
+      try {
+        setIsImporting(true);
+
+        const response = await fetch("/api/workspace/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folderPath }),
+        });
+
+        const payload = (await response.json()) as ImportApiResponse;
+        if (!response.ok) {
+          throw new Error(payload.error || payload.details || "import failed");
+        }
+
+        const importedNodes = (payload.nodes || []).map((n) => ({
+          id: n.id,
+          kind: n.kind,
+          title: n.title,
+          file_path: n.file_path,
+          signature: n.signature,
+          receiver: n.receiver,
+          x: Number.isFinite(n.x) ? n.x : 0,
+          y: Number.isFinite(n.y) ? n.y : 0,
+          code_text: n.code_text || "",
+        }));
+
+        const importedEdges = (payload.edges || []).map((e, idx) => ({
+          id: e.id || `edge-${idx + 1}`,
+          from_node_id: e.from_node_id,
+          to_node_id: e.to_node_id,
+          kind: e.kind || "call",
+          style: e.style || "solid",
+        }));
+
+        if (importedNodes.length === 0) {
+          window.alert("解析結果にノードがありませんでした。");
+          return;
+        }
+
+        const layoutPositions = computeLayout(importedNodes, importedEdges, {
+          xGap: layoutXGap,
+          yGap: layoutYGap,
+        });
+        const positionedNodes = importedNodes.map((node) => {
+          const pos = layoutPositions.get(node.id);
+          return pos ? { ...node, x: pos.x, y: pos.y } : node;
+        });
+
+        const sccIds = buildSccEdgeIds(positionedNodes, importedEdges);
+
+        pushHistorySnapshot();
+        setNodes(toFlowNodes(positionedNodes));
+        setEdges(toFlowEdges(importedEdges, sccIds));
+        setCheckpoints([]);
+        setSelectedCheckpointId("");
+        setBoardDrawPaths([]);
+        setLiveBoardDrawPath(null);
+        setIsSelectionMode(false);
+        setIsFreeDrawMode(false);
+        setIsEraseMode(false);
+        setFabOpen(false);
+
+        window.setTimeout(() => {
+          fitView({ padding: 0.2, duration: 450 });
+        }, 40);
+
+        if (payload.warnings) {
+          console.warn("import warnings:\n", payload.warnings);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "import failed";
+        window.alert(`Importに失敗しました: ${message}`);
+      } finally {
+        setIsImporting(false);
+      }
+    },
+    [layoutXGap, layoutYGap, pushHistorySnapshot, setNodes, setEdges, fitView],
   );
 
   const miniMapNodeColor = useCallback((node: Node) => {
@@ -1104,41 +1255,54 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     liveBoardDrawPathRef.current = null;
   }, []);
 
-  const eraseAtPoint = useCallback((clientX: number, clientY: number) => {
-    const ERASE_RADIUS = 20;
-    setBoardDrawPaths((prev) =>
-      prev.filter((path) =>
-        !path.points.some((point) => {
-          const screen = reactFlow.flowToScreenPosition(point);
-          const dx = screen.x - clientX;
-          const dy = screen.y - clientY;
-          return dx * dx + dy * dy < ERASE_RADIUS * ERASE_RADIUS;
-        }),
-      ),
-    );
-  }, [reactFlow]);
+  const eraseAtPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const ERASE_RADIUS = 20;
+      setBoardDrawPaths((prev) =>
+        prev.filter(
+          (path) =>
+            !path.points.some((point) => {
+              const screen = reactFlow.flowToScreenPosition(point);
+              const dx = screen.x - clientX;
+              const dy = screen.y - clientY;
+              return dx * dx + dy * dy < ERASE_RADIUS * ERASE_RADIUS;
+            }),
+        ),
+      );
+    },
+    [reactFlow],
+  );
 
-  const handleErasePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button === 2) return;
-    pushHistorySnapshot();
-    isErasingRef.current = true;
-    eraseAtPoint(e.clientX, e.clientY);
-  }, [eraseAtPoint, pushHistorySnapshot]);
+  const handleErasePointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.button === 2) return;
+      pushHistorySnapshot();
+      isErasingRef.current = true;
+      eraseAtPoint(e.clientX, e.clientY);
+    },
+    [eraseAtPoint, pushHistorySnapshot],
+  );
 
-  const handleErasePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!isErasingRef.current) return;
-    eraseAtPoint(e.clientX, e.clientY);
-  }, [eraseAtPoint]);
+  const handleErasePointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isErasingRef.current) return;
+      eraseAtPoint(e.clientX, e.clientY);
+    },
+    [eraseAtPoint],
+  );
 
   const handleErasePointerUp = useCallback(() => {
     isErasingRef.current = false;
   }, []);
 
-  const onFabPointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
-    fabDragRef.current = { dragging: true, startClientX: e.clientX, startClientY: e.clientY, startOffsetX: fabOffset.x, startOffsetY: fabOffset.y, moved: false };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    e.stopPropagation();
-  }, [fabOffset]);
+  const onFabPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      fabDragRef.current = { dragging: true, startClientX: e.clientX, startClientY: e.clientY, startOffsetX: fabOffset.x, startOffsetY: fabOffset.y, moved: false };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+    },
+    [fabOffset],
+  );
 
   const onFabPointerMove = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
     if (!fabDragRef.current.dragging) return;
@@ -1160,51 +1324,89 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {/* 左上：ファイルツリーボタン（パネル閉時のみ表示） */}
       <AnimatePresence>
         {!fileTreeOpen && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            style={{ transformOrigin: "top left" }}
-            onClick={() => setFileTreeOpen(true)}
-            className="absolute top-4 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors"
-            title="ファイルツリー"
-          >
+          <motion.button initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} style={{ transformOrigin: "top left" }} onClick={() => setFileTreeOpen(true)} className="absolute top-4 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
             <FolderTree className="size-5 text-gray-700" />
           </motion.button>
         )}
       </AnimatePresence>
 
       {/* ドラッグ可能な挿入FAB */}
-      <div
-        className="absolute z-50"
-        style={{ right: 16, top: 68, transform: `translate(${fabOffset.x}px, ${fabOffset.y}px)` }}
-      >
+      <div className="absolute z-50" style={{ right: 16, top: 68, transform: `translate(${fabOffset.x}px, ${fabOffset.y}px)` }}>
         <div className="relative flex flex-col items-end">
           {/* サブボタン（下に展開） */}
           <AnimatePresence>
             {fabOpen && (
               <div className="absolute top-14 right-0 flex flex-col items-end gap-2">
-                {([
-                  { id: "memo",   icon: <StickyNote className="size-4" />,    label: "メモ",    active: false,            color: "text-yellow-500", onClick: () => { insertNodeAtCenter("memo",  "メモ"); setFabOpen(false); } },
-                  { id: "image",  icon: <ImageIcon  className="size-4" />,    label: "画像",    active: false,            color: "text-pink-500",   onClick: () => { insertNodeAtCenter("image", "画像"); setFabOpen(false); } },
-                  { id: "draw",   icon: <Pencil     className="size-4" />,    label: "手書き",  active: isFreeDrawMode && !isEraseMode, color: "text-blue-500",  onClick: () => { setIsFreeDrawMode(true); setIsSelectionMode(false); setIsEraseMode(false); setFabOpen(false); } },
-                  { id: "erase",  icon: <Eraser     className="size-4" />,    label: "消しゴム", active: isFreeDrawMode && isEraseMode,  color: "text-sky-500",   onClick: () => { setIsFreeDrawMode(true); setIsSelectionMode(false); setIsEraseMode(true);  setFabOpen(false); } },
-                  { id: "select", icon: <MousePointer2 className="size-4" />, label: "範囲選択", active: isSelectionMode,                color: "text-blue-500",  onClick: () => { setIsSelectionMode((p) => { const n = !p; if (n) setIsFreeDrawMode(false); return n; }); setFabOpen(false); } },
-                ] as const).map((item, i) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, x: 12, scale: 0.7 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 12, scale: 0.7 }}
-                    transition={{ delay: i * 0.05, type: "spring", stiffness: 400, damping: 25 }}
-                    className="flex items-center gap-2"
-                  >
+                {(
+                  [
+                    {
+                      id: "memo",
+                      icon: <StickyNote className="size-4" />,
+                      label: "メモ",
+                      active: false,
+                      color: "text-yellow-500",
+                      onClick: () => {
+                        insertNodeAtCenter("memo", "メモ");
+                        setFabOpen(false);
+                      },
+                    },
+                    {
+                      id: "image",
+                      icon: <ImageIcon className="size-4" />,
+                      label: "画像",
+                      active: false,
+                      color: "text-pink-500",
+                      onClick: () => {
+                        insertNodeAtCenter("image", "画像");
+                        setFabOpen(false);
+                      },
+                    },
+                    {
+                      id: "draw",
+                      icon: <Pencil className="size-4" />,
+                      label: "手書き",
+                      active: isFreeDrawMode && !isEraseMode,
+                      color: "text-blue-500",
+                      onClick: () => {
+                        setIsFreeDrawMode(true);
+                        setIsSelectionMode(false);
+                        setIsEraseMode(false);
+                        setFabOpen(false);
+                      },
+                    },
+                    {
+                      id: "erase",
+                      icon: <Eraser className="size-4" />,
+                      label: "消しゴム",
+                      active: isFreeDrawMode && isEraseMode,
+                      color: "text-sky-500",
+                      onClick: () => {
+                        setIsFreeDrawMode(true);
+                        setIsSelectionMode(false);
+                        setIsEraseMode(true);
+                        setFabOpen(false);
+                      },
+                    },
+                    {
+                      id: "select",
+                      icon: <MousePointer2 className="size-4" />,
+                      label: "範囲選択",
+                      active: isSelectionMode,
+                      color: "text-blue-500",
+                      onClick: () => {
+                        setIsSelectionMode((p) => {
+                          const n = !p;
+                          if (n) setIsFreeDrawMode(false);
+                          return n;
+                        });
+                        setFabOpen(false);
+                      },
+                    },
+                  ] as const
+                ).map((item, i) => (
+                  <motion.div key={item.id} initial={{ opacity: 0, x: 12, scale: 0.7 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: 12, scale: 0.7 }} transition={{ delay: i * 0.05, type: "spring", stiffness: 400, damping: 25 }} className="flex items-center gap-2">
                     <span className="bg-white border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-600 shadow-sm whitespace-nowrap select-none">{item.label}</span>
-                    <button
-                      onClick={item.onClick}
-                      className={`w-10 h-10 rounded-full shadow-md flex items-center justify-center transition-colors border-2 ${item.active ? "bg-blue-500 border-blue-500 text-white" : `bg-white border-gray-200 hover:bg-gray-50 ${item.color}`}`}
-                    >
+                    <button onClick={item.onClick} className={`w-10 h-10 rounded-full shadow-md flex items-center justify-center transition-colors border-2 ${item.active ? "bg-blue-500 border-blue-500 text-white" : `bg-white border-gray-200 hover:bg-gray-50 ${item.color}`}`}>
                       {item.icon}
                     </button>
                   </motion.div>
@@ -1214,13 +1416,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           </AnimatePresence>
 
           {/* メインFABボタン */}
-          <button
-            onPointerDown={onFabPointerDown}
-            onPointerMove={onFabPointerMove}
-            onPointerUp={onFabPointerUp}
-            className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors cursor-grab active:cursor-grabbing border-2 ${fabOpen ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-            title="挿入メニュー（ドラッグで移動）"
-          >
+          <button onPointerDown={onFabPointerDown} onPointerMove={onFabPointerMove} onPointerUp={onFabPointerUp} className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-colors cursor-grab active:cursor-grabbing border-2 ${fabOpen ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`} title="挿入メニュー（ドラッグで移動）">
             <motion.div animate={{ rotate: fabOpen ? 45 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
               <PenTool className="size-6" />
             </motion.div>
@@ -1231,6 +1427,17 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              openImportPicker();
+            }}
+            disabled={isImporting}
+            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="フォルダを解析してホワイトボードへImport"
+          >
+            <Wand2 className="size-5 text-gray-700" />
+          </button>
+
           <button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
             <RotateCcw className="size-5 text-gray-700" />
           </button>
@@ -1322,39 +1529,98 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           <button onClick={() => setFocusMode((prev) => !prev)} className={`border rounded-lg p-2 shadow-md transition-colors ${focusMode ? "bg-blue-500 border-blue-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`} title="フォーカスモード">
             <Focus className="size-5" />
           </button>
-
         </div>
 
-        <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-48 translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
-          <div className="mb-2 text-xs font-semibold text-gray-700">レイアウト間隔</div>
+        <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-72 translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
+          <div className="mb-3 text-xs font-semibold text-gray-700">レイアウト方式</div>
+          <div className="mb-3 flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="radio" name="layoutMode" value="grid" checked={layoutMode === "grid"} onChange={() => setLayoutMode("grid")} className="accent-blue-500" />
+              <span>グリッド</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="radio" name="layoutMode" value="circular" checked={layoutMode === "circular"} onChange={() => setLayoutMode("circular")} className="accent-blue-500" />
+              <span>円形</span>
+            </label>
+          </div>
 
-          <label className="mb-1 block text-xs text-gray-600">X間隔: {layoutXGap}px</label>
-          <input
-            type="range"
-            min={0}
-            max={420}
-            step={10}
-            value={layoutXGap}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              if (Number.isFinite(next)) setLayoutXGap(next);
-            }}
-            className="mb-3 w-full"
-          />
+          <div className="mb-2 text-xs font-semibold text-gray-700">レイアウト設定</div>
 
-          <label className="mb-1 block text-xs text-gray-600">Y間隔: {layoutYGap}px</label>
-          <input
-            type="range"
-            min={0}
-            max={420}
-            step={10}
-            value={layoutYGap}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              if (Number.isFinite(next)) setLayoutYGap(next);
-            }}
-            className="w-full"
-          />
+          {layoutMode === "grid" ? (
+            <>
+              <label className="mb-1 block text-xs text-gray-600">X間隔: {layoutXGap}px</label>
+              <input
+                type="range"
+                min={0}
+                max={420}
+                step={10}
+                value={layoutXGap}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next)) setLayoutXGap(next);
+                }}
+                className="mb-3 w-full"
+              />
+
+              <label className="mb-1 block text-xs text-gray-600">Y間隔: {layoutYGap}px</label>
+              <input
+                type="range"
+                min={0}
+                max={420}
+                step={10}
+                value={layoutYGap}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next)) setLayoutYGap(next);
+                }}
+                className="w-full"
+              />
+            </>
+          ) : (
+            <>
+              <label className="mb-1 block text-xs text-gray-600">基本半径: {circularBaseRadius}px</label>
+              <input
+                type="range"
+                min={100}
+                max={2000}
+                step={50}
+                value={circularBaseRadius}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next)) setCircularBaseRadius(next);
+                }}
+                className="mb-3 w-full"
+              />
+
+              <label className="mb-1 block text-xs text-gray-600">層間距離: {circularLayerDistance}px</label>
+              <input
+                type="range"
+                min={50}
+                max={600}
+                step={10}
+                value={circularLayerDistance}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next)) setCircularLayerDistance(next);
+                }}
+                className="mb-3 w-full"
+              />
+
+              <label className="mb-1 block text-xs text-gray-600">ノード半径係数: {circularNodeRadiusFactor}px</label>
+              <input
+                type="range"
+                min={10}
+                max={100}
+                step={5}
+                value={circularNodeRadiusFactor}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next)) setCircularNodeRadiusFactor(next);
+                }}
+                className="w-full"
+              />
+            </>
+          )}
         </div>
 
         {isFreeDrawMode && (
@@ -1362,12 +1628,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold text-gray-700">手書きモード</div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setIsEraseMode((p) => !p)}
-                  className={`rounded border px-2 py-1 text-[11px] transition-colors ${isEraseMode ? "bg-sky-200 border-sky-300 text-sky-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-                  title="消しゴム"
-                >
-                  <Eraser className="size-3 inline mr-1" />消しゴム
+                <button onClick={() => setIsEraseMode((p) => !p)} className={`rounded border px-2 py-1 text-[11px] transition-colors ${isEraseMode ? "bg-sky-200 border-sky-300 text-sky-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`} title="消しゴム">
+                  <Eraser className="size-3 inline mr-1" />
+                  消しゴム
                 </button>
                 <button onClick={clearBoardDrawings} className="rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50" title="手書きをすべて消去">
                   クリア
@@ -1384,6 +1647,73 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           </div>
         )}
       </div>
+
+      {isImportPickerOpen && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/30 p-4" onClick={() => setIsImportPickerOpen(false)}>
+          <div className="w-full max-w-xl rounded-xl border border-gray-200 bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800">解析対象フォルダを選択</h3>
+              <button onClick={() => setIsImportPickerOpen(false)} className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50" type="button">
+                閉じる
+              </button>
+            </div>
+
+            <div className="mb-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 break-all">現在: {importPickerCurrentPath || "(読み込み中)"}</div>
+
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button onClick={() => void loadImportDirectories(importPickerRoot || undefined)} disabled={importPickerLoading || !importPickerRoot} className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40" type="button">
+                ルートへ
+              </button>
+              <button
+                onClick={() => {
+                  if (importPickerParentPath) void loadImportDirectories(importPickerParentPath);
+                }}
+                disabled={importPickerLoading || !importPickerParentPath}
+                className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                type="button"
+              >
+                1つ上へ
+              </button>
+              <button onClick={() => void loadImportDirectories(importPickerCurrentPath || undefined)} disabled={importPickerLoading} className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40" type="button">
+                再読み込み
+              </button>
+            </div>
+
+            <div className="mb-3 h-64 overflow-y-auto rounded-md border border-gray-200">
+              {importPickerLoading && <div className="px-3 py-2 text-xs text-gray-500">読み込み中...</div>}
+              {!importPickerLoading && importPickerDirectories.length === 0 && <div className="px-3 py-2 text-xs text-gray-500">サブフォルダがありません。</div>}
+              {!importPickerLoading &&
+                importPickerDirectories.map((dir) => (
+                  <button key={dir.fullPath} onClick={() => void loadImportDirectories(dir.fullPath)} className="flex w-full items-center justify-between border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 last:border-b-0" type="button">
+                    <span className="truncate">{dir.name}</span>
+                    <span className="ml-3 shrink-0 text-[11px] text-gray-400">{dir.relativePath}</span>
+                  </button>
+                ))}
+            </div>
+
+            {importPickerError && <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">{importPickerError}</div>}
+
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setIsImportPickerOpen(false)} className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" type="button">
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  const selectedPath = importPickerCurrentPath;
+                  if (!selectedPath) return;
+                  setIsImportPickerOpen(false);
+                  void handleImportFromFolder(selectedPath);
+                }}
+                disabled={isImporting || importPickerLoading || !importPickerCurrentPath}
+                className="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                type="button"
+              >
+                このフォルダを解析
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ReactFlow
         nodes={nodesWithCallbacks}
