@@ -442,6 +442,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [setNodes, setEdges, edges, focusMode],
   );
 
+  const currentBoardNodes = useMemo(() => nodes.map((n) => n.data as unknown as BoardNode), [nodes]);
+
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   const windowZMax = useRef(9999);
   const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
@@ -1806,7 +1808,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {isFreeDrawMode && <div className={`absolute inset-0 z-30 touch-none ${isOverFlowElement ? "pointer-events-none cursor-default" : isEraseMode ? "cursor-cell" : "cursor-crosshair"}`} onPointerDown={isEraseMode ? handleErasePointerDown : handleBoardDrawPointerDown} onPointerMove={isEraseMode ? handleErasePointerMove : handleBoardDrawPointerMove} onPointerUp={isEraseMode ? handleErasePointerUp : finalizeBoardDraw} onPointerCancel={isEraseMode ? handleErasePointerUp : finalizeBoardDraw} />}
 
       {/* ファイルツリーパネル */}
-      <FileTreePanel nodes={boardNodes} isOpen={fileTreeOpen} onClose={() => setFileTreeOpen(false)} onFileSelect={handleFileSelect} />
+      <FileTreePanel nodes={currentBoardNodes} isOpen={fileTreeOpen} onClose={() => setFileTreeOpen(false)} onFileSelect={handleFileSelect} />
 
       {/* ファイル全体表示ウィンドウ（複数ウィンドウ対応） */}
       {viewerWindows.map((win, idx) => (
