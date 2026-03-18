@@ -9,7 +9,9 @@ import {
   FolderOpen,
   ChevronRight,
   ChevronDown,
+  Download,
 } from "lucide-react";
+import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -74,6 +76,32 @@ function buildFolderTree(nodes: BoardNode[]): FolderNode {
   }
 
   return root;
+}
+
+export async function exportAsZip(nodes: BoardNode[]) {
+  const zip = new JSZip();
+
+  // file_path ごとにノードをまとめる
+  const fileMap = new Map<string, BoardNode[]>();
+  for (const node of nodes) {
+    if (!node.file_path || !node.code_text) continue;
+    const arr = fileMap.get(node.file_path) ?? [];
+    arr.push(node);
+    fileMap.set(node.file_path, arr);
+  }
+
+  for (const [filePath, fileNodes] of fileMap) {
+    const content = fileNodes.map((n) => n.code_text).join("\n\n");
+    zip.file(filePath, content);
+  }
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "export.zip";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function FileTreePanel({
@@ -189,7 +217,7 @@ export function FileTreePanel({
                 </Button>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="gap-1">
                   <FileCode className="size-3" />
                   {uniqueFiles.size} ファイル
@@ -197,6 +225,16 @@ export function FileTreePanel({
                 <Badge variant="secondary" className="gap-1">
                   {filesWithPath.length} 関数
                 </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto gap-1 text-xs"
+                  disabled={nodes.length === 0}
+                  onClick={() => void exportAsZip(nodes)}
+                >
+                  <Download className="size-3" />
+                  エクスポート
+                </Button>
               </div>
             </div>
 

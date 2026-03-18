@@ -10,9 +10,9 @@ import { MemoCard } from "./MemoCard";
 import { ImageCard } from "./ImageCard";
 import { DrawingCard } from "./DrawingCard";
 import { AnimatedEdge } from "./AnimatedEdge";
-import { FileTreePanel } from "./FileTreePanel";
+import { FileTreePanel, exportAsZip } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, Wand2, SaveAll, Eraser } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, Wand2, SaveAll, Eraser, Download } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs } from "@/utils/graphLayout";
 
@@ -1448,6 +1448,15 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
             title="フォルダを解析してホワイトボードへImport"
           >
             <Wand2 className="size-5 text-gray-700" />
+          </button>
+
+          <button
+            onClick={() => void exportAsZip(currentBoardNodes)}
+            disabled={currentBoardNodes.length === 0}
+            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="フォルダ構造をZIPでエクスポート"
+          >
+            <Download className="size-5 text-gray-700" />
           </button>
 
           <button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
