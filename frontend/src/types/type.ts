@@ -45,8 +45,6 @@ export interface Variant {
   designGuideId?: string;
 }
 
-export type DesignGuideVisibility = "private" | "team" | "public";
-
 export interface Project {
   id: string;
   name: string;
@@ -67,9 +65,7 @@ export interface DesignGuide {
   id: string;
   name: string;
   description: string;
-  visibility: DesignGuideVisibility;
   createdBy: string;
-  teamId?: string;
   createdAt: Date;
   updatedAt: Date;
   content: string;

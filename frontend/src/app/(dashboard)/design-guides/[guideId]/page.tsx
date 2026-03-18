@@ -10,9 +10,6 @@ import {
   Heart,
   Calendar,
   User,
-  Lock,
-  Globe,
-  Users,
   ArrowLeft,
   Check
 } from 'lucide-react';
@@ -42,28 +39,6 @@ export default function DesignGuideDetail() {
   }
 
   const isOwner = guide.createdBy === currentUserId;
-
-  const getVisibilityIcon = () => {
-    switch (guide.visibility) {
-      case 'private':
-        return <Lock className="size-4" />;
-      case 'team':
-        return <Users className="size-4" />;
-      case 'public':
-        return <Globe className="size-4" />;
-    }
-  };
-
-  const getVisibilityLabel = () => {
-    switch (guide.visibility) {
-      case 'private':
-        return '非公開';
-      case 'team':
-        return 'チーム';
-      case 'public':
-        return '公開';
-    }
-  };
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -111,10 +86,6 @@ export default function DesignGuideDetail() {
 
           {/* メタ情報 */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-            <div className="flex items-center gap-1.5">
-              {getVisibilityIcon()}
-              <span>{getVisibilityLabel()}</span>
-            </div>
             <div className="flex items-center gap-1.5">
               <User className="size-4" />
               <span>作成者: User {guide.createdBy}</span>

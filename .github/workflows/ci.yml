@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
       - run: buf lint
         working-directory: proto
       - run: buf format --diff --exit-code
@@ -38,6 +40,8 @@ jobs:
         with:
           go-version-file: backend/go.mod
       - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
       - name: Install Atlas CLI
         run: curl -sSf https://atlasgo.sh | sh
       - name: Install protoc plugins
@@ -77,6 +81,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
       - name: Install dependencies
         run: bun install --frozen-lockfile
         working-directory: frontend
