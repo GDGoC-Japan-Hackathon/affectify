@@ -82,6 +82,13 @@ bun install
 bun run dev
 ```
 
+デモ用 seed 投入:
+
+```bash
+cd backend
+go run ./cmd/seed --preset demo
+```
+
 ## More Docs
 
 - [docs/proto.md](./docs/proto.md)
