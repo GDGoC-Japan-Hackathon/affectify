@@ -51,7 +51,7 @@ function getScoreBg(score?: number) {
 
 export function VariantCard({
   variant,
-  projectId,
+  projectId: _projectId, // eslint-disable-line @typescript-eslint/no-unused-vars
   onCompareToggle,
   isComparing,
 }: VariantCardProps) {

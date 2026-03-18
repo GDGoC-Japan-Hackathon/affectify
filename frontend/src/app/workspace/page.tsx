@@ -5,16 +5,12 @@ import { mockNodes, mockNodesLarge } from "@/data/mock-nodes";
 import { mockEdges, mockEdgesLarge } from "@/data/mock-edges";
 
 export default function WorkspacePage() {
-  // TODO: useParams() で variantId を取得し API からノード/エッジを取得する
-  // 現在はモックデータを使用
+  // 既存モックを残しつつ、必要な時だけ大規模モックに切り替え
   const useLargeMock = true;
 
   return (
     <div className="w-screen h-screen">
-      <Whiteboard
-        boardNodes={useLargeMock ? mockNodesLarge : mockNodes}
-        boardEdges={useLargeMock ? mockEdgesLarge : mockEdges}
-      />
+      <Whiteboard boardNodes={useLargeMock ? mockNodesLarge : mockNodes} boardEdges={useLargeMock ? mockEdgesLarge : mockEdges} />
     </div>
   );
 }
