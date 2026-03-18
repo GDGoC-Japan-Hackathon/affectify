@@ -7,13 +7,9 @@ import {
   Save,
   Eye,
   Code,
-  Lock,
-  Users,
-  Globe,
   ArrowLeft
 } from 'lucide-react';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import { DesignGuideVisibility } from '@/types/type';
 
 type ViewMode = 'edit' | 'preview' | 'split';
 
@@ -28,11 +24,10 @@ export default function DesignGuideEditor() {
   const [name, setName] = useState(existingGuide?.name || '');
   const [description, setDescription] = useState(existingGuide?.description || '');
   const [content, setContent] = useState(existingGuide?.content || getDefaultTemplate());
-  const [visibility, setVisibility] = useState<DesignGuideVisibility>(existingGuide?.visibility || 'private');
   const [viewMode, setViewMode] = useState<ViewMode>('split');
 
   const handleSave = () => {
-    console.log('設計書を保存:', { name, description, content, visibility });
+    console.log('設計書を保存:', { name, description, content });
     // 保存処理
     router.push('/design-guides');
   };
@@ -106,57 +101,16 @@ export default function DesignGuideEditor() {
 
       {/* メタ情報バー */}
       <div className="border-b border-slate-200 bg-white px-6 py-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">説明</label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="この設計書の説明を入力"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">公開範囲</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setVisibility('private')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  visibility === 'private'
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <Lock className="size-4" />
-                非公開
-              </button>
-              <button
-                onClick={() => setVisibility('team')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  visibility === 'team'
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <Users className="size-4" />
-                チーム
-              </button>
-              <button
-                onClick={() => setVisibility('public')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  visibility === 'public'
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <Globe className="size-4" />
-                公開
-              </button>
-            </div>
-          </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">説明</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="この設計書の説明を入力"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          />
         </div>
-
       </div>
 
       {/* エディタエリア */}

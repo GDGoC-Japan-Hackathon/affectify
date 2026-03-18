@@ -152,6 +152,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const historyPastRef = useRef<HistorySnapshot[]>([]);
   const historyFutureRef = useRef<HistorySnapshot[]>([]);
   const [, setHistoryTick] = useState(0);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const [checkpoints, setCheckpoints] = useState<NamedCheckpoint[]>([]);
   const [selectedCheckpointId, setSelectedCheckpointId] = useState("");
   const suppressHistoryRef = useRef(false);
@@ -204,6 +206,11 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     [nodes, checkpoints, selectedCheckpointId, cloneNodesSnapshot, cloneCheckpointsSnapshot],
   );
 
+  const syncHistoryAvailability = useCallback(() => {
+    setCanUndo(historyPastRef.current.length > 0);
+    setCanRedo(historyFutureRef.current.length > 0);
+  }, []);
+
   const pushHistorySnapshot = useCallback(
     (snapshot?: HistorySnapshot) => {
       if (suppressHistoryRef.current) return;
@@ -211,8 +218,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       if (historyPastRef.current.length > 100) historyPastRef.current.shift();
       historyFutureRef.current = [];
       setHistoryTick((v) => v + 1);
+      syncHistoryAvailability();
     },
-    [makeHistorySnapshot],
+    [makeHistorySnapshot, syncHistoryAvailability],
   );
 
   const undo = useCallback(() => {
@@ -229,7 +237,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       suppressHistoryRef.current = false;
     });
     setHistoryTick((v) => v + 1);
-  }, [setNodes, cloneNodesSnapshot, makeHistorySnapshot, cloneCheckpointsSnapshot]);
+    syncHistoryAvailability();
+  }, [setNodes, cloneNodesSnapshot, makeHistorySnapshot, cloneCheckpointsSnapshot, syncHistoryAvailability]);
 
   const redo = useCallback(() => {
     if (historyFutureRef.current.length === 0) return;
@@ -245,7 +254,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       suppressHistoryRef.current = false;
     });
     setHistoryTick((v) => v + 1);
-  }, [setNodes, cloneNodesSnapshot, makeHistorySnapshot, cloneCheckpointsSnapshot]);
+    syncHistoryAvailability();
+  }, [setNodes, cloneNodesSnapshot, makeHistorySnapshot, cloneCheckpointsSnapshot, syncHistoryAvailability]);
 
   const saveCheckpoint = useCallback(() => {
     const now = new Date();
@@ -465,7 +475,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   useEffect(() => {
     if (!isLayoutPanelOpen || isLayoutAnimatingRef.current) return;
-    applyLayoutInstant(layoutXGap, layoutYGap);
+    const frameId = requestAnimationFrame(() => {
+      applyLayoutInstant(layoutXGap, layoutYGap);
+    });
 
     if (layoutViewFrameRef.current !== null) {
       cancelAnimationFrame(layoutViewFrameRef.current);
@@ -474,7 +486,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       fitView({ padding: 0.2, duration: 180 });
       layoutViewFrameRef.current = null;
     });
-  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, applyLayoutInstant]);
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, applyLayoutInstant, fitView]);
 
   useEffect(() => {
     if (!isLayoutPanelOpen) {
@@ -623,7 +638,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, zIndex: 0 } : n)));
       }
     },
-    [setNodes, fitView, bringToFront],
+    [setNodes, bringToFront],
   );
 
   // 各ノードのエッジ数を計算
@@ -782,8 +797,12 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   useEffect(() => {
     if (!isSelectionMode) {
       isOverFlowElementRef.current = false;
-      setIsOverFlowElement(false);
-      return;
+      const frameId = requestAnimationFrame(() => {
+        setIsOverFlowElement(false);
+      });
+      return () => {
+        cancelAnimationFrame(frameId);
+      };
     }
 
     const onWindowMouseMove = (event: MouseEvent) => {
@@ -920,11 +939,11 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
-          <button onClick={undo} disabled={historyPastRef.current.length === 0} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
+          <button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
             <RotateCcw className="size-5 text-gray-700" />
           </button>
 
-          <button onClick={redo} disabled={historyFutureRef.current.length === 0} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Redo (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)">
+          <button onClick={redo} disabled={!canRedo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Redo (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)">
             <RotateCw className="size-5 text-gray-700" />
           </button>
 

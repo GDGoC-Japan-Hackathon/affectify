@@ -81,9 +81,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     setIsImporting(false);
   };
 
-  const availableDesignGuides = mockDesignGuides.filter(
-    (guide) => guide.visibility === 'public' || guide.createdBy === 'user-1'
-  );
+  const availableDesignGuides = mockDesignGuides;
 
   const handleFolderImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

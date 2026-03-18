@@ -83,27 +83,32 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
 
-  // コード結合 + 行マッピング
-  const codeLines: string[] = [];
-  const lineNodeMap: (BoardNode | null)[] = [];
+  // コード結合と行マッピングは、編集中のファイルが変わった時だけ再計算する。
+  const { fileContent, lineNodeMap } = useMemo(() => {
+    const codeLines: string[] = [];
+    const nextLineNodeMap: (BoardNode | null)[] = [];
 
-  nodes.forEach((n, idx) => {
-    if (idx > 0) {
-      codeLines.push("");
-      lineNodeMap.push(null);
-    }
-    const header = n.kind === "method" ? `// (${n.receiver}).${n.title}` : `// ${n.title}`;
-    codeLines.push(header);
-    lineNodeMap.push(null);
+    nodes.forEach((n, idx) => {
+      if (idx > 0) {
+        codeLines.push("");
+        nextLineNodeMap.push(null);
+      }
+      const header = n.kind === "method" ? `// (${n.receiver}).${n.title}` : `// ${n.title}`;
+      codeLines.push(header);
+      nextLineNodeMap.push(null);
 
-    const lines = n.code_text?.split("\n") ?? [];
-    for (const line of lines) {
-      codeLines.push(line);
-      lineNodeMap.push(n);
-    }
-  });
+      const lines = n.code_text?.split("\n") ?? [];
+      for (const line of lines) {
+        codeLines.push(line);
+        nextLineNodeMap.push(n);
+      }
+    });
 
-  const fileContent = codeLines.join("\n");
+    return {
+      fileContent: codeLines.join("\n"),
+      lineNodeMap: nextLineNodeMap,
+    };
+  }, [nodes]);
 
   // 各ノードのヘッダー行番号（1-indexed）
   const headerLineNumbers: number[] = [];
@@ -148,7 +153,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
     if (decorationsRef.current) {
       decorationsRef.current.set(lineNodeMap.map((node, i) => (node ? { range: { startLineNumber: i + 1, endLineNumber: i + 1, startColumn: 1, endColumn: 1 }, options: { isWholeLine: true, className: "bg-blue-50" } } : null)).filter((d): d is NonNullable<typeof d> => d !== null));
     }
-  }, [fileContent]);
+  }, [fileContent, lineNodeMap]);
 
   // ポップアップが開いたらフォーカス
   useEffect(() => {

@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { ChevronDown, ChevronRight, FunctionSquare, Cog, Puzzle, Folder, StickyNote, Image } from "lucide-react";
+import { ChevronDown, ChevronRight, FunctionSquare, Cog, Puzzle, Folder, StickyNote, Image as ImageIcon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import type { BoardNode } from "@/types/type";
@@ -46,7 +46,7 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
     interface: <Puzzle className="size-4" />,
     group: <Folder className="size-4" />,
     note: <StickyNote className="size-4" />,
-    image: <Image className="size-4" />,
+    image: <ImageIcon className="size-4" />,
   };
 
   return (

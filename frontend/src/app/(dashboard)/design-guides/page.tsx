@@ -8,13 +8,12 @@ import {
   Search,
   Star,
   TrendingUp,
-  Users,
   Heart,
   FileText,
   Upload,
 } from 'lucide-react';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
-import { DesignGuide, DesignGuideVisibility } from '@/types/type';
+import { DesignGuide } from '@/types/type';
 import {
   Dialog,
   DialogContent,
@@ -23,7 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-type TabType = 'templates' | 'my-guides' | 'team' | 'liked';
+type TabType = 'templates' | 'my-guides' | 'liked';
 
 export default function DesignGuides() {
   const router = useRouter();
@@ -33,7 +32,6 @@ export default function DesignGuides() {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
 
   const currentUserId = 'user-1';
-  const currentTeamId = 'team-1';
 
   // フィルタリング
   const filteredGuides = mockDesignGuides.filter(guide => {
@@ -45,12 +43,9 @@ export default function DesignGuides() {
 
     switch (activeTab) {
       case 'templates':
-        return guide.visibility === 'public';
+        return guide.createdBy !== currentUserId;
       case 'my-guides':
         return guide.createdBy === currentUserId;
-      case 'team':
-        // 複数チーム対応：現在選択中のチームで共有されているもの
-        return guide.visibility === 'team' && guide.teamId === currentTeamId;
       case 'liked':
         // ここでは仮で人気のあるもの（likeCount > 500）を表示
         return guide.likeCount > 500;
@@ -164,17 +159,6 @@ export default function DesignGuides() {
             マイ設計書
           </button>
           <button
-            onClick={() => setActiveTab('team')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 font-medium transition-colors ${
-              activeTab === 'team'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Users className="size-4" />
-            チーム
-          </button>
-          <button
             onClick={() => setActiveTab('liked')}
             className={`flex items-center gap-2 border-b-2 px-4 py-3 font-medium transition-colors ${
               activeTab === 'liked'
@@ -272,14 +256,6 @@ export default function DesignGuides() {
 function DesignGuideCard({ guide }: { guide: DesignGuide }) {
   const router = useRouter();
 
-  const getVisibilityLabel = (visibility: DesignGuideVisibility) => {
-    switch (visibility) {
-      case 'private': return 'Private';
-      case 'team': return 'Team';
-      case 'public': return 'Public';
-    }
-  };
-
   return (
     <div
       onClick={() => router.push(`/design-guides/${guide.id}`)}
@@ -291,16 +267,13 @@ function DesignGuideCard({ guide }: { guide: DesignGuide }) {
     >
       <div className="flex flex-col p-[18px]">
         {/* トップバー */}
-        <div className="mb-3.5 flex items-center justify-between">
+        <div className="mb-3.5 flex items-center">
           <div
             className="grid size-[38px] place-items-center rounded-[10px] bg-white/70 text-[#3b82f6]"
             style={{ border: '1px solid #bfd7f1' }}
           >
             <BookOpen className="size-[18px]" />
           </div>
-          <span className="rounded-full bg-[#eef6ff] px-2.5 py-1.5 text-xs font-bold text-[#55739a]">
-            {getVisibilityLabel(guide.visibility)}
-          </span>
         </div>
 
         {/* タイトル */}
