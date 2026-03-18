@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 import { X, FileCode, Copy, Check, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
@@ -236,7 +236,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
         <div ref={headerRef} onMouseDown={handleMouseDown} className="border-b border-gray-200 bg-gray-50 cursor-move shrink-0">
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-xs text-gray-400">
-              {nodes.length} 関数 / {codeLines.length} 行
+              {nodes.length} 関数 / {fileContent.split("\n").length} 行
             </span>
             <div className="flex items-center gap-1">
               <button
