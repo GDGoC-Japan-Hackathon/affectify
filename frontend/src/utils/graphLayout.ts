@@ -394,3 +394,51 @@ export function computeCircularLayout(nodes: BoardNode[], edges: BoardEdge[], op
 
   return positions;
 }
+
+// =========================================================
+// 5. ランダムレイアウト（ノード非接触保証）
+//    - 各ノードをランダムな位置に配置する
+//    - spacing パラメータでノード間の最小間隔を指定
+// =========================================================
+export function computeRandomLayout(nodes: BoardNode[], _edges: BoardEdge[], options: { spacing?: number } = {}): Map<string, { x: number; y: number }> {
+  if (nodes.length === 0) return new Map();
+
+  const spacing = options.spacing ?? 80;
+  const cellW = NODE_W + spacing;
+  const cellH = NODE_H + spacing;
+  const area = Math.sqrt(nodes.length) * Math.max(cellW, cellH) * 2.5;
+
+  const positions = new Map<string, { x: number; y: number }>();
+  const placed: Array<{ x: number; y: number }> = [];
+
+  for (const node of nodes) {
+    let pos: { x: number; y: number } | null = null;
+
+    for (let attempt = 0; attempt < 300; attempt++) {
+      const x = (Math.random() - 0.5) * area;
+      const y = (Math.random() - 0.5) * area;
+
+      let overlaps = false;
+      for (const p of placed) {
+        if (x < p.x + NODE_W + spacing && x + NODE_W + spacing > p.x && y < p.y + NODE_H + spacing && y + NODE_H + spacing > p.y) {
+          overlaps = true;
+          break;
+        }
+      }
+
+      if (!overlaps) {
+        pos = { x, y };
+        break;
+      }
+    }
+
+    if (!pos) {
+      pos = { x: (Math.random() - 0.5) * area * 1.5, y: (Math.random() - 0.5) * area * 1.5 };
+    }
+
+    positions.set(node.id, pos);
+    placed.push(pos);
+  }
+
+  return positions;
+}

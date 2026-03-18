@@ -14,7 +14,7 @@ import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
 import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, Shapes, PenTool, Wand2, LayoutGrid, Component, Save, BookmarkPlus, Clock, SaveAll, SaveAllIcon, Clock1, Eraser } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { computeLayout, computeCircularLayout, computeSCCs } from "@/utils/graphLayout";
+import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs } from "@/utils/graphLayout";
 
 interface WhiteboardProps {
   boardNodes: BoardNode[];
@@ -177,7 +177,10 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [closeAllCounter, setCloseAllCounter] = useState(0);
   const [layoutXGap, setLayoutXGap] = useState(200);
   const [layoutYGap, setLayoutYGap] = useState(200);
-  const [layoutMode, setLayoutMode] = useState<"grid" | "circular">("grid");
+  const [layoutMode, setLayoutMode] = useState<"grid" | "circular" | "random">("grid");
+  const [randomSpacing, setRandomSpacing] = useState(80);
+  const randomSpacingRef = useRef(80);
+  randomSpacingRef.current = randomSpacing;
   const [circularBaseRadius, setCircularBaseRadius] = useState(700);
   const [circularLayerDistance, setCircularLayerDistance] = useState(180);
   const [circularNodeRadiusFactor, setCircularNodeRadiusFactor] = useState(35);
@@ -447,6 +450,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const layoutViewFrameRef = useRef<number | null>(null);
   const isLayoutAnimatingRef = useRef(false);
   const hasAutoLayoutedRef = useRef(false);
+  const applyLayoutInstantRef = useRef<(xGap: number, yGap: number) => void>(() => {});
 
   const applyLayoutInstant = useCallback(
     (xGap: number, yGap: number) => {
@@ -463,9 +467,12 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       }));
       setNodes((nds) => {
         const currentBoardNodes = nds.map((n) => n.data as unknown as BoardNode);
-        const layoutFn = layoutMode === "circular" ? computeCircularLayout : computeLayout;
-        const layoutOptions = layoutMode === "circular" ? { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor } : { xGap, yGap };
-        const targetPositions = layoutFn(currentBoardNodes, currentBoardEdges, layoutOptions);
+        const targetPositions =
+          layoutMode === "circular"
+            ? computeCircularLayout(currentBoardNodes, currentBoardEdges, { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor })
+            : layoutMode === "random"
+              ? computeRandomLayout(currentBoardNodes, currentBoardEdges, { spacing: randomSpacingRef.current })
+              : computeLayout(currentBoardNodes, currentBoardEdges, { xGap, yGap });
 
         return nds.map((n) => {
           const to = targetPositions.get(n.id);
@@ -476,6 +483,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     },
     [edges, setNodes, pushHistorySnapshot, layoutMode, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor],
   );
+  applyLayoutInstantRef.current = applyLayoutInstant;
 
   // 自動レイアウト
   const handleAutoLayout = useCallback(
@@ -492,9 +500,12 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         kind: "call" as const,
         style: "solid" as const,
       }));
-      const layoutFn = layoutMode === "circular" ? computeCircularLayout : computeLayout;
-      const layoutOptions = layoutMode === "circular" ? { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor } : { xGap, yGap };
-      const targetPositions = layoutFn(boardNodes, boardEdges, layoutOptions);
+      const targetPositions =
+        layoutMode === "circular"
+          ? computeCircularLayout(boardNodes, boardEdges, { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor })
+          : layoutMode === "random"
+            ? computeRandomLayout(boardNodes, boardEdges, { spacing: randomSpacingRef.current })
+            : computeLayout(boardNodes, boardEdges, { xGap, yGap });
       const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
 
       const durationMs = 700;
@@ -547,9 +558,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   );
 
   useEffect(() => {
-    if (!isLayoutPanelOpen || isLayoutAnimatingRef.current) return;
+    if (!isLayoutPanelOpen || isLayoutAnimatingRef.current || layoutMode === "random") return;
     const frameId = requestAnimationFrame(() => {
-      applyLayoutInstant(layoutXGap, layoutYGap);
+      applyLayoutInstantRef.current(layoutXGap, layoutYGap);
     });
 
     if (layoutViewFrameRef.current !== null) {
@@ -562,7 +573,8 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor, applyLayoutInstant, fitView]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLayoutPanelOpen, layoutXGap, layoutYGap, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor, layoutMode, fitView]);
 
   useEffect(() => {
     if (!isLayoutPanelOpen) {
@@ -1531,7 +1543,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           </button>
         </div>
 
-        <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-72 translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
+        <div ref={layoutPanelRef} className={`w-72 origin-top overflow-hidden rounded-lg border bg-white/95 shadow-md backdrop-blur-sm transition-all duration-250 ease-out ${isLayoutPanelOpen ? "max-h-96 translate-y-0 scale-100 border-gray-200 p-3 opacity-100" : "max-h-0 -translate-y-1 scale-95 border-transparent p-0 opacity-0 pointer-events-none"}`}>
           <div className="mb-3 text-xs font-semibold text-gray-700">レイアウト方式</div>
           <div className="mb-3 flex items-center gap-3">
             <label className="flex items-center gap-2 text-xs cursor-pointer">
@@ -1542,11 +1554,37 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
               <input type="radio" name="layoutMode" value="circular" checked={layoutMode === "circular"} onChange={() => setLayoutMode("circular")} className="accent-blue-500" />
               <span>円形</span>
             </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="radio" name="layoutMode" value="random" checked={layoutMode === "random"} onChange={() => setLayoutMode("random")} className="accent-blue-500" />
+              <span>ランダム</span>
+            </label>
           </div>
 
           <div className="mb-2 text-xs font-semibold text-gray-700">レイアウト設定</div>
 
-          {layoutMode === "grid" ? (
+          {layoutMode === "random" ? (
+            <>
+              <label className="mb-1 block text-xs text-gray-600">ノード間隔: {randomSpacing}px</label>
+              <input
+                type="range"
+                min={0}
+                max={400}
+                step={10}
+                value={randomSpacing}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next)) setRandomSpacing(next);
+                }}
+                className="mb-3 w-full"
+              />
+              <button
+                onClick={() => handleAutoLayout()}
+                className="w-full rounded-md border border-blue-300 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                もう一度ランダム配置
+              </button>
+            </>
+          ) : layoutMode === "grid" ? (
             <>
               <label className="mb-1 block text-xs text-gray-600">X間隔: {layoutXGap}px</label>
               <input
