@@ -17,24 +17,24 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus } from 'lucide-react';
 import type { Variant } from '@/types/type';
 
-interface CreateBranchDialogProps {
-  branches: Variant[];
-  onCreateBranch: (name: string, description: string, baseBranchName: string) => void;
+interface CreateVariantDialogProps {
+  variants: Variant[];
+  onCreateVariant: (name: string, description: string, baseVariantName: string) => void;
 }
 
-export function CreateBranchDialog({ branches, onCreateBranch }: CreateBranchDialogProps) {
+export function CreateVariantDialog({ variants, onCreateVariant }: CreateVariantDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [baseBranch, setBaseBranch] = useState('main');
+  const [baseVariant, setBaseVariant] = useState('main');
 
   const handleCreate = () => {
     if (!name.trim()) return;
-    onCreateBranch(name, description, baseBranch);
+    onCreateVariant(name, description, baseVariant);
     setOpen(false);
     setName('');
     setDescription('');
-    setBaseBranch('main');
+    setBaseVariant('main');
   };
 
   return (
@@ -52,18 +52,18 @@ export function CreateBranchDialog({ branches, onCreateBranch }: CreateBranchDia
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="branch-name">設計案名</Label>
+            <Label htmlFor="variant-name">設計案名</Label>
             <Input
-              id="branch-name"
+              id="variant-name"
               placeholder="例: パフォーマンス最適化案"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="branch-description">説明</Label>
+            <Label htmlFor="variant-description">説明</Label>
             <Textarea
-              id="branch-description"
+              id="variant-description"
               placeholder="この設計案の目的や特徴を説明..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -71,17 +71,17 @@ export function CreateBranchDialog({ branches, onCreateBranch }: CreateBranchDia
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="base-branch">ベース設計案</Label>
+            <Label htmlFor="base-variant">ベース設計案</Label>
             <select
-              id="base-branch"
+              id="base-variant"
               className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm"
-              value={baseBranch}
-              onChange={(e) => setBaseBranch(e.target.value)}
+              value={baseVariant}
+              onChange={(e) => setBaseVariant(e.target.value)}
             >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.name}>
-                  {branch.name}
-                  {branch.isMain ? ' (メイン)' : ''}
+              {variants.map((variant) => (
+                <option key={variant.id} value={variant.name}>
+                  {variant.name}
+                  {variant.isMain ? ' (メイン)' : ''}
                 </option>
               ))}
             </select>

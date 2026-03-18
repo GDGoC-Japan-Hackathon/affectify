@@ -5,8 +5,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { mockProjects, mockUser, mockUsers } from '@/data/mockData';
 import { Variant } from '@/types/type';
-import { CreateBranchDialog } from '@/components/features/project/CreateBranchDialog';
-import { BranchCard, getScoreColor } from '@/components/features/project/BranchCard';
+import { CreateVariantDialog } from '@/components/features/project/CreateVariantDialog';
+import { VariantCard, getScoreColor } from '@/components/features/project/VariantCard';
 import { ManageMembersDialog } from '@/components/features/project/ManageMembersDialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -28,14 +28,14 @@ export default function ProjectDetail() {
   const { projectId } = useParams();
   const project = mockProjects.find(p => p.id === projectId);
 
-  const [branches, setBranches] = useState<Variant[]>(project?.variants || []);
-  const [compareBranches, setCompareBranches] = useState<string[]>([]);
+  const [variants, setVariants] = useState<Variant[]>(project?.variants || []);
+  const [compareVariants, setCompareVariants] = useState<string[]>([]);
   const [members, setMembers] = useState<string[]>(project?.members || []);
   const [isManageOpen, setIsManageOpen] = useState(false);
 
-  const comparedBranches = useMemo(
-    () => branches.filter(b => compareBranches.includes(b.id)),
-    [branches, compareBranches]
+  const comparedVariants = useMemo(
+    () => variants.filter(b => compareVariants.includes(b.id)),
+    [variants, compareVariants]
   );
 
   if (!project) {
@@ -46,13 +46,13 @@ export default function ProjectDetail() {
     );
   }
 
-  const mainBranch = branches.find(b => b.isMain);
-  const otherBranches = branches.filter(b => !b.isMain);
+  const mainVariant = variants.find(b => b.isMain);
+  const otherVariants = variants.filter(b => !b.isMain);
 
-  const handleCreateBranch = (name: string, description: string, baseBranchName: string) => {
-    const base = branches.find(b => b.name === baseBranchName);
-    const newBranch: Variant = {
-      id: `branch-${Date.now()}`,
+  const handleCreateVariant = (name: string, description: string, baseVariantName: string) => {
+    const base = variants.find(b => b.name === baseVariantName);
+    const newVariant: Variant = {
+      id: `variant-${Date.now()}`,
       name,
       description,
       createdBy: mockUser.id,
@@ -63,15 +63,15 @@ export default function ProjectDetail() {
       isMain: false,
       parentVariantId: base?.id,
     };
-    setBranches([...branches, newBranch]);
+    setVariants([...variants, newVariant]);
     toast.success(`設計案「${name}」を作成しました`);
   };
 
-  const handleToggleCompare = (branchId: string) => {
-    setCompareBranches(prev =>
-      prev.includes(branchId)
-        ? prev.filter(id => id !== branchId)
-        : [...prev, branchId].slice(0, 3) // 最大3つまで
+  const handleToggleCompare = (variantId: string) => {
+    setCompareVariants(prev =>
+      prev.includes(variantId)
+        ? prev.filter(id => id !== variantId)
+        : [...prev, variantId].slice(0, 3) // 最大3つまで
     );
   };
 
@@ -113,7 +113,7 @@ export default function ProjectDetail() {
                 </div>
                 <div className="flex items-center gap-2">
                   <GitBranch className="w-4 h-4" />
-                  <span>{branches.length} 設計案</span>
+                  <span>{variants.length} 設計案</span>
                 </div>
               </div>
             </div>
@@ -151,11 +151,11 @@ export default function ProjectDetail() {
                 </Button>
               )}
 
-              {compareBranches.length > 1 && (
-                <Link href={`/compare/${project.id}?branches=${compareBranches.join(',')}`}>
+              {compareVariants.length > 1 && (
+                <Link href={`/compare/${project.id}?variants=${compareVariants.join(',')}`}>
                   <Button variant="outline" className="gap-2">
                     <BarChart3 className="w-4 h-4" />
-                    比較 ({compareBranches.length})
+                    比較 ({compareVariants.length})
                   </Button>
                 </Link>
               )}
@@ -163,40 +163,40 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        {/* Main Branch */}
-        {mainBranch && (
+        {/* Main Variant */}
+        {mainVariant && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-600" />
                 メイン設計案
               </h2>
-              <CreateBranchDialog branches={branches} onCreateBranch={handleCreateBranch} />
+              <CreateVariantDialog variants={variants} onCreateVariant={handleCreateVariant} />
             </div>
-            <BranchCard
-              branch={mainBranch}
+            <VariantCard
+              variant={mainVariant}
               projectId={project.id}
               onCompareToggle={handleToggleCompare}
-              isComparing={compareBranches.includes(mainBranch.id)}
+              isComparing={compareVariants.includes(mainVariant.id)}
             />
           </div>
         )}
 
-        {/* Other Branches */}
-        {otherBranches.length > 0 && (
+        {/* Other Variants */}
+        {otherVariants.length > 0 && (
           <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <GitBranch className="w-5 h-5 text-blue-600" />
-              その他の設計案 ({otherBranches.length})
+              その他の設計案 ({otherVariants.length})
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {otherBranches.map((branch) => (
-                <BranchCard
-                  key={branch.id}
-                  branch={branch}
+              {otherVariants.map((variant) => (
+                <VariantCard
+                  key={variant.id}
+                  variant={variant}
                   projectId={project.id}
                   onCompareToggle={handleToggleCompare}
-                  isComparing={compareBranches.includes(branch.id)}
+                  isComparing={compareVariants.includes(variant.id)}
                 />
               ))}
             </div>
@@ -204,7 +204,7 @@ export default function ProjectDetail() {
         )}
 
         {/* Comparison Summary */}
-        {comparedBranches.length > 1 && (
+        {comparedVariants.length > 1 && (
           <div
             className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-6"
           >
@@ -213,27 +213,27 @@ export default function ProjectDetail() {
               比較サマリー
             </h3>
             <div className="grid grid-cols-3 gap-4">
-              {comparedBranches.map(branch => (
-                <div key={branch.id} className="bg-white rounded-lg p-4">
+              {comparedVariants.map(variant => (
+                <div key={variant.id} className="bg-white rounded-lg p-4">
                   <div className="font-medium text-gray-900 mb-3 truncate">
-                    {branch.name}
+                    {variant.name}
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">ノード数:</span>
-                      <span className="font-medium">{branch.nodeCount}</span>
+                      <span className="font-medium">{variant.nodeCount}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">スコア:</span>
-                      <span className={`font-medium ${getScoreColor(branch.analysisScore)}`}>
-                        {branch.analysisScore || 'N/A'}
+                      <span className={`font-medium ${getScoreColor(variant.analysisScore)}`}>
+                        {variant.analysisScore || 'N/A'}
                       </span>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <Link href={`/compare/${project.id}?branches=${compareBranches.join(',')}`}>
+            <Link href={`/compare/${project.id}?variants=${compareVariants.join(',')}`}>
               <Button className="w-full mt-4 gap-2">
                 <ExternalLink className="w-4 h-4" />
                 詳細な比較ビューを開く

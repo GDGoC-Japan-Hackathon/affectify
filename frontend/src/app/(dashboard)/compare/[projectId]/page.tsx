@@ -16,15 +16,15 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export default function BranchCompare() {
+export default function VariantCompare() {
   const { projectId } = useParams();
   const searchParams = useSearchParams();
-  const branchIds = searchParams.get('branches')?.split(',') || [];
+  const variantIds = searchParams.get('variants')?.split(',') || [];
 
   const project = mockProjects.find(p => p.id === projectId);
-  const branches = project?.variants.filter(b => branchIds.includes(b.id)) || [];
+  const variants = project?.variants.filter(b => variantIds.includes(b.id)) || [];
 
-  if (!project || branches.length < 2) {
+  if (!project || variants.length < 2) {
     return (
         <div className="p-6">
           <p>比較する設計案を選択してください</p>
@@ -36,13 +36,13 @@ export default function BranchCompare() {
   const comparisonMetrics = [
     {
       name: 'ノード数',
-      values: branches.map(b => b.nodeCount),
+      values: variants.map(b => b.nodeCount),
       unit: '個',
       higher: 'neutral',
     },
     {
       name: 'AIスコア',
-      values: branches.map(b => b.analysisScore || 0),
+      values: variants.map(b => b.analysisScore || 0),
       unit: '点',
       higher: 'better',
     },
@@ -68,21 +68,21 @@ export default function BranchCompare() {
 
   const designIssues = [
     {
-      branch: branches[0].name,
+      variant: variants[0].name,
       issues: [
         { type: 'warning', text: 'UserService に多数の責務が集中しています' },
         { type: 'info', text: 'コンポーネントの再利用性を改善できます' },
       ],
     },
     {
-      branch: branches[1]?.name,
+      variant: variants[1]?.name,
       issues: [
         { type: 'success', text: '依存関係が適切に管理されています' },
         { type: 'info', text: 'モジュール分割が良好です' },
       ],
     },
     {
-      branch: branches[2]?.name,
+      variant: variants[2]?.name,
       issues: [
         { type: 'error', text: '循環依存が検出されました' },
         { type: 'warning', text: 'レイヤー間の依存が複雑です' },
@@ -140,7 +140,7 @@ export default function BranchCompare() {
                 設計案比較
               </h1>
               <p className="text-gray-600">
-                {project.name} - {branches.length} つの設計案を比較
+                {project.name} - {variants.length} つの設計案を比較
               </p>
             </div>
 
@@ -150,33 +150,33 @@ export default function BranchCompare() {
           </div>
         </div>
 
-        {/* Branch Headers */}
+        {/* Variant Headers */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {branches.map((branch) => (
+          {variants.map((variant) => (
             <div
-              key={branch.id}
+              key={variant.id}
               className="bg-white rounded-xl border-2 border-gray-200 p-6"
             >
               <div className="flex items-center gap-2 mb-2">
                 <GitBranch className="w-5 h-5 text-blue-600" />
-                <h3 className="font-semibold text-gray-900">{branch.name}</h3>
-                {branch.isMain && (
+                <h3 className="font-semibold text-gray-900">{variant.name}</h3>
+                {variant.isMain && (
                   <Badge variant="default" className="text-xs">メイン</Badge>
                 )}
               </div>
               <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                {branch.description}
+                {variant.description}
               </p>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">総合スコア</span>
                 <span className={`text-2xl font-bold ${
-                  (branch.analysisScore || 0) >= 90
+                  (variant.analysisScore || 0) >= 90
                     ? 'text-green-600'
-                    : (branch.analysisScore || 0) >= 70
+                    : (variant.analysisScore || 0) >= 70
                     ? 'text-yellow-600'
                     : 'text-red-600'
                 }`}>
-                  {branch.analysisScore || 'N/A'}
+                  {variant.analysisScore || 'N/A'}
                 </span>
               </div>
             </div>
@@ -218,7 +218,7 @@ export default function BranchCompare() {
                           {getComparisonIcon(value, bestValue, metric.higher as 'better' | 'worse' | 'neutral')}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {branches[index]?.name}
+                          {variants[index]?.name}
                         </div>
                       </div>
                     ))}
@@ -238,9 +238,9 @@ export default function BranchCompare() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {designIssues.slice(0, branches.length).map((item, index) => (
+            {designIssues.slice(0, variants.length).map((item, index) => (
               <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-medium text-gray-900 mb-3">{item.branch}</h3>
+                <h3 className="font-medium text-gray-900 mb-3">{item.variant}</h3>
                 <div className="space-y-2">
                   {item.issues.map((issue, issueIndex) => (
                     <div key={issueIndex} className="flex items-start gap-2 text-sm">
@@ -263,7 +263,7 @@ export default function BranchCompare() {
             AI 推奨
           </h3>
           <p className="text-gray-700 mb-4">
-            総合的な分析の結果、<strong>{branches[1]?.name || branches[0].name}</strong>が最も優れた設計となっています。
+            総合的な分析の結果、<strong>{variants[1]?.name || variants[0].name}</strong>が最も優れた設計となっています。
             依存関係の管理が適切で、モジュール分割も良好です。
           </p>
           <div className="flex gap-2">
