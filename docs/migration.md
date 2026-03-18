@@ -77,6 +77,26 @@ DB_PASSWORD=... ./scripts/migrate-cloud-sql.sh
 
 デフォルトでは `PROXY_PORT=15432` を使う。
 
+## Demo Seed
+
+デモ確認用のデータ投入は migration と分けて扱う。
+
+ローカル DB へ投入:
+
+```bash
+cd /Users/siraiyuto/Projects/affectify/backend
+go run ./cmd/seed --preset demo
+```
+
+Cloud SQL へ投入:
+
+```bash
+cd /Users/siraiyuto/Projects/affectify/backend
+DB_PASSWORD=... ./scripts/seed-cloud-sql.sh
+```
+
+この seed は冪等に作ってあり、同じ preset を複数回流しても重複作成しにくい前提で動く。
+
 ## Generated Files
 
 - `backend/migrations`

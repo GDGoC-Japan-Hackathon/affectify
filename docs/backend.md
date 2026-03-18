@@ -37,6 +37,8 @@
   `gorm/gen` の生成コマンド
 - `cmd/atlasschema`
   Atlas 用 schema 出力コマンド
+- `cmd/seed`
+  デモ用 seed データ投入コマンド
 - `internal/handler`
   RPC / HTTP の入口
 - `internal/service`
@@ -55,6 +57,13 @@ cd /Users/siraiyuto/Projects/affectify/backend
 go build ./...
 go test ./...
 go run ./cmd/server
+```
+
+デモ用データ投入:
+
+```bash
+cd /Users/siraiyuto/Projects/affectify/backend
+go run ./cmd/seed --preset demo
 ```
 
 ## Authentication
