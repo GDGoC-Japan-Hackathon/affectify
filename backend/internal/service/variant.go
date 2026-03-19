@@ -77,7 +77,19 @@ func NewVariantService(db *gorm.DB, userRepository *repository.UserRepository, j
 	}
 }
 
-func (s *VariantService) ListVariants(ctx context.Context, projectID int64) ([]VariantDetail, error) {
+func (s *VariantService) ListVariants(ctx context.Context, firebaseUID string, projectID int64) ([]VariantDetail, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, err
+	}
+	hasAccess, err := s.projectRepo.HasAccess(ctx, projectID, requester.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !hasAccess {
+		return nil, ErrForbidden
+	}
+
 	variants, err := s.variantRepo.ListByProjectID(ctx, projectID)
 	if err != nil {
 		return nil, err
@@ -86,13 +98,10 @@ func (s *VariantService) ListVariants(ctx context.Context, projectID int64) ([]V
 	return s.attachVariantDetails(ctx, variants)
 }
 
-func (s *VariantService) GetVariant(ctx context.Context, id int64) (*VariantDetail, error) {
-	variant, err := s.variantRepo.FindByID(ctx, id)
+func (s *VariantService) GetVariant(ctx context.Context, firebaseUID string, id int64) (*VariantDetail, error) {
+	variant, _, err := s.requireVariantAccess(ctx, firebaseUID, id)
 	if err != nil {
 		return nil, err
-	}
-	if variant == nil {
-		return nil, ErrVariantNotFound
 	}
 
 	details, err := s.attachVariantDetails(ctx, []entity.Variant{*variant})
@@ -114,6 +123,13 @@ func (s *VariantService) CreateVariant(
 	requester, err := s.requireUser(ctx, firebaseUID)
 	if err != nil {
 		return nil, err
+	}
+	hasAccess, err := s.projectRepo.HasAccess(ctx, input.ProjectID, requester.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !hasAccess {
+		return nil, ErrForbidden
 	}
 
 	var created entity.Variant
@@ -182,11 +198,11 @@ func (s *VariantService) CreateVariant(
 		return nil, err
 	}
 
-	return s.GetVariant(ctx, created.ID)
+	return s.GetVariant(ctx, firebaseUID, created.ID)
 }
 
-func (s *VariantService) UpdateVariant(ctx context.Context, input UpdateVariantInput) (*VariantDetail, error) {
-	variant, err := s.getVariantEntity(ctx, input.ID)
+func (s *VariantService) UpdateVariant(ctx context.Context, firebaseUID string, input UpdateVariantInput) (*VariantDetail, error) {
+	variant, _, err := s.requireVariantAccess(ctx, firebaseUID, input.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -219,10 +235,14 @@ func (s *VariantService) UpdateVariant(ctx context.Context, input UpdateVariantI
 		return nil, err
 	}
 
-	return s.GetVariant(ctx, input.ID)
+	return s.GetVariant(ctx, firebaseUID, input.ID)
 }
 
-func (s *VariantService) DeleteVariant(ctx context.Context, id int64) error {
+func (s *VariantService) DeleteVariant(ctx context.Context, firebaseUID string, id int64) error {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, id); err != nil {
+		return err
+	}
+
 	deleted, err := s.variantRepo.DeleteByID(ctx, id)
 	if err != nil {
 		return err
@@ -235,21 +255,9 @@ func (s *VariantService) DeleteVariant(ctx context.Context, id int64) error {
 }
 
 func (s *VariantService) UploadVariantSource(ctx context.Context, firebaseUID string, variantID int64, files []source.UploadedFile) (string, error) {
-	requester, err := s.requireUser(ctx, firebaseUID)
+	variant, _, err := s.requireVariantAccess(ctx, firebaseUID, variantID)
 	if err != nil {
 		return "", err
-	}
-	variant, err := s.getVariantEntity(ctx, variantID)
-	if err != nil {
-		return "", err
-	}
-
-	hasAccess, err := s.projectRepo.HasAccess(ctx, variant.ProjectID, requester.ID)
-	if err != nil {
-		return "", err
-	}
-	if !hasAccess {
-		return "", ErrProjectNotFound
 	}
 
 	sourceRootURI, err := s.sourceStore.SaveVariantFiles(ctx, variantID, files)
@@ -265,8 +273,8 @@ func (s *VariantService) UploadVariantSource(ctx context.Context, firebaseUID st
 	return sourceRootURI, nil
 }
 
-func (s *VariantService) GetVariantWorkspace(ctx context.Context, variantID int64) (*VariantWorkspace, error) {
-	detail, err := s.GetVariant(ctx, variantID)
+func (s *VariantService) GetVariantWorkspace(ctx context.Context, firebaseUID string, variantID int64) (*VariantWorkspace, error) {
+	detail, err := s.GetVariant(ctx, firebaseUID, variantID)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +318,7 @@ func (s *VariantService) CreateGraphBuildJob(ctx context.Context, firebaseUID st
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.getVariantEntity(ctx, variantID); err != nil {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, variantID); err != nil {
 		return nil, err
 	}
 
@@ -335,13 +343,16 @@ func (s *VariantService) CreateGraphBuildJob(ctx context.Context, firebaseUID st
 	return job, nil
 }
 
-func (s *VariantService) GetGraphBuildJob(ctx context.Context, id int64) (*entity.GraphBuildJob, error) {
+func (s *VariantService) GetGraphBuildJob(ctx context.Context, firebaseUID string, id int64) (*entity.GraphBuildJob, error) {
 	job, err := s.variantRepo.FindGraphBuildJobByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if job == nil {
 		return nil, ErrGraphBuildJobNotFound
+	}
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID); err != nil {
+		return nil, err
 	}
 	return job, nil
 }
@@ -355,7 +366,7 @@ func (s *VariantService) CreateLayoutJob(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.getVariantEntity(ctx, input.VariantID); err != nil {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, input.VariantID); err != nil {
 		return nil, err
 	}
 
@@ -386,13 +397,16 @@ func (s *VariantService) CreateLayoutJob(
 	return job, nil
 }
 
-func (s *VariantService) GetLayoutJob(ctx context.Context, id int64) (*entity.LayoutJob, error) {
+func (s *VariantService) GetLayoutJob(ctx context.Context, firebaseUID string, id int64) (*entity.LayoutJob, error) {
 	job, err := s.variantRepo.FindLayoutJobByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if job == nil {
 		return nil, ErrLayoutJobNotFound
+	}
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID); err != nil {
+		return nil, err
 	}
 	return job, nil
 }
@@ -418,6 +432,28 @@ func (s *VariantService) getVariantEntity(ctx context.Context, id int64) (*entit
 		return nil, ErrVariantNotFound
 	}
 	return variant, nil
+}
+
+func (s *VariantService) requireVariantAccess(ctx context.Context, firebaseUID string, variantID int64) (*entity.Variant, *entity.User, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	variant, err := s.getVariantEntity(ctx, variantID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hasAccess, err := s.projectRepo.HasAccess(ctx, variant.ProjectID, requester.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !hasAccess {
+		return nil, nil, ErrForbidden
+	}
+
+	return variant, requester, nil
 }
 
 func (s *VariantService) attachVariantDetails(ctx context.Context, variants []entity.Variant) ([]VariantDetail, error) {

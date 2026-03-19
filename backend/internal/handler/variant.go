@@ -26,14 +26,15 @@ func (h *VariantServiceHandler) ListVariants(
 	req *connect.Request[apiv1.ListVariantsRequest],
 ) (*connect.Response[apiv1.ListVariantsResponse], error) {
 	// project 配下の設計案一覧は認証済みユーザーだけに返す。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
 	// service の一覧結果を proto の Variant slice に変換する。
-	variants, err := h.variantService.ListVariants(ctx, req.Msg.ProjectId)
+	variants, err := h.variantService.ListVariants(ctx, identity.UID, req.Msg.ProjectId)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, mapVariantError(err)
 	}
 
 	items := make([]*apiv1.Variant, 0, len(variants))
@@ -49,11 +50,12 @@ func (h *VariantServiceHandler) GetVariant(
 	req *connect.Request[apiv1.GetVariantRequest],
 ) (*connect.Response[apiv1.GetVariantResponse], error) {
 	// 単体取得も同じく認証と service 呼び出しだけに責務を絞る。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	variant, err := h.variantService.GetVariant(ctx, req.Msg.Id)
+	variant, err := h.variantService.GetVariant(ctx, identity.UID, req.Msg.Id)
 	if err != nil {
 		return nil, mapVariantError(err)
 	}
@@ -95,11 +97,12 @@ func (h *VariantServiceHandler) UpdateVariant(
 	req *connect.Request[apiv1.UpdateVariantRequest],
 ) (*connect.Response[apiv1.UpdateVariantResponse], error) {
 	// 更新系も handler では request の整形だけを担当する。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	variant, err := h.variantService.UpdateVariant(ctx, service.UpdateVariantInput{
+	variant, err := h.variantService.UpdateVariant(ctx, identity.UID, service.UpdateVariantInput{
 		ID:             req.Msg.Id,
 		Name:           req.Msg.Name,
 		Description:    req.Msg.Description,
@@ -121,11 +124,12 @@ func (h *VariantServiceHandler) DeleteVariant(
 	req *connect.Request[apiv1.DeleteVariantRequest],
 ) (*connect.Response[apiv1.DeleteVariantResponse], error) {
 	// 削除は service 側の業務エラーを Connect error に写す。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	if err := h.variantService.DeleteVariant(ctx, req.Msg.Id); err != nil {
+	if err := h.variantService.DeleteVariant(ctx, identity.UID, req.Msg.Id); err != nil {
 		return nil, mapVariantError(err)
 	}
 
@@ -137,11 +141,12 @@ func (h *VariantServiceHandler) GetVariantWorkspace(
 	req *connect.Request[apiv1.GetVariantWorkspaceRequest],
 ) (*connect.Response[apiv1.GetVariantWorkspaceResponse], error) {
 	// workspace は variant 本体に加えて file / guide / graph をまとめて返す。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	workspace, err := h.variantService.GetVariantWorkspace(ctx, req.Msg.VariantId)
+	workspace, err := h.variantService.GetVariantWorkspace(ctx, identity.UID, req.Msg.VariantId)
 	if err != nil {
 		return nil, mapVariantError(err)
 	}
@@ -197,11 +202,12 @@ func (h *VariantServiceHandler) GetGraphBuildJob(
 	req *connect.Request[apiv1.GetGraphBuildJobRequest],
 ) (*connect.Response[apiv1.GetGraphBuildJobResponse], error) {
 	// 非同期 job の状態取得は polling 用の薄い API にする。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	job, err := h.variantService.GetGraphBuildJob(ctx, req.Msg.Id)
+	job, err := h.variantService.GetGraphBuildJob(ctx, identity.UID, req.Msg.Id)
 	if err != nil {
 		return nil, mapVariantError(err)
 	}
@@ -239,11 +245,12 @@ func (h *VariantServiceHandler) GetLayoutJob(
 	req *connect.Request[apiv1.GetLayoutJobRequest],
 ) (*connect.Response[apiv1.GetLayoutJobResponse], error) {
 	// layout job も graph build job と同じ polling パターンで返す。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	job, err := h.variantService.GetLayoutJob(ctx, req.Msg.Id)
+	job, err := h.variantService.GetLayoutJob(ctx, identity.UID, req.Msg.Id)
 	if err != nil {
 		return nil, mapVariantError(err)
 	}
@@ -266,6 +273,8 @@ func mapVariantError(err error) error {
 			return connect.NewError(connect.CodeFailedPrecondition, err)
 		}
 		return connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, service.ErrForbidden):
+		return connect.NewError(connect.CodePermissionDenied, err)
 	default:
 		return connect.NewError(connect.CodeInternal, err)
 	}
