@@ -13,9 +13,10 @@ import { DrawingCard } from "./DrawingCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, Wand2, SaveAll, Eraser } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, SaveAll, Eraser } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs } from "@/utils/graphLayout";
+import { toast } from "sonner";
 import {
   createLayoutJob,
   getLayoutJob,
@@ -482,6 +483,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
     async (_xGap = layoutXGap, _yGap = layoutYGap) => {
       if (isLayoutAnimatingRef.current) return;
 
+      const toastId = toast.loading("整理中...");
       try {
         isLayoutAnimatingRef.current = true;
         pushHistorySnapshot();
@@ -506,8 +508,9 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
         setNodes(toFlowNodes(refreshedNodes));
         setEdges(toFlowEdges(refreshedEdges, refreshedSccIds));
         fitView({ padding: 0.2, duration: 420 });
+        toast.success("整理が完了しました", { id: toastId });
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : "レイアウトに失敗しました。");
+        toast.error(error instanceof Error ? error.message : "レイアウトに失敗しました", { id: toastId });
       } finally {
         isLayoutAnimatingRef.current = false;
         if (layoutAnimFrameRef.current !== null) {
@@ -1183,7 +1186,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
       {/* 左上：ファイルツリーボタン（パネル閉時のみ表示） */}
       <AnimatePresence>
         {!fileTreeOpen && (
-          <motion.button initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} style={{ transformOrigin: "top left" }} onClick={() => setFileTreeOpen(true)} className="absolute top-4 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
+          <motion.button initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} style={{ transformOrigin: "top left" }} onClick={() => setFileTreeOpen(true)} className="absolute top-16 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
             <FolderTree className="size-5 text-gray-700" />
           </motion.button>
         )}
@@ -1286,15 +1289,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push(`/workspace/${variantId}/import`)}
-            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="フォルダを解析してホワイトボードへImport"
-          >
-            <Wand2 className="size-5 text-gray-700" />
-          </button>
-
-          <button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
+<button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
             <RotateCcw className="size-5 text-gray-700" />
           </button>
 

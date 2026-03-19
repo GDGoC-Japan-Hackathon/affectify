@@ -13,7 +13,7 @@ export function AppProvider({ children }: AppProviderProps) {
   return (
     <AuthProvider>
       {children}
-      <Toaster richColors position="top-right" />
+      <Toaster richColors position="top-center" />
     </AuthProvider>
   );
 }

@@ -10,6 +10,7 @@ import {
   GetLayoutJobRequestSchema,
   GetVariantWorkspaceRequestSchema,
   ListVariantsRequestSchema,
+  UpdateVariantDesignGuideRequestSchema,
   UpdateVariantRequestSchema,
   type GetVariantWorkspaceResponse,
   VariantService,
@@ -20,8 +21,17 @@ import type { Timestamp } from "@bufbuild/protobuf/wkt";
 const variantClient = createConnectClient(VariantService);
 
 export interface VariantWorkspaceData {
+  projectId: string;
   nodes: BoardNode[];
   edges: BoardEdge[];
+  designGuide?: {
+    id: string;
+    variantId: string;
+    baseDesignGuideId?: string;
+    title: string;
+    description: string;
+    content: string;
+  };
 }
 
 export interface UpdateVariantInput {
@@ -54,6 +64,13 @@ export interface CreateVariantInput {
   description?: string;
   forkedFromVariantId?: string;
   baseDesignGuideId?: string;
+}
+
+export interface UpdateVariantDesignGuideInput {
+  id: string;
+  title: string;
+  description?: string;
+  content: string;
 }
 
 export async function listVariants(projectId: string): Promise<Variant[]> {
@@ -200,6 +217,30 @@ export async function getVariantWorkspace(variantId: string): Promise<VariantWor
   return mapWorkspaceResponse(response);
 }
 
+export async function updateVariantDesignGuide(input: UpdateVariantDesignGuideInput): Promise<NonNullable<VariantWorkspaceData["designGuide"]>> {
+  const response = await variantClient.updateVariantDesignGuide(
+    create(UpdateVariantDesignGuideRequestSchema, {
+      id: BigInt(input.id),
+      title: input.title,
+      description: input.description ?? "",
+      content: input.content,
+    }),
+  );
+
+  if (!response.designGuide) {
+    throw new Error("variant design guide の更新に失敗しました");
+  }
+
+  return {
+    id: response.designGuide.id.toString(),
+    variantId: response.designGuide.variantId.toString(),
+    baseDesignGuideId: response.designGuide.baseDesignGuideId?.toString(),
+    title: response.designGuide.title,
+    description: response.designGuide.description,
+    content: response.designGuide.content,
+  };
+}
+
 function mapVariant(variant: {
   id: bigint;
   name: string;
@@ -243,6 +284,17 @@ function mapWorkspaceResponse(response: GetVariantWorkspaceResponse): VariantWor
   }
 
   return {
+    projectId: response.variant?.projectId.toString() ?? "",
+    designGuide: response.designGuide
+      ? {
+          id: response.designGuide.id.toString(),
+          variantId: response.designGuide.variantId.toString(),
+          baseDesignGuideId: response.designGuide.baseDesignGuideId?.toString(),
+          title: response.designGuide.title,
+          description: response.designGuide.description,
+          content: response.designGuide.content,
+        }
+      : undefined,
     nodes: response.nodes.map((node) => ({
       id: node.id.toString(),
       kind: normalizeNodeKind(node.kind),
