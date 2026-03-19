@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { mockProjects, mockUser, mockUsers } from '@/data/mockData';
-import { Variant } from '@/types/type';
+import { Project, Variant } from '@/types/type';
 import { CreateVariantDialog } from '@/components/features/project/CreateVariantDialog';
 import { VariantCard, getScoreColor } from '@/components/features/project/VariantCard';
 import { ManageMembersDialog } from '@/components/features/project/ManageMembersDialog';
@@ -23,20 +22,66 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { getProject } from '@/lib/api/projects';
+import { createVariant } from '@/lib/api/variants';
+import { getMe } from '@/lib/api/users';
 
 export default function ProjectDetail() {
-  const { projectId } = useParams();
-  const project = mockProjects.find(p => p.id === projectId);
-
-  const [variants, setVariants] = useState<Variant[]>(project?.variants || []);
+  const params = useParams<{ projectId: string }>();
+  const projectId = Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId;
+  const [project, setProject] = useState<Project | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [variants, setVariants] = useState<Variant[]>([]);
   const [compareVariants, setCompareVariants] = useState<string[]>([]);
-  const [members, setMembers] = useState<string[]>(project?.members || []);
+  const [members, setMembers] = useState<string[]>([]);
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId || Array.isArray(projectId)) return;
+
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setIsLoading(true);
+        const [result, meResponse] = await Promise.all([
+          getProject(projectId),
+          getMe(),
+        ]);
+        if (cancelled) return;
+        setProject(result);
+        setVariants(result.variants);
+        setMembers(result.members);
+        setCurrentUserId(meResponse.user?.id?.toString() ?? null);
+      } catch (error) {
+        if (cancelled) return;
+        toast.error(error instanceof Error ? error.message : 'プロジェクトの取得に失敗しました');
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const comparedVariants = useMemo(
     () => variants.filter(b => compareVariants.includes(b.id)),
     [variants, compareVariants]
   );
+
+  if (isLoading) {
+    return (
+        <div className="p-6">
+          <p>プロジェクトを読み込み中...</p>
+        </div>
+    );
+  }
 
   if (!project) {
     return (
@@ -48,23 +93,21 @@ export default function ProjectDetail() {
 
   const mainVariant = variants.find(b => b.isMain);
   const otherVariants = variants.filter(b => !b.isMain);
+  const isOwner = currentUserId !== null && project.ownerId === currentUserId;
 
-  const handleCreateVariant = (name: string, description: string, baseVariantName: string) => {
-    const base = variants.find(b => b.name === baseVariantName);
-    const newVariant: Variant = {
-      id: `variant-${Date.now()}`,
-      name,
-      description,
-      createdBy: mockUser.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      nodeCount: base?.nodeCount || 0,
-      analysisScore: undefined,
-      isMain: false,
-      parentVariantId: base?.id,
-    };
-    setVariants([...variants, newVariant]);
-    toast.success(`設計案「${name}」を作成しました`);
+  const handleCreateVariant = async (name: string, description: string, baseVariantId: string) => {
+    try {
+      const created = await createVariant({
+        projectId: project.id,
+        name,
+        description,
+        forkedFromVariantId: baseVariantId,
+      });
+      setVariants((prev) => [...prev, created]);
+      toast.success(`設計案「${name}」を作成しました`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '設計案の作成に失敗しました');
+    }
   };
 
   const handleToggleCompare = (variantId: string) => {
@@ -123,7 +166,7 @@ export default function ProjectDetail() {
               <div className="flex items-center">
                 <div className="flex -space-x-2">
                   {members.slice(0, 3).map((memberId, i) => {
-                    const user = mockUsers.find((u) => u.id === memberId);
+                    const user = project.memberSummaries?.find((member) => member.userId === memberId)?.user;
                     return (
                       <Avatar key={memberId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
                         <AvatarImage src={user?.avatar} />
@@ -139,7 +182,7 @@ export default function ProjectDetail() {
                 )}
               </div>
 
-              {project.ownerId === mockUser.id ? (
+              {isOwner ? (
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsManageOpen(true)}>
                   <Settings className="w-4 h-4" />
                   管理
@@ -247,7 +290,7 @@ export default function ProjectDetail() {
           onOpenChange={setIsManageOpen}
           memberIds={members}
           onMembersChange={setMembers}
-          isOwner={project.ownerId === mockUser.id}
+          isOwner={isOwner}
         />
       </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BookOpen,
@@ -34,6 +34,17 @@ export default function DesignGuides() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showLikedDialog, setShowLikedDialog] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) {
+        setCreateMenuOpen(false);
+      }
+    };
+    if (createMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [createMenuOpen]);
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'likes'>('recent');
   const [sortOpen, setSortOpen] = useState(false);
 
@@ -104,50 +115,60 @@ export default function DesignGuides() {
         {/* ヘッダー Row 1: タイトル + 新規作成 */}
         <div className="mb-2 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">設計書ライブラリ</h1>
-          <div className="relative">
+          <div className="relative" ref={createMenuRef}>
             <button
               onClick={() => setCreateMenuOpen(!createMenuOpen)}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
             >
               <Plus className="size-4" />
               新規作成
             </button>
             {createMenuOpen && (
-              <div className="absolute right-0 mt-1 z-50 w-64 rounded-lg border border-gray-200 bg-white shadow-lg p-1">
-                <div className="px-2 py-1.5 text-xs font-medium text-gray-500">設計書を作成</div>
-                <button
-                  onClick={() => { setCreateMenuOpen(false); router.push('/design-guides/new'); }}
-                  className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50"
-                >
-                  <FileText className="size-4 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-medium">ゼロから作成</span>
-                    <span className="text-xs text-slate-500">空白の設計書を作成</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => { setCreateMenuOpen(false); setShowLikedDialog(true); }}
-                  className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50"
-                >
-                  <Heart className="size-4 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-medium">お気に入りから作成</span>
-                    <span className="text-xs text-slate-500">いいねした設計書を選択</span>
-                  </div>
-                </button>
-                <label className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50 cursor-pointer">
-                  <Upload className="size-4 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-medium">ファイルをアップロード</span>
-                    <span className="text-xs text-slate-500">Markdownファイル (.md)</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept=".md"
-                    onChange={(e) => { setCreateMenuOpen(false); handleFileUpload(e); }}
-                    className="hidden"
-                  />
-                </label>
+              <div className="absolute right-0 mt-2 z-50 w-72 rounded-xl border border-gray-100 bg-white shadow-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">設計書を作成</p>
+                </div>
+                <div className="p-2 space-y-1">
+                  <button
+                    onClick={() => { setCreateMenuOpen(false); router.push('/design-guides/new'); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-indigo-50 group transition-colors"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200 transition-colors">
+                      <FileText className="size-4" />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium text-gray-900">ゼロから作成</span>
+                      <span className="text-xs text-gray-500">空白の設計書を作成</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setCreateMenuOpen(false); setShowLikedDialog(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-pink-50 group transition-colors"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-pink-100 text-pink-600 group-hover:bg-pink-200 transition-colors">
+                      <Heart className="size-4" />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium text-gray-900">お気に入りから作成</span>
+                      <span className="text-xs text-gray-500">いいねした設計書をベースに作成</span>
+                    </div>
+                  </button>
+                  <label className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-emerald-50 group transition-colors cursor-pointer">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200 transition-colors">
+                      <Upload className="size-4" />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium text-gray-900">ファイルをアップロード</span>
+                      <span className="text-xs text-gray-500">Markdownファイル (.md)</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept=".md"
+                      onChange={(e) => { setCreateMenuOpen(false); handleFileUpload(e); }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
             )}
           </div>

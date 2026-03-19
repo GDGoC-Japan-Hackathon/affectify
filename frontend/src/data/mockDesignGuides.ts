@@ -6,6 +6,8 @@ export const mockDesignGuides: DesignGuide[] = [
     name: 'DDD設計ガイドライン',
     description: 'ドメイン駆動設計の原則に基づいた設計指針',
     createdBy: 'user-1',
+    visibility: 'private',
+    isTemplate: false,
     createdAt: new Date('2024-01-15'),
     updatedAt: new Date('2024-03-10'),
     content: `# DDD（ドメイン駆動設計）ガイドライン
@@ -68,6 +70,8 @@ export const mockDesignGuides: DesignGuide[] = [
     name: 'Clean Architecture規約',
     description: 'Robert C. Martinのクリーンアーキテクチャに基づく設計原則',
     createdBy: 'user-2',
+    visibility: 'public',
+    isTemplate: true,
     createdAt: new Date('2024-02-01'),
     updatedAt: new Date('2024-03-12'),
     content: `# Clean Architecture規約
@@ -158,6 +162,8 @@ src/
     name: 'React ベストプラクティス',
     description: 'モダンなReactアプリケーション開発のガイドライン',
     createdBy: 'user-1',
+    visibility: 'public',
+    isTemplate: false,
     createdAt: new Date('2024-02-20'),
     updatedAt: new Date('2024-03-14'),
     content: `# React ベストプラクティス
@@ -233,6 +239,8 @@ src/
     name: 'マイクロサービス設計原則',
     description: 'スケーラブルなマイクロサービスアーキテクチャのガイドライン',
     createdBy: 'user-3',
+    visibility: 'public',
+    isTemplate: false,
     createdAt: new Date('2024-01-10'),
     updatedAt: new Date('2024-03-05'),
     content: `# マイクロサービス設計原則
@@ -307,6 +315,8 @@ src/
     name: '関数型プログラミング スタイルガイド',
     description: '関数型プログラミングの原則とベストプラクティス',
     createdBy: 'user-2',
+    visibility: 'public',
+    isTemplate: false,
     createdAt: new Date('2024-02-28'),
     updatedAt: new Date('2024-03-13'),
     content: `# 関数型プログラミング スタイルガイド

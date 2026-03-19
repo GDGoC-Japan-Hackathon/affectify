@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderOpen, Code2 } from 'lucide-react';
+import { ChevronDown, Code2, FolderOpen, Settings } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,87 +21,104 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { createProject } from '@/lib/api/projects';
+import { createVariant } from '@/lib/api/variants';
 import { mockDesignGuides } from '@/data/mockDesignGuides';
 import { toast } from 'sonner';
 
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated?: () => void;
 }
 
-interface ImportedFolder {
-  name: string;
-  fileCount: number;
-  files: File[];
-}
-
-export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
+export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreateProjectDialogProps) {
   const router = useRouter();
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
+  const [variantName, setVariantName] = useState('main');
   const [designGuideId, setDesignGuideId] = useState<string>('none');
-  const [importedFolder, setImportedFolder] = useState<ImportedFolder | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
+  const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
+  const [selectedFolderFileCount, setSelectedFolderFileCount] = useState<number>(0);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleCreate = () => {
-    if (!importedFolder) {
-      toast.error('フォルダを選択してください');
+  const handleCreate = async () => {
+    if (!projectName.trim()) {
+      toast.error('プロジェクト名を入力してください');
       return;
     }
 
-    const newProject = {
-      id: `project-${Date.now()}`,
-      name: projectName || importedFolder.name,
-      description,
-      ownerId: 'user-1',
-      members: ['user-1'],
-      designGuideId: designGuideId !== 'none' ? designGuideId : undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      nodeCount: 0,
-      variants: [],
-    };
+    try {
+      setIsSubmitting(true);
+      const project = await createProject({
+        name: projectName.trim(),
+        description: description.trim(),
+      });
 
-    console.log('Creating project:', newProject);
+      const shouldCreateVariant = showAdvancedOptions;
+      const resolvedDesignGuideId =
+        designGuideId !== 'none' && /^\d+$/.test(designGuideId) ? designGuideId : undefined;
 
-    sessionStorage.setItem('pending-project-import', JSON.stringify({
-      project: newProject,
-      files: importedFolder.files,
-    }));
+      if (shouldCreateVariant) {
+        const variant = await createVariant({
+          projectId: project.id,
+          name: variantName.trim() || 'main',
+          description: '',
+          baseDesignGuideId: resolvedDesignGuideId,
+        });
 
-    toast.success(`プロジェクト「${newProject.name}」を作成しました`);
+        if (selectedFolderName) {
+          toast.info('フォルダの取り込みは次に接続します。設計案のみ先に作成しました。');
+        }
 
-    router.push(`/editor/${newProject.id}`);
-    onOpenChange(false);
+        toast.success(`プロジェクト「${project.name}」と設計案「${variant.name}」を作成しました`);
+        onOpenChange(false);
+        onCreated?.();
 
-    setProjectName('');
-    setDescription('');
-    setDesignGuideId('none');
-    setImportedFolder(null);
-    setIsImporting(false);
-  };
+        setProjectName('');
+        setDescription('');
+        setVariantName('main');
+        setDesignGuideId('none');
+        setSelectedFolderName(null);
+        setSelectedFolderFileCount(0);
 
-  const availableDesignGuides = mockDesignGuides;
-
-  const handleFolderImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      setIsImporting(true);
-      const folderName = files[0].webkitRelativePath.split('/')[0];
-      const folderFiles = Array.from(files);
-
-      if (!projectName) {
-        setProjectName(folderName);
+        router.push(`/workspace/${variant.id}`);
+        return;
       }
 
-      setImportedFolder({
-        name: folderName,
-        fileCount: folderFiles.length,
-        files: folderFiles,
-      });
-      setIsImporting(false);
-      toast.success(`${folderName} (${folderFiles.length}ファイル) をインポートしました`);
+      toast.success(`プロジェクト「${project.name}」を作成しました`);
+
+      onOpenChange(false);
+      onCreated?.();
+
+      setProjectName('');
+      setDescription('');
+      setVariantName('main');
+      setDesignGuideId('none');
+      setSelectedFolderName(null);
+      setSelectedFolderFileCount(0);
+
+      router.push(`/project/${project.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'プロジェクトの作成に失敗しました');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleFolderSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      setSelectedFolderName(null);
+      setSelectedFolderFileCount(0);
+      return;
+    }
+
+    const firstPath = files[0].webkitRelativePath;
+    const folderName = firstPath ? firstPath.split('/')[0] : files[0].name;
+    setSelectedFolderName(folderName);
+    setSelectedFolderFileCount(files.length);
   };
 
   return (
@@ -140,86 +157,124 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
             />
           </div>
 
-          {/* 設計書選択 */}
-          <div className="space-y-2">
-            <Label htmlFor="design-guide">設計書（オプション）</Label>
-            <Select value={designGuideId} onValueChange={(v) => setDesignGuideId(v ?? '')}>
-              <SelectTrigger id="design-guide">
-                <SelectValue placeholder="設計書を選択..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">設計書なし</SelectItem>
-                {availableDesignGuides.map((guide) => (
-                  <SelectItem key={guide.id} value={guide.id}>
-                    {guide.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-slate-500">
-              プロジェクトにAI設計チェックの指針を適用できます
-            </p>
-          </div>
-
-          {/* フォルダインポート */}
-          <div className="space-y-3">
-            <Label>
-              フォルダインポート <span className="text-red-500">*</span>
-            </Label>
-
-            {!importedFolder ? (
-              <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-slate-400 transition-colors">
-                <FolderOpen className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                <p className="text-sm font-medium text-slate-700 mb-1">
-                  プロジェクトフォルダを選択
-                </p>
-                <p className="text-xs text-slate-500 mb-4">
-                  コードを含むフォルダを選択してインポートします
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const input = document.getElementById('import-folder') as HTMLInputElement;
-                    if (input) {
-                      input.click();
-                    }
-                  }}
-                  disabled={isImporting}
-                >
-                  {isImporting ? 'インポート中...' : 'フォルダを選択'}
-                </Button>
-                <input
-                  id="import-folder"
-                  type="file"
-                  className="hidden"
-                  /* @ts-expect-error webkitdirectory is not in the type definitions */
-                  webkitdirectory=""
-                  multiple
-                  onChange={handleFolderImport}
-                />
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedOptions((prev) => !prev)}
+              className={`flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors ${
+                showAdvancedOptions ? 'bg-indigo-50' : 'hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                  showAdvancedOptions ? 'bg-indigo-200 text-indigo-700' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  <Settings className="size-4" />
+                </div>
+                <div>
+                  <p className={`font-medium text-sm ${showAdvancedOptions ? 'text-indigo-900' : 'text-slate-900'}`}>
+                    初期設計案の詳細設定
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    設計書やインポートフォルダを先に選んでおけます
+                  </p>
+                </div>
               </div>
-            ) : (
-              <div className="border-2 border-blue-200 bg-blue-50 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Code2 className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900">{importedFolder.name}</p>
-                    <p className="text-sm text-slate-600 mt-0.5">
-                      {importedFolder.fileCount} ファイル
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setImportedFolder(null)}
-                    className="text-slate-500 hover:text-slate-700"
-                  >
-                    変更
-                  </Button>
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${
+                showAdvancedOptions ? 'rotate-180 text-indigo-500' : 'text-slate-400'
+              }`} />
+            </button>
+
+            {showAdvancedOptions && (
+              <div className="space-y-4 border-t border-slate-200 px-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="variant-name">初期設計案名</Label>
+                  <Input
+                    id="variant-name"
+                    value={variantName}
+                    onChange={(e) => setVariantName(e.target.value)}
+                    placeholder="main"
+                  />
+                  <p className="text-xs text-slate-500">
+                    ここで指定した名前で、プロジェクト作成後に初期設計案を続けて作成します。
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="design-guide">設計書</Label>
+                  <Select value={designGuideId} onValueChange={(value) => setDesignGuideId(value ?? 'none')}>
+                    <SelectTrigger id="design-guide" className="w-full">
+                      <SelectValue placeholder="設計書を選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">選択しない</SelectItem>
+                      {mockDesignGuides.map((guide) => (
+                        <SelectItem key={guide.id} value={guide.id}>
+                          {guide.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">
+                    選択した設計書を初期設計案のベースとして適用します。
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>インポートフォルダ</Label>
+                  {!selectedFolderName ? (
+                    <div className="rounded-lg border-2 border-dashed border-slate-300 p-4 text-center">
+                      <FolderOpen className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                      <p className="mb-3 text-sm text-slate-600">
+                        プロジェクト作成後に取り込みたいフォルダを先に選択できます
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const input = document.getElementById('project-folder-input') as HTMLInputElement | null;
+                          input?.click();
+                        }}
+                      >
+                        フォルダを選択
+                      </Button>
+                      <input
+                        id="project-folder-input"
+                        type="file"
+                        className="hidden"
+                        /* @ts-expect-error webkitdirectory is not in the type definitions */
+                        webkitdirectory=""
+                        multiple
+                        onChange={handleFolderSelect}
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-lg bg-blue-100 p-2">
+                          <Code2 className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-slate-900">{selectedFolderName}</p>
+                          <p className="text-sm text-slate-600">{selectedFolderFileCount} ファイル</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedFolderName(null);
+                            setSelectedFolderFileCount(0);
+                          }}
+                        >
+                          変更
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    現在はフォルダ選択 UI のみです。取り込み実行は次に接続します。
+                  </p>
                 </div>
               </div>
             )}
@@ -227,11 +282,11 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             キャンセル
           </Button>
-          <Button onClick={handleCreate}>
-            作成
+          <Button onClick={() => void handleCreate()} disabled={isSubmitting}>
+            {isSubmitting ? '作成中...' : '作成'}
           </Button>
         </div>
       </DialogContent>
