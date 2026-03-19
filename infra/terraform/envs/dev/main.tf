@@ -253,7 +253,7 @@ resource "google_cloud_run_v2_job_iam_member" "backend_run_graph_build_job" {
   project  = var.project_id
   location = var.region
   name     = module.graph_build_job.job_name
-  role     = "roles/run.invoker"
+  role     = "roles/run.jobsExecutorWithOverrides"
   member   = "serviceAccount:${google_service_account.backend.email}"
 }
 
@@ -261,6 +261,6 @@ resource "google_cloud_run_v2_job_iam_member" "backend_run_review_job" {
   project  = var.project_id
   location = var.region
   name     = module.review_job.job_name
-  role     = "roles/run.invoker"
+  role     = "roles/run.jobsExecutorWithOverrides"
   member   = "serviceAccount:${google_service_account.backend.email}"
 }
