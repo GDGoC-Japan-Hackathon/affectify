@@ -8,8 +8,6 @@
 
 - Artifact Registry
 - Cloud Run
-- Cloud Run Jobs
-- GCS
 - Cloud SQL for PostgreSQL
 - Secret Manager
 - GitHub Actions
@@ -22,12 +20,8 @@
   Firebase App Hosting を第一候補にする
 - backend
   Cloud Run
-- worker
-  Cloud Run Jobs
 - database
   Cloud SQL for PostgreSQL
-- object storage
-  GCS
 - auth
   Firebase Authentication
 - container registry
@@ -43,8 +37,6 @@
 - Artifact Registry
 - Cloud SQL
 - Cloud Run
-- Cloud Run Jobs
-- GCS
 - Secret Manager
 - GitHub Actions 用 WIF
 
@@ -154,6 +146,17 @@ terraform apply -var="backend_image_tag=${GIT_SHA}"
   - `layout_jobs`
   - `review_jobs`
 
+dev 環境では Terraform で最低限次を作る:
+
+- `whitecoder-backend`
+  - Connect RPC を受ける Cloud Run service
+- `whitecoder-graph-build`
+  - graph build worker 用 Cloud Run Job
+- `whitecoder-review`
+  - review worker 用 Cloud Run Job
+- `whitecoder-variant-sources-*`
+  - variant のコード実体を置く GCS bucket
+
 基本フロー:
 
 1. frontend が API を呼ぶ
@@ -162,6 +165,18 @@ terraform apply -var="backend_image_tag=${GIT_SHA}"
 4. worker が job を処理して DB の status を更新する
 
 最初は polling 前提で十分とする。
+
+## Worker Runtime Notes
+
+- backend API と worker job は同じ Artifact Registry image を使ってよい
+- 起動時の role は引数で切り替える
+  - 例: `/app/worker graph-build`
+  - 例: `/app/worker review`
+- backend service account には Cloud Run Job 実行権限を与える
+- worker service account には少なくとも次が必要
+  - Cloud SQL 接続
+  - Secret Manager 読取
+  - variant source bucket の object 読書き
 
 ## GitHub Actions Secrets
 
