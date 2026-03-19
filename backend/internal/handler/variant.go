@@ -105,6 +105,7 @@ func (h *VariantServiceHandler) UpdateVariant(
 		Description:    req.Msg.Description,
 		IsMain:         req.Msg.IsMain,
 		SourceLanguage: req.Msg.SourceLanguage,
+		SourceRootURI:  req.Msg.SourceRootUri,
 	})
 	if err != nil {
 		return nil, mapVariantError(err)

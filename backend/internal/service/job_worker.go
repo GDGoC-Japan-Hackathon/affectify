@@ -101,10 +101,16 @@ func (s *JobWorkerService) syncGraph(ctx context.Context, variantID int64, impor
 	if err != nil {
 		return err
 	}
+	if len(files) == 0 {
+		return errors.New("variant source_root_uri does not contain any files")
+	}
 
 	board, err := graphbuild.NewParser(localDir).Parse()
 	if err != nil {
 		return err
+	}
+	if len(board.Nodes) == 0 {
+		return errors.New("graph build produced no nodes")
 	}
 
 	return s.variantRepo.SyncParsedGraph(ctx, variantID, importedAt, files, board)

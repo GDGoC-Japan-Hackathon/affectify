@@ -9,6 +9,7 @@ import (
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/source"
 )
 
 var (
@@ -48,6 +49,7 @@ type UpdateVariantInput struct {
 	Description    string
 	IsMain         *bool
 	SourceLanguage *string
+	SourceRootURI  *string
 }
 
 type CreateLayoutJobInput struct {
@@ -59,15 +61,19 @@ type VariantService struct {
 	db             *gorm.DB
 	userRepository *repository.UserRepository
 	variantRepo    *repository.VariantRepository
+	projectRepo    *repository.ProjectRepository
 	jobDispatcher  JobDispatcher
+	sourceStore    source.Store
 }
 
-func NewVariantService(db *gorm.DB, userRepository *repository.UserRepository, jobDispatcher JobDispatcher) *VariantService {
+func NewVariantService(db *gorm.DB, userRepository *repository.UserRepository, jobDispatcher JobDispatcher, sourceStore source.Store) *VariantService {
 	return &VariantService{
 		db:             db,
 		userRepository: userRepository,
 		variantRepo:    repository.NewVariantRepository(db),
+		projectRepo:    repository.NewProjectRepository(db),
 		jobDispatcher:  jobDispatcher,
+		sourceStore:    sourceStore,
 	}
 }
 
@@ -201,6 +207,13 @@ func (s *VariantService) UpdateVariant(ctx context.Context, input UpdateVariantI
 			variant.SourceLanguage = input.SourceLanguage
 		}
 	}
+	if input.SourceRootURI != nil {
+		if *input.SourceRootURI == "" {
+			variant.SourceRootURI = nil
+		} else {
+			variant.SourceRootURI = input.SourceRootURI
+		}
+	}
 
 	if err := s.variantRepo.Save(ctx, variant); err != nil {
 		return nil, err
@@ -219,6 +232,37 @@ func (s *VariantService) DeleteVariant(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+func (s *VariantService) UploadVariantSource(ctx context.Context, firebaseUID string, variantID int64, files []source.UploadedFile) (string, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return "", err
+	}
+	variant, err := s.getVariantEntity(ctx, variantID)
+	if err != nil {
+		return "", err
+	}
+
+	hasAccess, err := s.projectRepo.HasAccess(ctx, variant.ProjectID, requester.ID)
+	if err != nil {
+		return "", err
+	}
+	if !hasAccess {
+		return "", ErrProjectNotFound
+	}
+
+	sourceRootURI, err := s.sourceStore.SaveVariantFiles(ctx, variantID, files)
+	if err != nil {
+		return "", err
+	}
+
+	variant.SourceRootURI = &sourceRootURI
+	if err := s.variantRepo.Save(ctx, variant); err != nil {
+		return "", err
+	}
+
+	return sourceRootURI, nil
 }
 
 func (s *VariantService) GetVariantWorkspace(ctx context.Context, variantID int64) (*VariantWorkspace, error) {
