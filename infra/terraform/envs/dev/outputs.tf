@@ -6,6 +6,18 @@ output "cloud_run_service_url" {
   value = module.cloud_run.service_url
 }
 
+output "graph_build_job_name" {
+  value = module.graph_build_job.job_name
+}
+
+output "review_job_name" {
+  value = module.review_job.job_name
+}
+
+output "variant_sources_bucket_name" {
+  value = google_storage_bucket.variant_sources.name
+}
+
 output "cloud_sql_instance_connection_name" {
   value = module.cloud_sql.instance_connection_name
 }
