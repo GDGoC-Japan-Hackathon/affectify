@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, RotateCcw, FileText, FolderCode, CheckCircle, Loader2 } from "lucide-react";
@@ -120,9 +120,7 @@ export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
     onViewNodes?.(nodeIds, edgeIds);
   };
   const [isScanning, setIsScanning] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
+  if (typeof document === "undefined") return null;
 
   const handleReEvaluate = () => {
     setIsScanning(true);
