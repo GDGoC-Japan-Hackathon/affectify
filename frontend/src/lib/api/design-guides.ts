@@ -22,6 +22,8 @@ export interface ListDesignGuidesOptions {
   query?: string;
   createdByMe?: boolean;
   likedByMe?: boolean;
+  visibility?: DesignGuideVisibility;
+  onlyTemplates?: boolean;
 }
 
 export interface CreateDesignGuideInput {
@@ -47,6 +49,8 @@ export async function listDesignGuides(options: ListDesignGuidesOptions = {}): P
       query: options.query ?? "",
       createdByMe: options.createdByMe ?? false,
       likedByMe: options.likedByMe ?? false,
+      visibility: options.visibility ?? "",
+      onlyTemplates: options.onlyTemplates ?? false,
     }),
   );
 

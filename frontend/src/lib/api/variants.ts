@@ -30,6 +30,7 @@ export interface UpdateVariantInput {
   description?: string;
   isMain?: boolean;
   sourceLanguage?: string;
+  sourceRootUri?: string;
 }
 
 export interface GraphBuildJob {
@@ -73,6 +74,7 @@ export async function updateVariant(input: UpdateVariantInput): Promise<Variant>
       description: input.description ?? "",
       isMain: input.isMain,
       sourceLanguage: input.sourceLanguage,
+      sourceRootUri: input.sourceRootUri,
     }),
   );
 
