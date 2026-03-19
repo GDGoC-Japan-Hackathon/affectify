@@ -1,8 +1,35 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import type { FeedbackCard, Resolution, ChatMessage } from "@/types/ai-review";
-import { mockFeedbackCards, mockOverallScore, mockSummary } from "@/data/mock-ai-review";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+
+import { getAnalysisReport } from "@/lib/api/analysis";
+import {
+  appendReviewFeedbackChat,
+  createReviewJob,
+  getReviewJob,
+  listReviewFeedbackChats,
+  listReviewFeedbacks,
+  resolveReviewFeedback,
+  type ReviewFeedback,
+  type ReviewFeedbackChat,
+  type ReviewFeedbackTarget,
+} from "@/lib/api/review";
+import type {
+  ChatMessage,
+  FeedbackCard,
+  FeedbackSeverity,
+  FeedbackStatus,
+  FeedbackType,
+  Resolution,
+} from "@/types/ai-review";
 
 type AIReviewContextType = {
   isModalOpen: boolean;
@@ -10,27 +37,122 @@ type AIReviewContextType = {
   selectedCardId: string | null;
   overallScore: number | null;
   summary: string;
+  error: string;
+  hasLoadedReview: boolean;
+  isLoading: boolean;
+  isReviewRunning: boolean;
   openModal: (cardId?: string) => void;
   closeModal: () => void;
   selectCard: (id: string | null) => void;
-  resolveCard: (id: string, resolution: Resolution) => void;
-  unresolveCard: (id: string) => void;
-  sendMessage: (cardId: string, content: string) => void;
-  loadReview: () => void;
+  resolveCard: (id: string, resolution: Resolution) => Promise<void>;
+  unresolveCard: (id: string) => Promise<void>;
+  sendMessage: (cardId: string, content: string) => Promise<void>;
+  loadReview: () => Promise<void>;
+  refreshReview: () => Promise<void>;
 };
 
 const AIReviewContext = createContext<AIReviewContextType | null>(null);
 
-export function AIReviewProvider({ children }: { children: ReactNode }) {
+const REVIEW_POLL_INTERVAL_MS = 1500;
+const REVIEW_POLL_TIMEOUT_MS = 60_000;
+
+function isResolution(value: string): value is Resolution {
+  return value === "update_design_guide" || value === "fix_code" || value === "both";
+}
+
+function isFeedbackType(value: string): value is FeedbackType {
+  return value === "design_guide" || value === "code";
+}
+
+function isFeedbackSeverity(value: string): value is FeedbackSeverity {
+  return value === "high" || value === "medium" || value === "low";
+}
+
+function isFeedbackStatus(value: string): value is FeedbackStatus {
+  return value === "open" || value === "resolved" || value === "dismissed";
+}
+
+function toChatMessages(chats: ReviewFeedbackChat[]): ChatMessage[] {
+  return chats.map((chat) => ({
+    role: chat.role === "ai" ? "ai" : "user",
+    content: chat.content,
+    timestamp: chat.createdAt,
+  }));
+}
+
+function mapFeedbackCards(
+  feedbacks: ReviewFeedback[],
+  targets: ReviewFeedbackTarget[],
+  previousCards: FeedbackCard[],
+): FeedbackCard[] {
+  const previousCardById = new Map(previousCards.map((card) => [card.id, card]));
+  const targetsByFeedbackId = new Map<string, ReviewFeedbackTarget[]>();
+  for (const target of targets) {
+    const items = targetsByFeedbackId.get(target.feedbackId) ?? [];
+    items.push(target);
+    targetsByFeedbackId.set(target.feedbackId, items);
+  }
+
+  return feedbacks.map((feedback) => {
+    const cardTargets = targetsByFeedbackId.get(feedback.id) ?? [];
+    const previousCard = previousCardById.get(feedback.id);
+
+    return {
+      id: feedback.id,
+      reviewJobId: feedback.reviewJobId,
+      variantId: feedback.variantId,
+      type: isFeedbackType(feedback.feedbackType) ? feedback.feedbackType : "code",
+      severity: isFeedbackSeverity(feedback.severity) ? feedback.severity : "low",
+      title: feedback.title,
+      description: feedback.description,
+      suggestion: feedback.suggestion,
+      filePaths: cardTargets
+        .filter((target) => target.targetType === "file")
+        .map((target) => target.targetRef),
+      nodeIds: cardTargets
+        .filter((target) => target.targetType === "node")
+        .map((target) => target.targetRef),
+      edgeIds: cardTargets
+        .filter((target) => target.targetType === "edge")
+        .map((target) => target.targetRef),
+      status: isFeedbackStatus(feedback.status) ? feedback.status : "open",
+      resolution: isResolution(feedback.resolution) ? feedback.resolution : undefined,
+      aiRecommendation: isResolution(feedback.aiRecommendation)
+        ? feedback.aiRecommendation
+        : undefined,
+      resolved: feedback.status !== "open",
+      chatHistory: previousCard?.chatHistory ?? [],
+      chatsLoaded: previousCard?.chatsLoaded ?? false,
+    };
+  });
+}
+
+async function delay(ms: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+export function AIReviewProvider({
+  variantId,
+  children,
+}: {
+  variantId: string;
+  children: ReactNode;
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [cards, setCards] = useState<FeedbackCard[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [overallScore, setOverallScore] = useState<number | null>(null);
   const [summary, setSummary] = useState("");
+  const [error, setError] = useState("");
+  const [hasLoadedReview, setHasLoadedReview] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isReviewRunning, setIsReviewRunning] = useState(false);
 
   const openModal = useCallback((cardId?: string) => {
     setIsModalOpen(true);
-    if (cardId) setSelectedCardId(cardId);
+    if (cardId) {
+      setSelectedCardId(cardId);
+    }
   }, []);
 
   const closeModal = useCallback(() => {
@@ -41,107 +163,215 @@ export function AIReviewProvider({ children }: { children: ReactNode }) {
     setSelectedCardId(id);
   }, []);
 
-  const resolveCard = useCallback((id: string, resolution: Resolution) => {
-    setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, resolved: true, resolution } : c))
-    );
-  }, []);
+  const refreshReview = useCallback(async () => {
+    setIsLoading(true);
+    setError("");
 
-  const unresolveCard = useCallback((id: string) => {
-    setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, resolved: false, resolution: undefined } : c))
-    );
-  }, []);
+    try {
+      const [{ feedbacks, targets }, report] = await Promise.all([
+        listReviewFeedbacks({ variantId }),
+        getAnalysisReport(variantId),
+      ]);
 
-  const sendMessage = useCallback((cardId: string, content: string) => {
-    const userMsg: ChatMessage = { role: "user", content, timestamp: new Date() };
+      setCards((previousCards) => mapFeedbackCards(feedbacks, targets, previousCards));
+      setOverallScore(report?.overallScore ?? null);
+      setSummary(report?.reportData.overview.summary ?? "");
+      setHasLoadedReview(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AIレビューの取得に失敗しました");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [variantId]);
 
-    let currentHistory: ChatMessage[] = [];
-    let currentType: FeedbackCard["type"] = "code";
-    setCards((prev) => {
-      const card = prev.find((c) => c.id === cardId);
-      if (card) {
-        currentHistory = card.chatHistory;
-        currentType = card.type;
-      }
-      return prev.map((c) =>
-        c.id === cardId ? { ...c, chatHistory: [...c.chatHistory, userMsg] } : c
-      );
-    });
+  const ensureCardChats = useCallback(async (cardId: string) => {
+    const targetCard = cards.find((card) => card.id === cardId);
+    if (!targetCard || targetCard.chatsLoaded) {
+      return;
+    }
 
-    // モック: 500ms後にAI返答。2ターン目以降で推薦を提示する
-    setTimeout(() => {
-      const turnCount = currentHistory.filter((m) => m.role === "user").length;
-      const isSecondTurn = turnCount >= 1;
-
-      let aiContent: string;
-      let recommendation: Resolution | undefined;
-
-      if (isSecondTurn) {
-        if (currentType === "design_guide") {
-          recommendation = "update_design_guide";
-          aiContent =
-            "議論を踏まえると、このフィードバックは**設計書の更新**で対応するのが最適だと判断します。\n\n設計書に責務の境界を明文化することで、今後の開発指針として機能します。設計書を更新しますか？";
-        } else {
-          recommendation = "both";
-          aiContent =
-            "会話の内容を整理すると、コードの修正だけでは根本解決にならず、設計書にもその方針を反映すべきです。\n\n**両方対応**を推奨します。コードの修正と合わせて設計書も更新することで、同様の問題を未然に防げます。";
-        }
-      } else {
-        aiContent =
-          "ご指摘ありがとうございます。もう少し詳しく教えていただけますか？現在の実装でどのような問題が発生しているか、具体例があると判断しやすくなります。";
-      }
-
-      const aiMsg: ChatMessage = {
-        role: "ai",
-        content: aiContent,
-        timestamp: new Date(),
-      };
-
-      setCards((prev) =>
-        prev.map((c) =>
-          c.id === cardId
+    try {
+      const chats = await listReviewFeedbackChats(cardId);
+      setCards((previousCards) =>
+        previousCards.map((card) =>
+          card.id === cardId
             ? {
-                ...c,
-                chatHistory: [...c.chatHistory, aiMsg],
-                ...(recommendation ? { aiRecommendation: recommendation } : {}),
+                ...card,
+                chatHistory: toChatMessages(chats),
+                chatsLoaded: true,
               }
-            : c
-        )
+            : card,
+        ),
       );
-    }, 500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "チャット履歴の取得に失敗しました");
+    }
+  }, [cards]);
+
+  useEffect(() => {
+    void refreshReview();
+  }, [refreshReview]);
+
+  useEffect(() => {
+    if (!selectedCardId) {
+      return;
+    }
+    void ensureCardChats(selectedCardId);
+  }, [ensureCardChats, selectedCardId]);
+
+  const loadReview = useCallback(async () => {
+    setError("");
+    setIsReviewRunning(true);
+
+    try {
+      const job = await createReviewJob(variantId);
+      const deadline = Date.now() + REVIEW_POLL_TIMEOUT_MS;
+      let currentStatus = job.status;
+
+      while (currentStatus === "queued" || currentStatus === "running") {
+        if (Date.now() > deadline) {
+          throw new Error("レビューの完了待機がタイムアウトしました");
+        }
+        await delay(REVIEW_POLL_INTERVAL_MS);
+        const latestJob = await getReviewJob(job.id);
+        currentStatus = latestJob.status;
+        if (currentStatus === "failed") {
+          throw new Error(latestJob.errorMessage || "レビューの再評価に失敗しました");
+        }
+      }
+
+      await refreshReview();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AIレビューの再評価に失敗しました");
+    } finally {
+      setIsReviewRunning(false);
+    }
+  }, [refreshReview, variantId]);
+
+  const resolveCard = useCallback(async (id: string, resolution: Resolution) => {
+    try {
+      const feedback = await resolveReviewFeedback(id, resolution, "resolved");
+      setCards((previousCards) =>
+        previousCards.map((card) =>
+          card.id === id
+            ? {
+                ...card,
+                status: "resolved",
+                resolved: true,
+                resolution: isResolution(feedback.resolution) ? feedback.resolution : resolution,
+              }
+            : card,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "フィードバックの解決に失敗しました");
+    }
   }, []);
 
-  const loadReview = useCallback(() => {
-    setCards(mockFeedbackCards.map((c) => ({ ...c, resolved: false, resolution: undefined, chatHistory: [] })));
-    setOverallScore(mockOverallScore);
-    setSummary(mockSummary);
+  const unresolveCard = useCallback(async (id: string) => {
+    const currentCard = cards.find((card) => card.id === id);
+    if (!currentCard) {
+      return;
+    }
+
+    try {
+      await resolveReviewFeedback(id, currentCard.resolution ?? "", "open");
+      setCards((previousCards) =>
+        previousCards.map((card) =>
+          card.id === id
+            ? {
+                ...card,
+                status: "open",
+                resolved: false,
+              }
+            : card,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "フィードバックの更新に失敗しました");
+    }
+  }, [cards]);
+
+  const sendMessage = useCallback(async (cardId: string, content: string) => {
+    try {
+      const response = await appendReviewFeedbackChat(cardId, content);
+      setCards((previousCards) =>
+        previousCards.map((card) =>
+          card.id === cardId
+            ? {
+                ...card,
+                chatHistory: toChatMessages(response.chats),
+                chatsLoaded: true,
+                aiRecommendation:
+                  response.feedback && isResolution(response.feedback.aiRecommendation)
+                    ? response.feedback.aiRecommendation
+                    : card.aiRecommendation,
+                resolution:
+                  response.feedback && isResolution(response.feedback.resolution)
+                    ? response.feedback.resolution
+                    : card.resolution,
+                status:
+                  response.feedback && isFeedbackStatus(response.feedback.status)
+                    ? response.feedback.status
+                    : card.status,
+                resolved: response.feedback ? response.feedback.status !== "open" : card.resolved,
+              }
+            : card,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "チャットの送信に失敗しました");
+    }
   }, []);
 
-  return (
-    <AIReviewContext.Provider
-      value={{
-        isModalOpen,
-        cards,
-        selectedCardId,
-        overallScore,
-        summary,
-        openModal,
-        closeModal,
-        selectCard,
-        resolveCard,
-        unresolveCard,
-        sendMessage,
-        loadReview,
-      }}
-    >
-      {children}
-    </AIReviewContext.Provider>
+  const value = useMemo<AIReviewContextType>(
+    () => ({
+      isModalOpen,
+      cards,
+      selectedCardId,
+      overallScore,
+      summary,
+      error,
+      hasLoadedReview,
+      isLoading,
+      isReviewRunning,
+      openModal,
+      closeModal,
+      selectCard,
+      resolveCard,
+      unresolveCard,
+      sendMessage,
+      loadReview,
+      refreshReview,
+    }),
+    [
+      cards,
+      closeModal,
+      error,
+      hasLoadedReview,
+      isLoading,
+      isModalOpen,
+      isReviewRunning,
+      loadReview,
+      openModal,
+      overallScore,
+      refreshReview,
+      resolveCard,
+      selectCard,
+      selectedCardId,
+      sendMessage,
+      summary,
+      unresolveCard,
+    ],
   );
+
+  return <AIReviewContext.Provider value={value}>{children}</AIReviewContext.Provider>;
 }
 
 export function useAIReview() {
   const ctx = useContext(AIReviewContext);
-  if (!ctx) throw new Error("useAIReview must be used within AIReviewProvider");
+  if (!ctx) {
+    throw new Error("useAIReview must be used within AIReviewProvider");
+  }
   return ctx;
 }

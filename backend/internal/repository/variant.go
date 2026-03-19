@@ -253,6 +253,23 @@ func (r *VariantRepository) FindLayoutJobByID(ctx context.Context, id int64) (*e
 	return job, nil
 }
 
+func (r *VariantRepository) ApplyNodePositions(ctx context.Context, variantID int64, positions map[int64][2]float64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for nodeID, position := range positions {
+			result := tx.Model(&entity.Node{}).
+				Where("id = ? AND variant_id = ?", nodeID, variantID).
+				Updates(map[string]any{
+					"position_x": position[0],
+					"position_y": position[1],
+				})
+			if result.Error != nil {
+				return result.Error
+			}
+		}
+		return nil
+	})
+}
+
 func (r *VariantRepository) SyncParsedGraph(
 	ctx context.Context,
 	variantID int64,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Project, Variant } from '@/types/type';
 import { CreateVariantDialog } from '@/components/features/project/CreateVariantDialog';
@@ -29,6 +29,7 @@ import { getMe } from '@/lib/api/users';
 export default function ProjectDetail() {
   const params = useParams<{ projectId: string }>();
   const projectId = Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId;
+  const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [variants, setVariants] = useState<Variant[]>([]);
@@ -95,16 +96,18 @@ export default function ProjectDetail() {
   const otherVariants = variants.filter(b => !b.isMain);
   const isOwner = currentUserId !== null && project.ownerId === currentUserId;
 
-  const handleCreateVariant = async (name: string, description: string, baseVariantId: string) => {
+  const handleCreateVariant = async (name: string, description: string, baseVariantId: string, designGuideId?: string) => {
     try {
       const created = await createVariant({
         projectId: project.id,
         name,
         description,
-        forkedFromVariantId: baseVariantId,
+        forkedFromVariantId: baseVariantId || undefined,
+        baseDesignGuideId: designGuideId,
       });
       setVariants((prev) => [...prev, created]);
       toast.success(`設計案「${name}」を作成しました`);
+      router.push(`/workspace/${created.id}/import`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '設計案の作成に失敗しました');
     }

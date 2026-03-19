@@ -1,7 +1,5 @@
 package config
 
-import "os"
-
 type JobRuntimeConfig struct {
 	ProjectID         string
 	Region            string
@@ -12,13 +10,8 @@ type JobRuntimeConfig struct {
 }
 
 func LoadJobRuntimeConfig() JobRuntimeConfig {
-	projectID := os.Getenv("GCP_PROJECT_ID")
-	if projectID == "" {
-		projectID = GetEnv("FIREBASE_PROJECT_ID", "")
-	}
-
 	return JobRuntimeConfig{
-		ProjectID:         projectID,
+		ProjectID:         GetEnv("GCP_PROJECT_ID", ""),
 		Region:            GetEnv("GCP_REGION", ""),
 		GraphBuildJobName: GetEnv("GRAPH_BUILD_JOB_NAME", ""),
 		LayoutJobName:     GetEnv("LAYOUT_JOB_NAME", ""),

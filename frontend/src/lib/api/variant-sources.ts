@@ -10,7 +10,9 @@ export async function uploadVariantSource(variantId: string, files: File[]): Pro
 
   const formData = new FormData();
   for (const file of files) {
-    formData.append("files", file, file.webkitRelativePath || file.name);
+    const relativePath = file.webkitRelativePath || file.name;
+    formData.append("files", file, file.name);
+    formData.append("relative_paths", relativePath);
   }
 
   const response = await fetch(`${baseUrl}/variant-sources/upload?variant_id=${encodeURIComponent(variantId)}`, {

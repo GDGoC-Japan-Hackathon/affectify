@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/graphbuild"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/layout"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
 )
@@ -67,6 +69,7 @@ func (s *JobWorkerService) RunReviewJob(ctx context.Context, jobID int64) error 
 }
 
 func (s *JobWorkerService) runGraphBuild(ctx context.Context, job *entity.GraphBuildJob) error {
+	log.Printf("graph-build: start job_id=%d variant_id=%d", job.ID, job.VariantID)
 	now := time.Now()
 	job.Status = entity.JobStatusRunning
 	job.StartedAt = (*entity.Time)(&now)
@@ -76,12 +79,14 @@ func (s *JobWorkerService) runGraphBuild(ctx context.Context, job *entity.GraphB
 	}
 
 	if err := s.syncGraph(ctx, job.VariantID, now); err != nil {
+		log.Printf("graph-build: failed job_id=%d variant_id=%d err=%v", job.ID, job.VariantID, err)
 		return s.failGraphBuild(ctx, job, err)
 	}
 
 	finished := time.Now()
 	job.Status = entity.JobStatusSucceeded
 	job.FinishedAt = (*entity.Time)(&finished)
+	log.Printf("graph-build: succeeded job_id=%d variant_id=%d", job.ID, job.VariantID)
 	return s.variantRepo.SaveGraphBuildJob(ctx, job)
 }
 
@@ -101,19 +106,51 @@ func (s *JobWorkerService) syncGraph(ctx context.Context, variantID int64, impor
 	if err != nil {
 		return err
 	}
+	moduleRoot := findGoModuleRoot(localDir, files)
+	files = relativizeFilesToModuleRoot(localDir, moduleRoot, files)
+	log.Printf(
+		"graph-build: materialized variant_id=%d source_root_uri=%s local_dir=%s module_root=%s files=%d",
+		variantID,
+		*variant.SourceRootURI,
+		localDir,
+		moduleRoot,
+		len(files),
+	)
 	if len(files) == 0 {
 		return errors.New("variant source_root_uri does not contain any files")
 	}
-	if !containsGoFiles(files) {
-		return errors.New("current graph build supports Go repositories only")
+	if !containsGoModule(files) {
+		return errors.New("current graph build supports Go modules only: go.mod not found")
+	}
+	goFiles := filterGoFiles(files)
+	if len(goFiles) == 0 {
+		return fmt.Errorf(
+			"current graph build supports Go repositories only: found %d files, 0 .go files",
+			len(files),
+		)
 	}
 
-	board, err := graphbuild.NewParser(localDir).Parse()
+	board, err := graphbuild.NewParser(moduleRoot).Parse()
 	if err != nil {
 		return err
 	}
+	log.Printf(
+		"graph-build: parsed variant_id=%d nodes=%d edges=%d",
+		variantID,
+		len(board.Nodes),
+		len(board.Edges),
+	)
 	if len(board.Nodes) == 0 {
-		return errors.New("graph build produced no nodes")
+		sampleFiles := goFiles
+		if len(sampleFiles) > 5 {
+			sampleFiles = sampleFiles[:5]
+		}
+		return fmt.Errorf(
+			"graph build produced no nodes: found %d files, %d Go files, but extracted 0 functions/methods (sample Go files: %s)",
+			len(files),
+			len(goFiles),
+			strings.Join(sampleFiles, ", "),
+		)
 	}
 
 	return s.variantRepo.SyncParsedGraph(ctx, variantID, importedAt, files, board)
@@ -258,13 +295,56 @@ func isLocalSourceURI(uri string) bool {
 	return strings.HasPrefix(uri, "file://") || filepath.IsAbs(uri)
 }
 
-func containsGoFiles(files []string) bool {
+func filterGoFiles(files []string) []string {
+	goFiles := make([]string, 0, len(files))
 	for _, file := range files {
 		if strings.HasSuffix(strings.ToLower(file), ".go") {
+			goFiles = append(goFiles, file)
+		}
+	}
+	return goFiles
+}
+
+func containsGoModule(files []string) bool {
+	for _, file := range files {
+		if filepath.Base(filepath.ToSlash(file)) == "go.mod" {
 			return true
 		}
 	}
 	return false
+}
+
+func findGoModuleRoot(localDir string, files []string) string {
+	for _, file := range files {
+		normalized := filepath.ToSlash(file)
+		if filepath.Base(normalized) != "go.mod" {
+			continue
+		}
+		dir := filepath.Dir(normalized)
+		if dir == "." || dir == "" {
+			return localDir
+		}
+		return filepath.Join(localDir, filepath.FromSlash(dir))
+	}
+	return localDir
+}
+
+func relativizeFilesToModuleRoot(localDir string, moduleRoot string, files []string) []string {
+	if moduleRoot == "" || moduleRoot == localDir {
+		return files
+	}
+
+	normalized := make([]string, 0, len(files))
+	for _, file := range files {
+		absPath := filepath.Join(localDir, filepath.FromSlash(file))
+		relPath, err := filepath.Rel(moduleRoot, absPath)
+		if err != nil {
+			normalized = append(normalized, filepath.ToSlash(file))
+			continue
+		}
+		normalized = append(normalized, filepath.ToSlash(relPath))
+	}
+	return normalized
 }
 
 func (s *JobWorkerService) runLayout(ctx context.Context, job *entity.LayoutJob) error {
@@ -274,6 +354,28 @@ func (s *JobWorkerService) runLayout(ctx context.Context, job *entity.LayoutJob)
 	job.ErrorMessage = nil
 	if err := s.variantRepo.SaveLayoutJob(ctx, job); err != nil {
 		return err
+	}
+
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failLayout(ctx, job, err)
+	}
+	if len(nodes) == 0 {
+		return s.failLayout(ctx, job, errors.New("layout requires at least one node"))
+	}
+
+	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failLayout(ctx, job, err)
+	}
+
+	computed := layout.Compute(nodes, edges, job.LayoutType)
+	positions := make(map[int64][2]float64, len(computed))
+	for nodeID, position := range computed {
+		positions[nodeID] = [2]float64{position.X, position.Y}
+	}
+	if err := s.variantRepo.ApplyNodePositions(ctx, job.VariantID, positions); err != nil {
+		return s.failLayout(ctx, job, err)
 	}
 
 	finished := time.Now()
@@ -319,6 +421,18 @@ func (s *JobWorkerService) failGraphBuild(ctx context.Context, job *entity.Graph
 	job.FinishedAt = (*entity.Time)(&now)
 	if err := s.variantRepo.SaveGraphBuildJob(ctx, job); err != nil {
 		return fmt.Errorf("graph build failed: %w (additionally failed to persist job error: %v)", cause, err)
+	}
+	return cause
+}
+
+func (s *JobWorkerService) failLayout(ctx context.Context, job *entity.LayoutJob, cause error) error {
+	now := time.Now()
+	message := cause.Error()
+	job.Status = entity.JobStatusFailed
+	job.ErrorMessage = &message
+	job.FinishedAt = (*entity.Time)(&now)
+	if err := s.variantRepo.SaveLayoutJob(ctx, job); err != nil {
+		return fmt.Errorf("layout failed: %w (additionally failed to persist job error: %v)", cause, err)
 	}
 	return cause
 }
