@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -21,6 +21,48 @@ function normalizeTargetPath(root: string, requestedPath?: string) {
   return target;
 }
 
+type TreeEntry = {
+  name: string;
+  fullPath: string;
+  relativePath: string;
+  kind: "directory" | "file";
+  depth: number;
+  size?: number;
+};
+
+async function walkTree(root: string, target: string, depth = 0): Promise<TreeEntry[]> {
+  const dirents = await readdir(target, { withFileTypes: true });
+  const entries = dirents
+    .map((entry) => ({
+      entry,
+      fullPath: path.resolve(target, entry.name),
+    }))
+    .sort((a, b) => {
+      if (a.entry.isDirectory() !== b.entry.isDirectory()) {
+        return a.entry.isDirectory() ? -1 : 1;
+      }
+      return a.entry.name.localeCompare(b.entry.name);
+    });
+
+  const results: TreeEntry[] = [];
+  for (const { entry, fullPath } of entries) {
+    const kind: TreeEntry["kind"] = entry.isDirectory() ? "directory" : "file";
+    results.push({
+      name: entry.name,
+      fullPath,
+      relativePath: path.relative(root, fullPath) || ".",
+      kind,
+      depth,
+      size: entry.isFile() ? (await stat(fullPath)).size : undefined,
+    });
+    if (entry.isDirectory()) {
+      results.push(...(await walkTree(root, fullPath, depth + 1)));
+    }
+  }
+
+  return results;
+}
+
 export async function GET(req: Request) {
   try {
     const root = resolvePickerRoot();
@@ -30,7 +72,18 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url);
     const requestedPath = url.searchParams.get("path") || undefined;
+    const recursive = url.searchParams.get("recursive") === "1";
     const target = normalizeTargetPath(root, requestedPath);
+
+    if (recursive) {
+      const entries = await walkTree(target, target);
+      return NextResponse.json({
+        root,
+        currentPath: target,
+        currentRelativePath: path.relative(root, target) || ".",
+        entries,
+      });
+    }
 
     const dirents = await readdir(target, { withFileTypes: true });
     const directories = dirents
