@@ -2,10 +2,13 @@ import { create } from "@bufbuild/protobuf";
 
 import { createConnectClient } from "@/lib/connect";
 import {
+  AddProjectMemberRequestSchema,
   CreateProjectRequestSchema,
   DeleteProjectRequestSchema,
   GetProjectRequestSchema,
   ListProjectsRequestSchema,
+  RemoveProjectMemberRequestSchema,
+  UpdateProjectRequestSchema,
   ProjectService,
   type Project as ProtoProject,
 } from "@/gen/api/v1/project_pb";
@@ -23,6 +26,12 @@ export interface ListProjectsOptions {
 }
 
 export interface CreateProjectInput {
+  name: string;
+  description: string;
+}
+
+export interface UpdateProjectInput {
+  id: string;
   name: string;
   description: string;
 }
@@ -70,6 +79,53 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   }
 
   return mapProject(response.project);
+}
+
+export async function updateProject(input: UpdateProjectInput): Promise<Project> {
+  const response = await projectClient.updateProject(
+    create(UpdateProjectRequestSchema, {
+      id: BigInt(input.id),
+      name: input.name,
+      description: input.description,
+    }),
+  );
+
+  if (!response.project) {
+    throw new Error("project の更新に失敗しました");
+  }
+
+  return mapProject(response.project);
+}
+
+export async function addProjectMember(
+  projectId: string,
+  email: string,
+): Promise<ProjectMemberSummary> {
+  const response = await projectClient.addProjectMember(
+    create(AddProjectMemberRequestSchema, {
+      projectId: BigInt(projectId),
+      email,
+      role: "editor",
+    }),
+  );
+
+  if (!response.member) {
+    throw new Error("メンバーの追加に失敗しました");
+  }
+
+  return mapProjectMemberSummary(response.member);
+}
+
+export async function removeProjectMember(
+  projectId: string,
+  userId: string,
+): Promise<void> {
+  await projectClient.removeProjectMember(
+    create(RemoveProjectMemberRequestSchema, {
+      projectId: BigInt(projectId),
+      userId: BigInt(userId),
+    }),
+  );
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
@@ -120,11 +176,11 @@ function mapVariant(variant: ProtoProject["variants"][number]): Variant {
 function mapProjectMemberSummary(member: ProtoProject["members"][number]): ProjectMemberSummary {
   return {
     userId: member.userId.toString(),
-    invitedBy: member.invitedBy.toString(),
+    addedBy: member.addedBy.toString(),
     role: member.role,
     joinedAt: toDate(member.joinedAt),
     user: mapUser(member.user),
-    inviter: mapUser(member.inviter),
+    addedByUser: mapUser(member.addedByUser),
   };
 }
 

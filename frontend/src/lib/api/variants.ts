@@ -2,8 +2,15 @@ import { create } from "@bufbuild/protobuf";
 
 import { createConnectClient } from "@/lib/connect";
 import {
+  CreateGraphBuildJobRequestSchema,
+  CreateLayoutJobRequestSchema,
   CreateVariantRequestSchema,
+  DeleteVariantRequestSchema,
+  GetGraphBuildJobRequestSchema,
+  GetLayoutJobRequestSchema,
   GetVariantWorkspaceRequestSchema,
+  ListVariantsRequestSchema,
+  UpdateVariantRequestSchema,
   type GetVariantWorkspaceResponse,
   VariantService,
 } from "@/gen/api/v1/variant_pb";
@@ -17,12 +24,150 @@ export interface VariantWorkspaceData {
   edges: BoardEdge[];
 }
 
+export interface UpdateVariantInput {
+  id: string;
+  name?: string;
+  description?: string;
+  isMain?: boolean;
+  sourceLanguage?: string;
+}
+
+export interface GraphBuildJob {
+  id: string;
+  variantId: string;
+  status: string;
+  errorMessage: string;
+}
+
+export interface LayoutJob {
+  id: string;
+  variantId: string;
+  layoutType: string;
+  status: string;
+  errorMessage: string;
+}
+
 export interface CreateVariantInput {
   projectId: string;
   name: string;
   description?: string;
   forkedFromVariantId?: string;
   baseDesignGuideId?: string;
+}
+
+export async function listVariants(projectId: string): Promise<Variant[]> {
+  const response = await variantClient.listVariants(
+    create(ListVariantsRequestSchema, {
+      projectId: BigInt(projectId),
+    }),
+  );
+
+  return response.variants.map(mapVariant);
+}
+
+export async function updateVariant(input: UpdateVariantInput): Promise<Variant> {
+  const response = await variantClient.updateVariant(
+    create(UpdateVariantRequestSchema, {
+      id: BigInt(input.id),
+      name: input.name ?? "",
+      description: input.description ?? "",
+      isMain: input.isMain,
+      sourceLanguage: input.sourceLanguage,
+    }),
+  );
+
+  if (!response.variant) {
+    throw new Error("variant の更新に失敗しました");
+  }
+
+  return mapVariant(response.variant);
+}
+
+export async function deleteVariant(variantId: string): Promise<void> {
+  await variantClient.deleteVariant(
+    create(DeleteVariantRequestSchema, {
+      id: BigInt(variantId),
+    }),
+  );
+}
+
+export async function createGraphBuildJob(variantId: string): Promise<GraphBuildJob> {
+  const response = await variantClient.createGraphBuildJob(
+    create(CreateGraphBuildJobRequestSchema, {
+      variantId: BigInt(variantId),
+    }),
+  );
+
+  if (!response.job) {
+    throw new Error("グラフビルドジョブの作成に失敗しました");
+  }
+
+  return {
+    id: response.job.id.toString(),
+    variantId: response.job.variantId.toString(),
+    status: response.job.status,
+    errorMessage: response.job.errorMessage,
+  };
+}
+
+export async function getGraphBuildJob(jobId: string): Promise<GraphBuildJob> {
+  const response = await variantClient.getGraphBuildJob(
+    create(GetGraphBuildJobRequestSchema, {
+      id: BigInt(jobId),
+    }),
+  );
+
+  if (!response.job) {
+    throw new Error("グラフビルドジョブの取得に失敗しました");
+  }
+
+  return {
+    id: response.job.id.toString(),
+    variantId: response.job.variantId.toString(),
+    status: response.job.status,
+    errorMessage: response.job.errorMessage,
+  };
+}
+
+export async function createLayoutJob(variantId: string, layoutType = "dagre"): Promise<LayoutJob> {
+  const response = await variantClient.createLayoutJob(
+    create(CreateLayoutJobRequestSchema, {
+      variantId: BigInt(variantId),
+      layoutType,
+    }),
+  );
+
+  if (!response.job) {
+    throw new Error("レイアウトジョブの作成に失敗しました");
+  }
+
+  return {
+    id: response.job.id.toString(),
+    variantId: response.job.variantId.toString(),
+    layoutType: response.job.layoutType,
+    status: response.job.status,
+    errorMessage: response.job.errorMessage,
+  };
+}
+
+export async function getLayoutJob(jobId: string): Promise<LayoutJob> {
+  const response = await variantClient.getLayoutJob(
+    create(GetLayoutJobRequestSchema, {
+      id: BigInt(jobId),
+    }),
+  );
+
+  if (!response.job) {
+    throw new Error("レイアウトジョブの取得に失敗しました");
+  }
+
+  return {
+    id: response.job.id.toString(),
+    variantId: response.job.variantId.toString(),
+    layoutType: response.job.layoutType,
+    status: response.job.status,
+    errorMessage: response.job.errorMessage,
+  };
 }
 
 export async function createVariant(input: CreateVariantInput): Promise<Variant> {
