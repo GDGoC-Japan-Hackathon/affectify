@@ -132,6 +132,47 @@ func toProtoProjectMember(detail *service.ProjectMemberDetail) *apiv1.ProjectMem
 	}
 }
 
+func toProtoDesignGuideSummary(detail *service.DesignGuideSummaryDetail) *apiv1.DesignGuideSummary {
+	if detail == nil || detail.Guide == nil {
+		return nil
+	}
+
+	return &apiv1.DesignGuideSummary{
+		Id:         detail.Guide.ID,
+		Name:       detail.Guide.Name,
+		Description:stringValue(detail.Guide.Description),
+		CreatedBy:  detail.Guide.CreatedBy,
+		Creator:    toProtoUserSummary(detail.Creator),
+		LikeCount:  detail.LikeCount,
+		CreatedAt:  timestamppb.New(detail.Guide.CreatedAt),
+		UpdatedAt:  timestamppb.New(detail.Guide.UpdatedAt),
+		Visibility: string(detail.Guide.Visibility),
+		IsTemplate: detail.Guide.IsTemplate,
+		LikedByMe:  detail.LikedByMe,
+	}
+}
+
+func toProtoDesignGuide(detail *service.DesignGuideDetail) *apiv1.DesignGuide {
+	if detail == nil || detail.Guide == nil {
+		return nil
+	}
+
+	return &apiv1.DesignGuide{
+		Id:         detail.Guide.ID,
+		Name:       detail.Guide.Name,
+		Description:stringValue(detail.Guide.Description),
+		Content:    detail.Guide.Content,
+		CreatedBy:  detail.Guide.CreatedBy,
+		Creator:    toProtoUserSummary(detail.Creator),
+		LikeCount:  detail.LikeCount,
+		CreatedAt:  timestamppb.New(detail.Guide.CreatedAt),
+		UpdatedAt:  timestamppb.New(detail.Guide.UpdatedAt),
+		Visibility: string(detail.Guide.Visibility),
+		IsTemplate: detail.Guide.IsTemplate,
+		LikedByMe:  detail.LikedByMe,
+	}
+}
+
 func toProtoVariantFile(file *entity.VariantFile) *apiv1.VariantFile {
 	if file == nil {
 		return nil
