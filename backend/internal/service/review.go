@@ -35,6 +35,8 @@ type ReviewFeedbackBundle struct {
 type ReviewService struct {
 	db             *gorm.DB
 	userRepository *repository.UserRepository
+	reviewRepo     *repository.ReviewRepository
+	variantRepo    *repository.VariantRepository
 	jobDispatcher  JobDispatcher
 }
 
@@ -42,6 +44,8 @@ func NewReviewService(db *gorm.DB, userRepository *repository.UserRepository, jo
 	return &ReviewService{
 		db:             db,
 		userRepository: userRepository,
+		reviewRepo:     repository.NewReviewRepository(db),
+		variantRepo:    repository.NewVariantRepository(db),
 		jobDispatcher:  jobDispatcher,
 	}
 }
@@ -52,12 +56,12 @@ func (s *ReviewService) CreateReviewJob(ctx context.Context, firebaseUID string,
 		return nil, err
 	}
 
-	var variant entity.Variant
-	if err := s.db.WithContext(ctx).First(&variant, variantID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrVariantNotFound
-		}
+	variant, err := s.variantRepo.FindByID(ctx, variantID)
+	if err != nil {
 		return nil, err
+	}
+	if variant == nil {
+		return nil, ErrVariantNotFound
 	}
 
 	job := &entity.ReviewJob{
@@ -65,7 +69,7 @@ func (s *ReviewService) CreateReviewJob(ctx context.Context, firebaseUID string,
 		RequestedBy: requester.ID,
 		Status:      entity.JobStatusQueued,
 	}
-	if err := s.db.WithContext(ctx).Create(job).Error; err != nil {
+	if err := s.reviewRepo.CreateReviewJob(ctx, job); err != nil {
 		return nil, err
 	}
 	if s.jobDispatcher != nil {
@@ -73,7 +77,7 @@ func (s *ReviewService) CreateReviewJob(ctx context.Context, firebaseUID string,
 			message := err.Error()
 			job.Status = entity.JobStatusFailed
 			job.ErrorMessage = &message
-			_ = s.db.WithContext(ctx).Save(job).Error
+			_ = s.reviewRepo.SaveReviewJob(ctx, job)
 			return nil, err
 		}
 	}
@@ -82,43 +86,31 @@ func (s *ReviewService) CreateReviewJob(ctx context.Context, firebaseUID string,
 }
 
 func (s *ReviewService) GetReviewJob(ctx context.Context, id int64) (*entity.ReviewJob, error) {
-	var job entity.ReviewJob
-	if err := s.db.WithContext(ctx).First(&job, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrReviewJobNotFound
-		}
+	job, err := s.reviewRepo.FindReviewJobByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-
-	return &job, nil
+	if job == nil {
+		return nil, ErrReviewJobNotFound
+	}
+	return job, nil
 }
 
 func (s *ReviewService) ListReviewFeedbacks(ctx context.Context, input ListReviewFeedbacksInput) (*ReviewFeedbackBundle, error) {
 	reviewJobID := input.ReviewJobID
 	if reviewJobID == nil {
-		var latest entity.ReviewJob
-		err := s.db.WithContext(ctx).
-			Where("variant_id = ?", input.VariantID).
-			Order("created_at DESC, id DESC").
-			First(&latest).Error
+		latest, err := s.reviewRepo.FindLatestReviewJobByVariantID(ctx, input.VariantID)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return &ReviewFeedbackBundle{}, nil
-			}
 			return nil, err
+		}
+		if latest == nil {
+			return &ReviewFeedbackBundle{}, nil
 		}
 		reviewJobID = &latest.ID
 	}
 
-	query := s.db.WithContext(ctx).
-		Where("variant_id = ? AND review_job_id = ?", input.VariantID, *reviewJobID).
-		Order("display_order ASC, created_at ASC, id ASC")
-	if input.OnlyOpen {
-		query = query.Where("status = ?", entity.FeedbackStatusOpen)
-	}
-
-	var feedbacks []entity.ReviewFeedback
-	if err := query.Find(&feedbacks).Error; err != nil {
+	feedbacks, err := s.reviewRepo.ListFeedbacksByVariantAndJob(ctx, input.VariantID, *reviewJobID, input.OnlyOpen)
+	if err != nil {
 		return nil, err
 	}
 	if len(feedbacks) == 0 {
@@ -130,11 +122,8 @@ func (s *ReviewService) ListReviewFeedbacks(ctx context.Context, input ListRevie
 		feedbackIDs = append(feedbackIDs, feedback.ID)
 	}
 
-	var targets []entity.ReviewFeedbackTarget
-	if err := s.db.WithContext(ctx).
-		Where("feedback_id IN ?", feedbackIDs).
-		Order("id ASC").
-		Find(&targets).Error; err != nil {
+	targets, err := s.reviewRepo.ListFeedbackTargetsByFeedbackIDs(ctx, feedbackIDs)
+	if err != nil {
 		return nil, err
 	}
 
@@ -149,11 +138,8 @@ func (s *ReviewService) ListReviewFeedbackChats(ctx context.Context, feedbackID 
 		return nil, err
 	}
 
-	var chats []entity.ReviewFeedbackChat
-	if err := s.db.WithContext(ctx).
-		Where("feedback_id = ?", feedbackID).
-		Order("created_at ASC, id ASC").
-		Find(&chats).Error; err != nil {
+	chats, err := s.reviewRepo.ListFeedbackChatsByFeedbackID(ctx, feedbackID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -181,7 +167,7 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 		Content:    content,
 		CreatedBy:  &requester.ID,
 	}
-	if err := s.db.WithContext(ctx).Create(chat).Error; err != nil {
+	if err := s.reviewRepo.CreateFeedbackChat(ctx, chat); err != nil {
 		return nil, nil, err
 	}
 
@@ -260,13 +246,12 @@ func (s *ReviewService) requireUser(ctx context.Context, firebaseUID string) (*e
 }
 
 func (s *ReviewService) getFeedback(ctx context.Context, id int64) (*entity.ReviewFeedback, error) {
-	var feedback entity.ReviewFeedback
-	if err := s.db.WithContext(ctx).First(&feedback, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrFeedbackNotFound
-		}
+	feedback, err := s.reviewRepo.FindFeedbackByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-
-	return &feedback, nil
+	if feedback == nil {
+		return nil, ErrFeedbackNotFound
+	}
+	return feedback, nil
 }

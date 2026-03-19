@@ -19,22 +19,22 @@ import type { Variant } from '@/types/type';
 
 interface CreateVariantDialogProps {
   variants: Variant[];
-  onCreateVariant: (name: string, description: string, baseVariantName: string) => void;
+  onCreateVariant: (name: string, description: string, baseVariantId: string) => void;
 }
 
 export function CreateVariantDialog({ variants, onCreateVariant }: CreateVariantDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [baseVariant, setBaseVariant] = useState('main');
+  const [baseVariant, setBaseVariant] = useState(variants.find((variant) => variant.isMain)?.id ?? variants[0]?.id ?? '');
 
   const handleCreate = () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !baseVariant) return;
     onCreateVariant(name, description, baseVariant);
     setOpen(false);
     setName('');
     setDescription('');
-    setBaseVariant('main');
+    setBaseVariant(variants.find((variant) => variant.isMain)?.id ?? variants[0]?.id ?? '');
   };
 
   return (
@@ -79,7 +79,7 @@ export function CreateVariantDialog({ variants, onCreateVariant }: CreateVariant
               onChange={(e) => setBaseVariant(e.target.value)}
             >
               {variants.map((variant) => (
-                <option key={variant.id} value={variant.name}>
+                <option key={variant.id} value={variant.id}>
                   {variant.name}
                   {variant.isMain ? ' (メイン)' : ''}
                 </option>

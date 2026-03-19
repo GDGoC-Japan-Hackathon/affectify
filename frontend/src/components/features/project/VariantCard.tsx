@@ -2,14 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { DesignDocViewer } from '@/components/features/design-guide/DesignDocViewer';
-import { mockUser } from '@/data/mockData';
-import { mockAnalysisReports } from '@/data/mockDesignDocs';
-import { mockDesignGuides } from '@/data/mockDesignGuides';
 import type { Variant } from '@/types/type';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Dialog,
   DialogContent,
@@ -19,11 +14,11 @@ import {
 } from '@/components/ui/dialog';
 import {
   Copy,
-  Pencil,
   Trash2,
+  Upload,
   ExternalLink,
-  BookOpen,
   FileText,
+  MonitorPlay,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -51,14 +46,12 @@ function getScoreBg(score?: number) {
 
 export function VariantCard({
   variant,
-  projectId: _projectId, // eslint-disable-line @typescript-eslint/no-unused-vars
+  projectId: _projectId,
   onCompareToggle,
   isComparing,
 }: VariantCardProps) {
-  const creator = mockUser;
-  const variantGuide = mockDesignGuides.find(g => g.id === variant.designGuideId);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
-  const analysisReport = mockAnalysisReports[0];
+  const hasImported = variant.nodeCount > 0;
 
   return (
     <div
@@ -93,29 +86,13 @@ export function VariantCard({
           />
         </div>
 
-        {/* Design Guide Badge */}
-        {variantGuide && (
-          <div className="mb-4 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
-            <div className="flex items-center gap-2 mb-1">
-              <BookOpen className="w-4 h-4 text-indigo-600" />
-              <span className="text-sm font-medium text-gray-900">適用中の設計書</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-indigo-700 font-medium">{variantGuide.name}</span>
-              <Link href={`/design-guides/${variantGuide.id}`}>
-                <Button variant="ghost" size="sm" className="h-auto p-1 text-xs">
-                  <ExternalLink className="w-3 h-3" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
-
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center p-3 bg-gray-50 rounded-lg">
             <div className="text-sm text-gray-600 mb-1">ノード数</div>
-            <div className="text-xl font-bold text-gray-900">{variant.nodeCount}</div>
+            <div className="text-xl font-bold text-gray-900">
+              {hasImported ? variant.nodeCount : '—'}
+            </div>
           </div>
 
           <div className={`text-center p-3 rounded-lg relative ${getScoreBg(variant.analysisScore)}`}>
@@ -132,7 +109,7 @@ export function VariantCard({
               )}
             </div>
             <div className={`text-xl font-bold ${getScoreColor(variant.analysisScore)}`}>
-              {variant.analysisScore || 'N/A'}
+              {variant.analysisScore ?? 'N/A'}
             </div>
           </div>
 
@@ -144,23 +121,23 @@ export function VariantCard({
           </div>
         </div>
 
-        {/* Creator */}
-        <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
-          <Avatar className="w-6 h-6">
-            <AvatarImage src={creator.avatar} />
-            <AvatarFallback>{creator.name[0]}</AvatarFallback>
-          </Avatar>
-          <span>{creator.name} が作成</span>
-        </div>
-
         {/* Actions */}
         <div className="flex gap-2">
-          <Link href={`/workspace/${variant.id}`} className="flex-1">
-            <Button variant="default" className="w-full gap-2">
-              <Pencil className="w-4 h-4" />
-              編集
-            </Button>
-          </Link>
+          {hasImported ? (
+            <Link href={`/workspace/${variant.id}`} className="flex-1">
+              <Button variant="default" className="w-full gap-2">
+                <MonitorPlay className="w-4 h-4" />
+                ワークスペースを開く
+              </Button>
+            </Link>
+          ) : (
+            <Link href={`/workspace/${variant.id}/import`} className="flex-1">
+              <Button variant="outline" className="w-full gap-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50">
+                <Upload className="w-4 h-4" />
+                コードをインポート
+              </Button>
+            </Link>
+          )}
 
           {!variant.isMain && (
             <>
@@ -177,7 +154,7 @@ export function VariantCard({
 
       {/* AI Analysis Modal */}
       <Dialog open={isAnalysisOpen} onOpenChange={setIsAnalysisOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-600" />
@@ -187,16 +164,9 @@ export function VariantCard({
               この設計案をAIが分析した結果です
             </DialogDescription>
           </DialogHeader>
-
-          <div className="py-4">
-            {analysisReport ? (
-              <DesignDocViewer document={analysisReport} mode="overview" />
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>AI分析がまだ実行されていません</p>
-              </div>
-            )}
+          <div className="py-4 text-center text-gray-500">
+            <ExternalLink className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+            <p>AI分析はワークスペースから実行できます</p>
           </div>
         </DialogContent>
       </Dialog>

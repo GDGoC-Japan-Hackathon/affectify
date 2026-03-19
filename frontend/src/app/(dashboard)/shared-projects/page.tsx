@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ProjectCard } from '@/components/features/project/ProjectCard';
-import { mockProjects, mockUser } from '@/data/mockData';
 import { Project } from '@/types/type';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,45 +12,62 @@ import {
   Filter,
   Folder,
 } from 'lucide-react';
+import { listProjects } from '@/lib/api/projects';
+import { toast } from 'sonner';
 
 export default function SharedProjectsPage() {
-  const [projects] = useState<Project[]>(mockProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'score'>('recent');
   const [sortOpen, setSortOpen] = useState(false);
 
-  const filteredProjects = useMemo(() => {
-    let filtered = projects.filter(
-      (p) => p.ownerId !== mockUser.id && p.members.includes(mockUser.id)
-    );
+  useEffect(() => {
+    let cancelled = false;
 
-    filtered = [...filtered].sort((a, b) => {
+    async function load() {
+      try {
+        setIsLoading(true);
+        const result = await listProjects({ onlyJoined: true, includeVariants: true });
+        if (cancelled) return;
+        setProjects(result);
+      } catch (error) {
+        if (cancelled) return;
+        toast.error(error instanceof Error ? error.message : 'プロジェクトの取得に失敗しました');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    void load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const filteredProjects = useMemo(() => {
+    return [...projects].sort((a, b) => {
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
         case 'score':
-          return (b.analysisScore || 0) - (a.analysisScore || 0);
+          return (b.analysisScore ?? 0) - (a.analysisScore ?? 0);
         case 'recent':
         default:
           return b.updatedAt.getTime() - a.updatedAt.getTime();
       }
     });
-
-    return filtered;
   }, [projects, sortBy]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        {/* Row 1: タイトル */}
         <h1 className="text-2xl font-bold text-gray-900 mb-2">共有プロジェクト</h1>
 
-        {/* Row 2: 件数 + View & Sort Controls */}
         <div className="flex items-center justify-between">
-          <p className="text-gray-600">{filteredProjects.length}件のプロジェクト</p>
+          <p className="text-gray-600">
+            {isLoading ? '読み込み中...' : `${filteredProjects.length}件のプロジェクト`}
+          </p>
 
-          {/* View & Sort Controls */}
           <div className="flex items-center gap-2">
             <div className="relative">
               <button
@@ -97,13 +113,16 @@ export default function SharedProjectsPage() {
         </div>
       </div>
 
-      {/* Projects */}
-      {filteredProjects.length === 0 ? (
+      {isLoading ? (
+        <div className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-48 rounded-lg bg-gray-100 animate-pulse" />
+          ))}
+        </div>
+      ) : filteredProjects.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <Folder className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">
-            共有されたプロジェクトはまだありません
-          </p>
+          <p className="text-gray-500">共有されたプロジェクトはまだありません</p>
         </div>
       ) : (
         <div
@@ -114,10 +133,7 @@ export default function SharedProjectsPage() {
           }
         >
           {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-            />
+            <ProjectCard key={project.id} project={project} />
           ))}
         </div>
       )}

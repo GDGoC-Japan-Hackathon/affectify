@@ -9,6 +9,7 @@ import (
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/source"
 )
 
 var (
@@ -48,6 +49,7 @@ type UpdateVariantInput struct {
 	Description    string
 	IsMain         *bool
 	SourceLanguage *string
+	SourceRootURI  *string
 }
 
 type CreateLayoutJobInput struct {
@@ -58,39 +60,51 @@ type CreateLayoutJobInput struct {
 type VariantService struct {
 	db             *gorm.DB
 	userRepository *repository.UserRepository
+	variantRepo    *repository.VariantRepository
+	projectRepo    *repository.ProjectRepository
 	jobDispatcher  JobDispatcher
+	sourceStore    source.Store
 }
 
-func NewVariantService(db *gorm.DB, userRepository *repository.UserRepository, jobDispatcher JobDispatcher) *VariantService {
+func NewVariantService(db *gorm.DB, userRepository *repository.UserRepository, jobDispatcher JobDispatcher, sourceStore source.Store) *VariantService {
 	return &VariantService{
 		db:             db,
 		userRepository: userRepository,
+		variantRepo:    repository.NewVariantRepository(db),
+		projectRepo:    repository.NewProjectRepository(db),
 		jobDispatcher:  jobDispatcher,
+		sourceStore:    sourceStore,
 	}
 }
 
-func (s *VariantService) ListVariants(ctx context.Context, projectID int64) ([]VariantDetail, error) {
-	var variants []entity.Variant
-	if err := s.db.WithContext(ctx).
-		Where("project_id = ?", projectID).
-		Order("is_main DESC, created_at ASC, id ASC").
-		Find(&variants).Error; err != nil {
+func (s *VariantService) ListVariants(ctx context.Context, firebaseUID string, projectID int64) ([]VariantDetail, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, err
+	}
+	hasAccess, err := s.projectRepo.HasAccess(ctx, projectID, requester.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !hasAccess {
+		return nil, ErrForbidden
+	}
+
+	variants, err := s.variantRepo.ListByProjectID(ctx, projectID)
+	if err != nil {
 		return nil, err
 	}
 
 	return s.attachVariantDetails(ctx, variants)
 }
 
-func (s *VariantService) GetVariant(ctx context.Context, id int64) (*VariantDetail, error) {
-	var variant entity.Variant
-	if err := s.db.WithContext(ctx).First(&variant, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrVariantNotFound
-		}
+func (s *VariantService) GetVariant(ctx context.Context, firebaseUID string, id int64) (*VariantDetail, error) {
+	variant, _, err := s.requireVariantAccess(ctx, firebaseUID, id)
+	if err != nil {
 		return nil, err
 	}
 
-	details, err := s.attachVariantDetails(ctx, []entity.Variant{variant})
+	details, err := s.attachVariantDetails(ctx, []entity.Variant{*variant})
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +123,13 @@ func (s *VariantService) CreateVariant(
 	requester, err := s.requireUser(ctx, firebaseUID)
 	if err != nil {
 		return nil, err
+	}
+	hasAccess, err := s.projectRepo.HasAccess(ctx, input.ProjectID, requester.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !hasAccess {
+		return nil, ErrForbidden
 	}
 
 	var created entity.Variant
@@ -177,11 +198,11 @@ func (s *VariantService) CreateVariant(
 		return nil, err
 	}
 
-	return s.GetVariant(ctx, created.ID)
+	return s.GetVariant(ctx, firebaseUID, created.ID)
 }
 
-func (s *VariantService) UpdateVariant(ctx context.Context, input UpdateVariantInput) (*VariantDetail, error) {
-	variant, err := s.getVariantEntity(ctx, input.ID)
+func (s *VariantService) UpdateVariant(ctx context.Context, firebaseUID string, input UpdateVariantInput) (*VariantDetail, error) {
+	variant, _, err := s.requireVariantAccess(ctx, firebaseUID, input.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -202,61 +223,79 @@ func (s *VariantService) UpdateVariant(ctx context.Context, input UpdateVariantI
 			variant.SourceLanguage = input.SourceLanguage
 		}
 	}
+	if input.SourceRootURI != nil {
+		if *input.SourceRootURI == "" {
+			variant.SourceRootURI = nil
+		} else {
+			variant.SourceRootURI = input.SourceRootURI
+		}
+	}
 
-	if err := s.db.WithContext(ctx).Save(variant).Error; err != nil {
+	if err := s.variantRepo.Save(ctx, variant); err != nil {
 		return nil, err
 	}
 
-	return s.GetVariant(ctx, input.ID)
+	return s.GetVariant(ctx, firebaseUID, input.ID)
 }
 
-func (s *VariantService) DeleteVariant(ctx context.Context, id int64) error {
-	result := s.db.WithContext(ctx).Delete(&entity.Variant{}, id)
-	if result.Error != nil {
-		return result.Error
+func (s *VariantService) DeleteVariant(ctx context.Context, firebaseUID string, id int64) error {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, id); err != nil {
+		return err
 	}
-	if result.RowsAffected == 0 {
+
+	deleted, err := s.variantRepo.DeleteByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !deleted {
 		return ErrVariantNotFound
 	}
 
 	return nil
 }
 
-func (s *VariantService) GetVariantWorkspace(ctx context.Context, variantID int64) (*VariantWorkspace, error) {
-	detail, err := s.GetVariant(ctx, variantID)
+func (s *VariantService) UploadVariantSource(ctx context.Context, firebaseUID string, variantID int64, files []source.UploadedFile) (string, error) {
+	variant, _, err := s.requireVariantAccess(ctx, firebaseUID, variantID)
+	if err != nil {
+		return "", err
+	}
+
+	sourceRootURI, err := s.sourceStore.SaveVariantFiles(ctx, variantID, files)
+	if err != nil {
+		return "", err
+	}
+
+	variant.SourceRootURI = &sourceRootURI
+	if err := s.variantRepo.Save(ctx, variant); err != nil {
+		return "", err
+	}
+
+	return sourceRootURI, nil
+}
+
+func (s *VariantService) GetVariantWorkspace(ctx context.Context, firebaseUID string, variantID int64) (*VariantWorkspace, error) {
+	detail, err := s.GetVariant(ctx, firebaseUID, variantID)
 	if err != nil {
 		return nil, err
 	}
 
-	var files []entity.VariantFile
-	if err := s.db.WithContext(ctx).
-		Where("variant_id = ?", variantID).
-		Order("display_order ASC, path ASC, id ASC").
-		Find(&files).Error; err != nil {
+	files, err := s.variantRepo.ListFilesByVariantID(ctx, variantID)
+	if err != nil {
 		return nil, err
 	}
 
-	var designGuide entity.VariantDesignGuide
-	err = s.db.WithContext(ctx).
-		Where("variant_id = ?", variantID).
-		First(&designGuide).Error
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	designGuide, err := s.variantRepo.FindDesignGuideByVariantID(ctx, variantID)
+	if err != nil {
 		return nil, err
 	}
 
-	var nodes []entity.Node
-	if err := s.db.WithContext(ctx).
-		Where("variant_id = ?", variantID).
-		Order("created_at ASC, id ASC").
-		Find(&nodes).Error; err != nil {
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, variantID)
+	if err != nil {
 		return nil, err
 	}
 
-	var edges []entity.Edge
-	if err := s.db.WithContext(ctx).
-		Where("variant_id = ?", variantID).
-		Order("created_at ASC, id ASC").
-		Find(&edges).Error; err != nil {
+	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, variantID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -267,8 +306,8 @@ func (s *VariantService) GetVariantWorkspace(ctx context.Context, variantID int6
 		Nodes:   nodes,
 		Edges:   edges,
 	}
-	if err == nil {
-		workspace.DesignGuide = &designGuide
+	if designGuide != nil {
+		workspace.DesignGuide = designGuide
 	}
 
 	return workspace, nil
@@ -279,7 +318,7 @@ func (s *VariantService) CreateGraphBuildJob(ctx context.Context, firebaseUID st
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.getVariantEntity(ctx, variantID); err != nil {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, variantID); err != nil {
 		return nil, err
 	}
 
@@ -288,7 +327,7 @@ func (s *VariantService) CreateGraphBuildJob(ctx context.Context, firebaseUID st
 		RequestedBy: requester.ID,
 		Status:      entity.JobStatusQueued,
 	}
-	if err := s.db.WithContext(ctx).Create(job).Error; err != nil {
+	if err := s.variantRepo.CreateGraphBuildJob(ctx, job); err != nil {
 		return nil, err
 	}
 	if s.jobDispatcher != nil {
@@ -296,7 +335,7 @@ func (s *VariantService) CreateGraphBuildJob(ctx context.Context, firebaseUID st
 			message := err.Error()
 			job.Status = entity.JobStatusFailed
 			job.ErrorMessage = &message
-			_ = s.db.WithContext(ctx).Save(job).Error
+			_ = s.variantRepo.SaveGraphBuildJob(ctx, job)
 			return nil, err
 		}
 	}
@@ -304,16 +343,18 @@ func (s *VariantService) CreateGraphBuildJob(ctx context.Context, firebaseUID st
 	return job, nil
 }
 
-func (s *VariantService) GetGraphBuildJob(ctx context.Context, id int64) (*entity.GraphBuildJob, error) {
-	var job entity.GraphBuildJob
-	if err := s.db.WithContext(ctx).First(&job, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrGraphBuildJobNotFound
-		}
+func (s *VariantService) GetGraphBuildJob(ctx context.Context, firebaseUID string, id int64) (*entity.GraphBuildJob, error) {
+	job, err := s.variantRepo.FindGraphBuildJobByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-
-	return &job, nil
+	if job == nil {
+		return nil, ErrGraphBuildJobNotFound
+	}
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID); err != nil {
+		return nil, err
+	}
+	return job, nil
 }
 
 func (s *VariantService) CreateLayoutJob(
@@ -325,7 +366,7 @@ func (s *VariantService) CreateLayoutJob(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.getVariantEntity(ctx, input.VariantID); err != nil {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, input.VariantID); err != nil {
 		return nil, err
 	}
 
@@ -340,7 +381,7 @@ func (s *VariantService) CreateLayoutJob(
 		LayoutType:  layoutType,
 		Status:      entity.JobStatusQueued,
 	}
-	if err := s.db.WithContext(ctx).Create(job).Error; err != nil {
+	if err := s.variantRepo.CreateLayoutJob(ctx, job); err != nil {
 		return nil, err
 	}
 	if s.jobDispatcher != nil {
@@ -348,7 +389,7 @@ func (s *VariantService) CreateLayoutJob(
 			message := err.Error()
 			job.Status = entity.JobStatusFailed
 			job.ErrorMessage = &message
-			_ = s.db.WithContext(ctx).Save(job).Error
+			_ = s.variantRepo.SaveLayoutJob(ctx, job)
 			return nil, err
 		}
 	}
@@ -356,16 +397,18 @@ func (s *VariantService) CreateLayoutJob(
 	return job, nil
 }
 
-func (s *VariantService) GetLayoutJob(ctx context.Context, id int64) (*entity.LayoutJob, error) {
-	var job entity.LayoutJob
-	if err := s.db.WithContext(ctx).First(&job, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrLayoutJobNotFound
-		}
+func (s *VariantService) GetLayoutJob(ctx context.Context, firebaseUID string, id int64) (*entity.LayoutJob, error) {
+	job, err := s.variantRepo.FindLayoutJobByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-
-	return &job, nil
+	if job == nil {
+		return nil, ErrLayoutJobNotFound
+	}
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID); err != nil {
+		return nil, err
+	}
+	return job, nil
 }
 
 func (s *VariantService) requireUser(ctx context.Context, firebaseUID string) (*entity.User, error) {
@@ -381,15 +424,36 @@ func (s *VariantService) requireUser(ctx context.Context, firebaseUID string) (*
 }
 
 func (s *VariantService) getVariantEntity(ctx context.Context, id int64) (*entity.Variant, error) {
-	var variant entity.Variant
-	if err := s.db.WithContext(ctx).First(&variant, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrVariantNotFound
-		}
+	variant, err := s.variantRepo.FindByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
+	if variant == nil {
+		return nil, ErrVariantNotFound
+	}
+	return variant, nil
+}
 
-	return &variant, nil
+func (s *VariantService) requireVariantAccess(ctx context.Context, firebaseUID string, variantID int64) (*entity.Variant, *entity.User, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	variant, err := s.getVariantEntity(ctx, variantID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hasAccess, err := s.projectRepo.HasAccess(ctx, variant.ProjectID, requester.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !hasAccess {
+		return nil, nil, ErrForbidden
+	}
+
+	return variant, requester, nil
 }
 
 func (s *VariantService) attachVariantDetails(ctx context.Context, variants []entity.Variant) ([]VariantDetail, error) {
@@ -404,35 +468,13 @@ func (s *VariantService) attachVariantDetails(ctx context.Context, variants []en
 		creatorIDs = append(creatorIDs, variant.CreatedBy)
 	}
 
-	var nodeCounts []struct {
-		VariantID int64
-		Count     int64
-	}
-	if err := s.db.WithContext(ctx).
-		Model(&entity.Node{}).
-		Select("variant_id, COUNT(*) AS count").
-		Where("variant_id IN ?", variantIDs).
-		Group("variant_id").
-		Scan(&nodeCounts).Error; err != nil {
+	countByVariantID, err := s.variantRepo.CountNodesByVariantIDs(ctx, variantIDs)
+	if err != nil {
 		return nil, err
 	}
-
-	countByVariantID := make(map[int64]int32, len(nodeCounts))
-	for _, item := range nodeCounts {
-		countByVariantID[item.VariantID] = int32(item.Count)
-	}
-
-	var creators []entity.User
-	if err := s.db.WithContext(ctx).
-		Where("id IN ?", creatorIDs).
-		Find(&creators).Error; err != nil {
+	creatorByID, err := s.variantRepo.ListCreatorsByIDs(ctx, creatorIDs)
+	if err != nil {
 		return nil, err
-	}
-
-	creatorByID := make(map[int64]*entity.User, len(creators))
-	for i := range creators {
-		user := creators[i]
-		creatorByID[user.ID] = &user
 	}
 
 	details := make([]VariantDetail, 0, len(variants))

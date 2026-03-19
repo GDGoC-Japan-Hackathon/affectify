@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProjectCard } from '@/components/features/project/ProjectCard';
-import { mockProjects, mockUser } from '@/data/mockData';
 import { Project } from '@/types/type';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,19 +14,40 @@ import {
   Plus,
 } from 'lucide-react';
 import { CreateProjectDialog } from '@/components/CreateProjectDialog';
+import { deleteProject, listProjects } from '@/lib/api/projects';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'score'>('recent');
   const [sortOpen, setSortOpen] = useState(false);
   const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Filter and sort projects - only show MY projects
+  useEffect(() => {
+    void loadProjects();
+  }, []);
+
+  async function loadProjects() {
+    try {
+      setIsLoading(true);
+      const result = await listProjects({
+        onlyOwned: true,
+        includeVariants: true,
+        includeMembers: true,
+      });
+      setProjects(result);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'プロジェクト一覧の取得に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   const filteredProjects = useMemo(() => {
-    let filtered = projects.filter(p => p.ownerId === mockUser.id);
+    let filtered = [...projects];
 
-    // Sort
     filtered = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -45,9 +65,15 @@ export default function Dashboard() {
 
   const myProjectsCount = filteredProjects.length;
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('このプロジェクトを削除してもよろしいですか？')) {
-      setProjects(prev => prev.filter(p => p.id !== id));
+      try {
+        await deleteProject(id);
+        setProjects(prev => prev.filter(p => p.id !== id));
+        toast.success('プロジェクトを削除しました');
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'プロジェクトの削除に失敗しました');
+      }
     }
   };
 
@@ -115,7 +141,11 @@ export default function Dashboard() {
         </div>
 
         {/* Projects */}
-        {filteredProjects.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <p className="text-gray-500">読み込み中...</p>
+          </div>
+        ) : filteredProjects.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <Folder className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500">
@@ -144,6 +174,9 @@ export default function Dashboard() {
         <CreateProjectDialog
           open={showCreateProjectDialog}
           onOpenChange={setShowCreateProjectDialog}
+          onCreated={() => {
+            void loadProjects();
+          }}
         />
       </div>
   );

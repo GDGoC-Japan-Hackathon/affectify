@@ -10,7 +10,7 @@ export default function WorkspacePage() {
 
   return (
     <div className="w-screen h-screen">
-      <Whiteboard boardNodes={useLargeMock ? mockNodesLarge : mockNodes} boardEdges={useLargeMock ? mockEdgesLarge : mockEdges} />
+      <Whiteboard variantId="local-preview" boardNodes={useLargeMock ? mockNodesLarge : mockNodes} boardEdges={useLargeMock ? mockEdgesLarge : mockEdges} />
     </div>
   );
 }

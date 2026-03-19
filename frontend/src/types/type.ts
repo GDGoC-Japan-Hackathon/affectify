@@ -31,6 +31,15 @@ export interface User {
   avatar?: string;
 }
 
+export interface ProjectMemberSummary {
+  userId: string;
+  addedBy: string;
+  role: string;
+  joinedAt: Date;
+  user?: User;
+  addedByUser?: User;
+}
+
 export interface Variant {
   id: string;
   name: string;
@@ -50,16 +59,21 @@ export interface Project {
   name: string;
   description: string;
   ownerId: string;
+  owner?: User;
   createdAt: Date;
   updatedAt: Date;
   nodeCount: number;
   analysisScore?: number;
   variants: Variant[];
   members: string[];
+  memberSummaries?: ProjectMemberSummary[];
+  mainVariantId?: string;
 
   // AI分析結果
   analysisReport?: AnalysisReport;
 }
+
+export type DesignGuideVisibility = 'private' | 'project' | 'public';
 
 export interface DesignGuide {
   id: string;
@@ -69,6 +83,8 @@ export interface DesignGuide {
   createdAt: Date;
   updatedAt: Date;
   content: string;
+  visibility: DesignGuideVisibility;
+  isTemplate: boolean;
 
   // 統計（計算値）
   likeCount: number;
