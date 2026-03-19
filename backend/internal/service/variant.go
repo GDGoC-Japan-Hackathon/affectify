@@ -52,6 +52,13 @@ type UpdateVariantInput struct {
 	SourceRootURI  *string
 }
 
+type UpdateVariantDesignGuideInput struct {
+	ID          int64
+	Title       string
+	Description string
+	Content     string
+}
+
 type CreateLayoutJobInput struct {
 	VariantID  int64
 	LayoutType string
@@ -313,6 +320,33 @@ func (s *VariantService) GetVariantWorkspace(ctx context.Context, firebaseUID st
 	return workspace, nil
 }
 
+func (s *VariantService) UpdateVariantDesignGuide(
+	ctx context.Context,
+	firebaseUID string,
+	input UpdateVariantDesignGuideInput,
+) (*entity.VariantDesignGuide, error) {
+	guide, requester, err := s.requireVariantDesignGuideAccess(ctx, firebaseUID, input.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	guide.Title = input.Title
+	if input.Description == "" {
+		guide.Description = nil
+	} else {
+		guide.Description = &input.Description
+	}
+	guide.Content = input.Content
+	guide.Version++
+	guide.CreatedBy = requester.ID
+
+	if err := s.variantRepo.SaveDesignGuide(ctx, guide); err != nil {
+		return nil, err
+	}
+
+	return guide, nil
+}
+
 func (s *VariantService) CreateGraphBuildJob(ctx context.Context, firebaseUID string, variantID int64) (*entity.GraphBuildJob, error) {
 	requester, err := s.requireUser(ctx, firebaseUID)
 	if err != nil {
@@ -454,6 +488,36 @@ func (s *VariantService) requireVariantAccess(ctx context.Context, firebaseUID s
 	}
 
 	return variant, requester, nil
+}
+
+func (s *VariantService) requireVariantDesignGuideAccess(ctx context.Context, firebaseUID string, designGuideID int64) (*entity.VariantDesignGuide, *entity.User, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	guide, err := s.variantRepo.FindDesignGuideByID(ctx, designGuideID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if guide == nil {
+		return nil, nil, ErrDesignGuideNotFound
+	}
+
+	variant, err := s.getVariantEntity(ctx, guide.VariantID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hasAccess, err := s.projectRepo.HasAccess(ctx, variant.ProjectID, requester.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !hasAccess {
+		return nil, nil, ErrForbidden
+	}
+
+	return guide, requester, nil
 }
 
 func (s *VariantService) attachVariantDetails(ctx context.Context, variants []entity.Variant) ([]VariantDetail, error) {

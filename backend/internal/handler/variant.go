@@ -177,6 +177,30 @@ func (h *VariantServiceHandler) GetVariantWorkspace(
 	}), nil
 }
 
+func (h *VariantServiceHandler) UpdateVariantDesignGuide(
+	ctx context.Context,
+	req *connect.Request[apiv1.UpdateVariantDesignGuideRequest],
+) (*connect.Response[apiv1.UpdateVariantDesignGuideResponse], error) {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+
+	designGuide, err := h.variantService.UpdateVariantDesignGuide(ctx, identity.UID, service.UpdateVariantDesignGuideInput{
+		ID:          req.Msg.Id,
+		Title:       req.Msg.Title,
+		Description: req.Msg.Description,
+		Content:     req.Msg.Content,
+	})
+	if err != nil {
+		return nil, mapVariantError(err)
+	}
+
+	return connect.NewResponse(&apiv1.UpdateVariantDesignGuideResponse{
+		DesignGuide: toProtoVariantDesignGuide(designGuide),
+	}), nil
+}
+
 func (h *VariantServiceHandler) CreateGraphBuildJob(
 	ctx context.Context,
 	req *connect.Request[apiv1.CreateGraphBuildJobRequest],

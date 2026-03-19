@@ -16,6 +16,7 @@ service VariantService {
   rpc UpdateVariant(UpdateVariantRequest) returns (UpdateVariantResponse) {}
   rpc DeleteVariant(DeleteVariantRequest) returns (DeleteVariantResponse) {}
   rpc GetVariantWorkspace(GetVariantWorkspaceRequest) returns (GetVariantWorkspaceResponse) {}
+  rpc UpdateVariantDesignGuide(UpdateVariantDesignGuideRequest) returns (UpdateVariantDesignGuideResponse) {}
   rpc CreateGraphBuildJob(CreateGraphBuildJobRequest) returns (CreateGraphBuildJobResponse) {}
   rpc GetGraphBuildJob(GetGraphBuildJobRequest) returns (GetGraphBuildJobResponse) {}
   rpc CreateLayoutJob(CreateLayoutJobRequest) returns (CreateLayoutJobResponse) {}
@@ -147,6 +148,17 @@ message GetVariantWorkspaceResponse {
   VariantDesignGuide design_guide = 3;
   repeated Node nodes = 4;
   repeated Edge edges = 5;
+}
+
+message UpdateVariantDesignGuideRequest {
+  int64 id = 1;
+  string title = 2;
+  string description = 3;
+  string content = 4;
+}
+
+message UpdateVariantDesignGuideResponse {
+  VariantDesignGuide design_guide = 1;
 }
 
 message CreateGraphBuildJobRequest {

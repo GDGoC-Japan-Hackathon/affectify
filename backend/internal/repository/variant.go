@@ -123,6 +123,26 @@ func (r *VariantRepository) FindDesignGuideByVariantID(ctx context.Context, vari
 	return designGuide, nil
 }
 
+func (r *VariantRepository) FindDesignGuideByID(ctx context.Context, id int64) (*entity.VariantDesignGuide, error) {
+	q := query.Use(r.db)
+	vdg := q.VariantDesignGuide
+	designGuide, err := vdg.WithContext(ctx).
+		Where(vdg.ID.Eq(id)).
+		First()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return designGuide, nil
+}
+
+func (r *VariantRepository) SaveDesignGuide(ctx context.Context, designGuide *entity.VariantDesignGuide) error {
+	q := query.Use(r.db)
+	return q.VariantDesignGuide.WithContext(ctx).Save(designGuide)
+}
+
 func (r *VariantRepository) ListNodesByVariantID(ctx context.Context, variantID int64) ([]entity.Node, error) {
 	q := query.Use(r.db)
 	n := q.Node
