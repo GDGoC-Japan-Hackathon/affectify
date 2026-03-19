@@ -131,7 +131,7 @@ export async function getGraphBuildJob(jobId: string): Promise<GraphBuildJob> {
   };
 }
 
-export async function createLayoutJob(variantId: string, layoutType = "dagre"): Promise<LayoutJob> {
+export async function createLayoutJob(variantId: string, layoutType = "grid"): Promise<LayoutJob> {
   const response = await variantClient.createLayoutJob(
     create(CreateLayoutJobRequestSchema, {
       variantId: BigInt(variantId),
