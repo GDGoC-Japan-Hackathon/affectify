@@ -164,6 +164,7 @@ export function AIReviewProvider({
   }, []);
 
   const refreshReview = useCallback(async () => {
+    if (!variantId) return;
     setIsLoading(true);
     setError("");
 
@@ -220,6 +221,7 @@ export function AIReviewProvider({
   }, [ensureCardChats, selectedCardId]);
 
   const loadReview = useCallback(async () => {
+    if (!variantId) return;
     setError("");
     setIsReviewRunning(true);
 

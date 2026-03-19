@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -18,6 +18,7 @@ import {
 
 import { createGraphBuildJob, getGraphBuildJob, updateVariant } from "@/lib/api/variants";
 import { uploadVariantSource } from "@/lib/api/variant-sources";
+import { useAuth } from "@/lib/auth";
 
 type Step = "select" | "tree" | "confirm" | "building";
 
@@ -30,7 +31,7 @@ interface FileTreeNode {
   language?: string;
 }
 
-const DEFAULT_EXCLUDES = [
+const DEFAULT_EXCLUDE_DIRS = [
   "node_modules",
   ".git",
   "dist",
@@ -42,6 +43,20 @@ const DEFAULT_EXCLUDES = [
   "target",
   ".idea",
   ".vscode",
+];
+
+const DEFAULT_EXCLUDE_FILE_PATTERNS = [
+  /^\.env$/i,
+  /^\.env\..+$/i,
+  /\.md$/i,
+  /\.sh$/i,
+  /\.gen\.go$/i,
+  /\.pb\.go$/i,
+  /_connect\.go$/i,
+  /^package-lock\.json$/i,
+  /^pnpm-lock\.ya?ml$/i,
+  /^yarn\.lock$/i,
+  /^bun\.lockb?$/i,
 ];
 
 const EXT_TO_LANG: Record<string, string> = {
@@ -72,7 +87,14 @@ function detectLanguage(name: string): string {
 }
 
 function shouldAutoExclude(pathValue: string): boolean {
-  return pathValue.split("/").some((segment) => DEFAULT_EXCLUDES.includes(segment));
+  const normalized = pathValue.replaceAll("\\", "/");
+  const fileName = normalized.split("/").pop() ?? normalized;
+
+  if (normalized.split("/").some((segment) => DEFAULT_EXCLUDE_DIRS.includes(segment))) {
+    return true;
+  }
+
+  return DEFAULT_EXCLUDE_FILE_PATTERNS.some((pattern) => pattern.test(fileName));
 }
 
 function buildTree(files: File[]): FileTreeNode {
@@ -179,6 +201,7 @@ export default function ImportPage() {
   const params = useParams<{ variantId: string }>();
   const variantId = Array.isArray(params?.variantId) ? params.variantId[0] : params?.variantId;
   const router = useRouter();
+  const { loading: authLoading, user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>("select");
@@ -186,6 +209,12 @@ export default function ImportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [buildStatus, setBuildStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [buildError, setBuildError] = useState("");
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [authLoading, router, user]);
 
   const handleFolderSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -274,6 +303,10 @@ export default function ImportPage() {
 
   if (!variantId) {
     return <div className="grid min-h-screen place-items-center text-sm text-slate-500">variantId が不正です</div>;
+  }
+
+  if (authLoading || !user) {
+    return <div className="grid min-h-screen place-items-center text-sm text-slate-500">認証状態を確認中...</div>;
   }
 
   return (

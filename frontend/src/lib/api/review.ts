@@ -98,6 +98,9 @@ export async function listReviewFeedbacks(options: ListReviewFeedbacksOptions): 
   feedbacks: ReviewFeedback[];
   targets: ReviewFeedbackTarget[];
 }> {
+  if (!options.variantId) {
+    return { feedbacks: [], targets: [] };
+  }
   const response = await reviewClient.listReviewFeedbacks(
     create(ListReviewFeedbacksRequestSchema, {
       variantId: BigInt(options.variantId),
