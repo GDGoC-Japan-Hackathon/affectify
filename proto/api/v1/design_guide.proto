@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package api.v1;
 
-option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
-
 import "api/v1/common.proto";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
 
 service DesignGuideService {
   rpc ListDesignGuides(ListDesignGuidesRequest) returns (ListDesignGuidesResponse) {}

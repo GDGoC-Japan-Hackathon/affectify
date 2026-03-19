@@ -2,12 +2,12 @@ syntax = "proto3";
 
 package api.v1;
 
-option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
-
 import "api/v1/common.proto";
-import "api/v1/node.proto";
 import "api/v1/edge.proto";
+import "api/v1/node.proto";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
 
 service VariantService {
   rpc ListVariants(ListVariantsRequest) returns (ListVariantsResponse) {}

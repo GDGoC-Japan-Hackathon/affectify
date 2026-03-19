@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package api.v1;
 
-option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
-
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
 
 message UserSummary {
   int64 id = 1;
