@@ -1,11 +1,15 @@
 package entity
 
 type DesignGuide struct {
-	ID          int64   `gorm:"column:id;primaryKey;autoIncrement"`
-	Name        string  `gorm:"column:name;type:varchar(255);not null"`
-	Description *string `gorm:"column:description;type:text"`
-	Content     string  `gorm:"column:content;type:text;not null"`
-	CreatedBy   int64   `gorm:"column:created_by;not null;index"`
+	ID            int64                 `gorm:"column:id;primaryKey;autoIncrement"`
+	Name          string                `gorm:"column:name;type:varchar(255);not null"`
+	Description   *string               `gorm:"column:description;type:text"`
+	Content       string                `gorm:"column:content;type:text;not null"`
+	Visibility    DesignGuideVisibility `gorm:"column:visibility;type:varchar(30);not null;default:private;index"`
+	SourceGuideID *int64                `gorm:"column:source_guide_id;index"`
+	IsTemplate    bool                  `gorm:"column:is_template;not null;default:false;index"`
+	CreatedBy     int64                 `gorm:"column:created_by;not null;index"`
+	PublishedAt   *Time                 `gorm:"column:published_at"`
 	Timestamped
 }
 

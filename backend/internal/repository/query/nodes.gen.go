@@ -30,9 +30,9 @@ func newNode(db *gorm.DB, opts ...gen.DOOption) node {
 	_node.ALL = field.NewAsterisk(tableName)
 	_node.ID = field.NewInt64(tableName, "id")
 	_node.VariantID = field.NewInt64(tableName, "variant_id")
+	_node.VariantFileID = field.NewInt64(tableName, "variant_file_id")
 	_node.Kind = field.NewString(tableName, "kind")
 	_node.Title = field.NewString(tableName, "title")
-	_node.FilePath = field.NewString(tableName, "file_path")
 	_node.Signature = field.NewString(tableName, "signature")
 	_node.Receiver = field.NewString(tableName, "receiver")
 	_node.CodeText = field.NewString(tableName, "code_text")
@@ -50,20 +50,20 @@ func newNode(db *gorm.DB, opts ...gen.DOOption) node {
 type node struct {
 	nodeDo nodeDo
 
-	ALL       field.Asterisk
-	ID        field.Int64
-	VariantID field.Int64
-	Kind      field.String
-	Title     field.String
-	FilePath  field.String
-	Signature field.String
-	Receiver  field.String
-	CodeText  field.String
-	PositionX field.Float64
-	PositionY field.Float64
-	Metadata  field.Field
-	CreatedAt field.Time
-	UpdatedAt field.Time
+	ALL           field.Asterisk
+	ID            field.Int64
+	VariantID     field.Int64
+	VariantFileID field.Int64
+	Kind          field.String
+	Title         field.String
+	Signature     field.String
+	Receiver      field.String
+	CodeText      field.String
+	PositionX     field.Float64
+	PositionY     field.Float64
+	Metadata      field.Field
+	CreatedAt     field.Time
+	UpdatedAt     field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -82,9 +82,9 @@ func (n *node) updateTableName(table string) *node {
 	n.ALL = field.NewAsterisk(table)
 	n.ID = field.NewInt64(table, "id")
 	n.VariantID = field.NewInt64(table, "variant_id")
+	n.VariantFileID = field.NewInt64(table, "variant_file_id")
 	n.Kind = field.NewString(table, "kind")
 	n.Title = field.NewString(table, "title")
-	n.FilePath = field.NewString(table, "file_path")
 	n.Signature = field.NewString(table, "signature")
 	n.Receiver = field.NewString(table, "receiver")
 	n.CodeText = field.NewString(table, "code_text")
@@ -120,9 +120,9 @@ func (n *node) fillFieldMap() {
 	n.fieldMap = make(map[string]field.Expr, 13)
 	n.fieldMap["id"] = n.ID
 	n.fieldMap["variant_id"] = n.VariantID
+	n.fieldMap["variant_file_id"] = n.VariantFileID
 	n.fieldMap["kind"] = n.Kind
 	n.fieldMap["title"] = n.Title
-	n.fieldMap["file_path"] = n.FilePath
 	n.fieldMap["signature"] = n.Signature
 	n.fieldMap["receiver"] = n.Receiver
 	n.fieldMap["code_text"] = n.CodeText

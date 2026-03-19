@@ -3,17 +3,17 @@ package entity
 import "gorm.io/datatypes"
 
 type Node struct {
-	ID        int64          `gorm:"column:id;primaryKey;autoIncrement"`
-	VariantID int64          `gorm:"column:variant_id;not null;index"`
-	Kind      NodeKind       `gorm:"column:kind;type:varchar(50);not null;index"`
-	Title     string         `gorm:"column:title;type:varchar(255);not null;index"`
-	FilePath  *string        `gorm:"column:file_path;type:text"`
-	Signature *string        `gorm:"column:signature;type:text"`
-	Receiver  *string        `gorm:"column:receiver;type:text"`
-	CodeText  *string        `gorm:"column:code_text;type:text"`
-	PositionX float64        `gorm:"column:position_x;not null;default:0"`
-	PositionY float64        `gorm:"column:position_y;not null;default:0"`
-	Metadata  datatypes.JSON `gorm:"column:metadata;type:jsonb"`
+	ID            int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	VariantID     int64          `gorm:"column:variant_id;not null;index"`
+	VariantFileID *int64         `gorm:"column:variant_file_id;index"`
+	Kind          NodeKind       `gorm:"column:kind;type:varchar(50);not null;index"`
+	Title         string         `gorm:"column:title;type:varchar(255);not null;index"`
+	Signature     *string        `gorm:"column:signature;type:text"`
+	Receiver      *string        `gorm:"column:receiver;type:text"`
+	CodeText      *string        `gorm:"column:code_text;type:text"`
+	PositionX     float64        `gorm:"column:position_x;not null;default:0"`
+	PositionY     float64        `gorm:"column:position_y;not null;default:0"`
+	Metadata      datatypes.JSON `gorm:"column:metadata;type:jsonb"`
 	Timestamped
 }
 
