@@ -48,6 +48,16 @@ type Result struct {
 	Edges []ParsedEdge
 }
 
+// defaultExcludedDirs are directory name segments that indicate auto-generated code.
+var defaultExcludedDirs = []string{
+	"gen", "vendor", "mock", "mocks", "testdata",
+}
+
+// defaultExcludedSuffixes are file name suffixes that indicate auto-generated code.
+var defaultExcludedSuffixes = []string{
+	".gen.go", ".pb.go", ".connect.go", "_mock.go", "_test.go",
+}
+
 // Parser analyzes Go source code and extracts declarations and call relationships.
 type Parser struct {
 	fset        *token.FileSet
@@ -116,8 +126,14 @@ func (p *Parser) Parse() (*Result, error) {
 
 // extractNodes extracts all declarations (functions, methods, types, etc.) from a package.
 func (p *Parser) extractNodes(pkg *packages.Package) {
+	if pkg.TypesInfo == nil {
+		return // skip packages that failed to type-check (e.g. compile errors)
+	}
 	for i, file := range pkg.Syntax {
 		relPath := p.relativeFilePath(pkg, i, file)
+		if isExcluded(relPath) {
+			continue
+		}
 		p.collectFileInfo(file, relPath)
 
 		ast.Inspect(file, func(n ast.Node) bool {
@@ -165,6 +181,31 @@ func (p *Parser) relToBase(path string) string {
 		return relPath
 	}
 	return absPath
+}
+
+// isExcluded returns true if the file path should be skipped (auto-generated or test files).
+func isExcluded(relPath string) bool {
+	normalized := filepath.ToSlash(relPath)
+	parts := strings.Split(normalized, "/")
+
+	// Check directory segments
+	for _, part := range parts[:len(parts)-1] {
+		for _, excluded := range defaultExcludedDirs {
+			if part == excluded {
+				return true
+			}
+		}
+	}
+
+	// Check file name suffixes
+	fileName := parts[len(parts)-1]
+	for _, suffix := range defaultExcludedSuffixes {
+		if strings.HasSuffix(fileName, suffix) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // collectFileInfo records package name and imports for a source file.
@@ -331,7 +372,14 @@ func (p *Parser) inferLayer(filePath string) string {
 
 // extractEdges extracts call relationships from a package.
 func (p *Parser) extractEdges(pkg *packages.Package) {
-	for _, file := range pkg.Syntax {
+	if pkg.TypesInfo == nil {
+		return
+	}
+	for i, file := range pkg.Syntax {
+		relPath := p.relativeFilePath(pkg, i, file)
+		if isExcluded(relPath) {
+			continue
+		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
@@ -391,17 +439,26 @@ func (p *Parser) resolveCallee(pkg *packages.Package, call *ast.CallExpr) string
 	case *ast.Ident:
 		if obj := pkg.TypesInfo.Uses[fn]; obj != nil {
 			if f, ok := obj.(*types.Func); ok {
+				if f.Pkg() == nil {
+					return ""
+				}
 				return f.FullName()
 			}
 		}
 	case *ast.SelectorExpr:
 		if sel := pkg.TypesInfo.Selections[fn]; sel != nil {
 			if f, ok := sel.Obj().(*types.Func); ok {
+				if f.Pkg() == nil {
+					return ""
+				}
 				recvName := p.extractTypeName(sel.Recv())
 				return fmt.Sprintf("%s.(%s).%s", f.Pkg().Path(), recvName, f.Name())
 			}
 		} else if obj := pkg.TypesInfo.Uses[fn.Sel]; obj != nil {
 			if f, ok := obj.(*types.Func); ok {
+				if f.Pkg() == nil {
+					return ""
+				}
 				return f.FullName()
 			}
 		}
