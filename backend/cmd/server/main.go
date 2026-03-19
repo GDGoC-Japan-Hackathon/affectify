@@ -47,18 +47,27 @@ func main() {
 	}
 
 	interceptors := connect.WithInterceptors(auth.NewInterceptor(verifier))
+	jobDispatcher := service.NewJobDispatcher(config.LoadJobRuntimeConfig())
 
 	userRepository := repository.NewUserRepository(db)
 	healthService := service.NewHealthService()
 	userService := service.NewUserService(userRepository)
+	variantService := service.NewVariantService(db, userRepository, jobDispatcher)
+	reviewService := service.NewReviewService(db, userRepository, jobDispatcher)
 	healthHandler := handler.NewHealthServiceHandler(healthService)
 	userHandler := handler.NewUserServiceHandler(userService)
+	variantHandler := handler.NewVariantServiceHandler(variantService)
+	reviewHandler := handler.NewReviewServiceHandler(reviewService)
 
 	mux := http.NewServeMux()
 	healthPath, healthHTTPHandler := apiv1connect.NewHealthServiceHandler(healthHandler, interceptors)
 	mux.Handle(healthPath, healthHTTPHandler)
 	userPath, userHTTPHandler := apiv1connect.NewUserServiceHandler(userHandler, interceptors)
 	mux.Handle(userPath, userHTTPHandler)
+	variantPath, variantHTTPHandler := apiv1connect.NewVariantServiceHandler(variantHandler, interceptors)
+	mux.Handle(variantPath, variantHTTPHandler)
+	reviewPath, reviewHTTPHandler := apiv1connect.NewReviewServiceHandler(reviewHandler, interceptors)
+	mux.Handle(reviewPath, reviewHTTPHandler)
 
 	port := config.GetEnv("APP_PORT", "8080")
 	addr := ":" + port
