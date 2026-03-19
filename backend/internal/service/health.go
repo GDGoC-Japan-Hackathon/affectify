@@ -1,10 +1,10 @@
 package service
 
-import (
-	"context"
+import "context"
 
-	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/entity"
-)
+type HealthStatus struct {
+	Status string `json:"status"`
+}
 
 type HealthService struct{}
 
@@ -12,8 +12,6 @@ func NewHealthService() *HealthService {
 	return &HealthService{}
 }
 
-func (s *HealthService) Check(ctx context.Context) entity.HealthStatus {
-	return entity.HealthStatus{
-		Status: "ok",
-	}
+func (s *HealthService) Check(ctx context.Context) HealthStatus {
+	return HealthStatus{Status: "ok"}
 }

@@ -32,6 +32,8 @@ func newVariantFile(db *gorm.DB, opts ...gen.DOOption) variantFile {
 	_variantFile.VariantID = field.NewInt64(tableName, "variant_id")
 	_variantFile.Path = field.NewString(tableName, "path")
 	_variantFile.Language = field.NewString(tableName, "language")
+	_variantFile.PackageName = field.NewString(tableName, "package_name")
+	_variantFile.Imports = field.NewField(tableName, "imports")
 	_variantFile.NodeCount = field.NewInt32(tableName, "node_count")
 	_variantFile.IsVisible = field.NewBool(tableName, "is_visible")
 	_variantFile.DisplayOrder = field.NewInt32(tableName, "display_order")
@@ -51,6 +53,8 @@ type variantFile struct {
 	VariantID    field.Int64
 	Path         field.String
 	Language     field.String
+	PackageName  field.String
+	Imports      field.Field
 	NodeCount    field.Int32
 	IsVisible    field.Bool
 	DisplayOrder field.Int32
@@ -76,6 +80,8 @@ func (v *variantFile) updateTableName(table string) *variantFile {
 	v.VariantID = field.NewInt64(table, "variant_id")
 	v.Path = field.NewString(table, "path")
 	v.Language = field.NewString(table, "language")
+	v.PackageName = field.NewString(table, "package_name")
+	v.Imports = field.NewField(table, "imports")
 	v.NodeCount = field.NewInt32(table, "node_count")
 	v.IsVisible = field.NewBool(table, "is_visible")
 	v.DisplayOrder = field.NewInt32(table, "display_order")
@@ -107,11 +113,13 @@ func (v *variantFile) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (v *variantFile) fillFieldMap() {
-	v.fieldMap = make(map[string]field.Expr, 9)
+	v.fieldMap = make(map[string]field.Expr, 11)
 	v.fieldMap["id"] = v.ID
 	v.fieldMap["variant_id"] = v.VariantID
 	v.fieldMap["path"] = v.Path
 	v.fieldMap["language"] = v.Language
+	v.fieldMap["package_name"] = v.PackageName
+	v.fieldMap["imports"] = v.Imports
 	v.fieldMap["node_count"] = v.NodeCount
 	v.fieldMap["is_visible"] = v.IsVisible
 	v.fieldMap["display_order"] = v.DisplayOrder

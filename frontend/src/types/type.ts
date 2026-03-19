@@ -1,4 +1,4 @@
-export type NodeKind = "function" | "method" | "interface" | "group" | "note" | "memo" | "image" | "drawing";
+export type NodeKind = "function" | "method" | "interface" | "struct" | "type" | "const" | "var" | "group" | "note" | "memo" | "image" | "drawing";
 
 export type EdgeKind = "call" | "import" | "implement";
 
@@ -69,6 +69,8 @@ export interface DesignGuide {
   createdAt: Date;
   updatedAt: Date;
   content: string;
+  isTemplate?: boolean;
+  visibility?: "private" | "project" | "public";
 
   // 統計（計算値）
   likeCount: number;
