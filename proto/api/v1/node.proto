@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service NodeService {
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse) {}
+  rpc CreateNode(CreateNodeRequest) returns (CreateNodeResponse) {}
+  rpc UpdateNode(UpdateNodeRequest) returns (UpdateNodeResponse) {}
+  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse) {}
+}
+
+message Node {
+  int64 id = 1;
+  int64 variant_id = 2;
+  optional int64 variant_file_id = 3;
+  string kind = 4; // "function", "method", "interface", "group", "note", "image"
+  string title = 5;
+  string signature = 6;
+  string receiver = 7;
+  string code_text = 8;
+  double x = 9;
+  double y = 10;
+  google.protobuf.Struct metadata = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message ListNodesRequest {
+  int64 variant_id = 1;
+}
+
+message ListNodesResponse {
+  repeated Node nodes = 1;
+}
+
+message CreateNodeRequest {
+  int64 variant_id = 1;
+  optional int64 variant_file_id = 2;
+  string kind = 3;
+  string title = 4;
+  string signature = 5;
+  string receiver = 6;
+  string code_text = 7;
+  double x = 8;
+  double y = 9;
+  google.protobuf.Struct metadata = 10;
+}
+
+message CreateNodeResponse {
+  Node node = 1;
+}
+
+message UpdateNodeRequest {
+  int64 id = 1;
+  string title = 2;
+  string code_text = 3;
+  double x = 4;
+  double y = 5;
+  string signature = 6;
+  string receiver = 7;
+  google.protobuf.Struct metadata = 8;
+}
+
+message UpdateNodeResponse {
+  Node node = 1;
+}
+
+message DeleteNodeRequest {
+  int64 id = 1;
+}
+
+message DeleteNodeResponse {}

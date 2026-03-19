@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service AnalysisService {
+  rpc RunAnalysis(RunAnalysisRequest) returns (RunAnalysisResponse) {}
+  rpc GetAnalysisReport(GetAnalysisReportRequest) returns (GetAnalysisReportResponse) {}
+}
+
+message AnalysisReport {
+  int64 id = 1;
+  int64 variant_id = 2;
+  int32 overall_score = 3;
+  google.protobuf.Struct report_data = 4;
+  google.protobuf.Timestamp analyzed_at = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message RunAnalysisRequest {
+  int64 variant_id = 1;
+}
+
+message RunAnalysisResponse {
+  AnalysisReport report = 1;
+}
+
+message GetAnalysisReportRequest {
+  int64 variant_id = 1;
+}
+
+message GetAnalysisReportResponse {
+  AnalysisReport report = 1;
+}

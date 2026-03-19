@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+import "api/v1/common.proto";
+import "api/v1/variant.proto";
+import "google/protobuf/timestamp.proto";
+
+service ProjectService {
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {}
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse) {}
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {}
+  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) {}
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {}
+}
+
+message Project {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  int64 owner_id = 4;
+  UserSummary owner = 5;
+  int32 node_count = 6;
+  optional int32 analysis_score = 7;
+  repeated Variant variants = 8;
+  repeated ProjectMember members = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message ListProjectsRequest {
+  string query = 1;
+  bool only_owned = 2;
+  bool only_joined = 3;
+  bool include_variants = 4;
+  bool include_members = 5;
+}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message GetProjectRequest {
+  int64 id = 1;
+  bool include_variants = 2;
+  bool include_members = 3;
+}
+
+message GetProjectResponse {
+  Project project = 1;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  string description = 2;
+}
+
+message CreateProjectResponse {
+  Project project = 1;
+}
+
+message UpdateProjectRequest {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+}
+
+message UpdateProjectResponse {
+  Project project = 1;
+}
+
+message DeleteProjectRequest {
+  int64 id = 1;
+}
+
+message DeleteProjectResponse {}
