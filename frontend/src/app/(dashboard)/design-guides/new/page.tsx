@@ -1,50 +1,46 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Editor from '@monaco-editor/react';
 import { ArrowLeft, Code, Eye, Save } from 'lucide-react';
-import { getDesignGuide, updateDesignGuide } from '@/lib/api/design-guides';
+import { createDesignGuide, getDesignGuide } from '@/lib/api/design-guides';
 import type { DesignGuideVisibility } from '@/types/type';
 import { toast } from 'sonner';
 
 type ViewMode = 'edit' | 'preview' | 'split';
 
-export default function DesignGuideEditor() {
-  const { guideId } = useParams<{ guideId: string }>();
+export default function NewDesignGuidePage() {
+  return (
+    <Suspense>
+      <NewDesignGuideForm />
+    </Suspense>
+  );
+}
+
+function NewDesignGuideForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const templateId = searchParams.get('templateId');
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(getDefaultTemplate());
   const [visibility, setVisibility] = useState<DesignGuideVisibility>('private');
   const [viewMode, setViewMode] = useState<ViewMode>('split');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  // テンプレートから作成する場合はコンテンツを引き継ぐ
   useEffect(() => {
-    if (!guideId) return;
-    let cancelled = false;
+    if (!templateId) return;
 
-    getDesignGuide(guideId)
+    getDesignGuide(templateId)
       .then((guide) => {
-        if (cancelled) return;
-        setName(guide.name);
-        setDescription(guide.description);
         setContent(guide.content);
-        setVisibility(guide.visibility);
+        setDescription(guide.description);
       })
-      .catch((error) => {
-        if (cancelled) return;
-        toast.error(error instanceof Error ? error.message : '設計書の取得に失敗しました');
-        router.push('/design-guides');
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [guideId, router]);
+      .catch(() => {/* テンプレート取得失敗は無視 */});
+  }, [templateId]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -54,28 +50,19 @@ export default function DesignGuideEditor() {
 
     try {
       setIsSaving(true);
-      await updateDesignGuide({
-        id: guideId,
+      const guide = await createDesignGuide({
         name: name.trim(),
         description: description.trim(),
         content,
         visibility,
       });
-      toast.success('保存しました');
+      toast.success(`「${guide.name}」を作成しました`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '保存に失敗しました');
+      toast.error(error instanceof Error ? error.message : '設計書の作成に失敗しました');
     } finally {
       setIsSaving(false);
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
@@ -243,4 +230,42 @@ function MarkdownPreview({ content }: { content: string }) {
   });
 
   return <>{elements}</>;
+}
+
+function getDefaultTemplate(): string {
+  return `# 設計ガイドライン
+
+## 概要
+このセクションに設計の基本方針を記述します。
+
+## アーキテクチャ原則
+
+### 原則1: レイヤード アーキテクチャ
+- プレゼンテーション層
+- ビジネスロジック層
+- データアクセス層
+
+### 原則2: 依存関係の管理
+- 上位層から下位層への単方向依存
+- 循環依存の禁止
+
+## コーディング規約
+
+### 命名規則
+- クラス: PascalCase
+- 関数: camelCase
+- 定数: UPPER_SNAKE_CASE
+
+## 禁止事項
+- グローバル変数の使用
+- マジックナンバーの使用
+
+## 推奨パターン
+\`\`\`typescript
+// 推奨される書き方の例
+const example = () => {
+  // コード例
+};
+\`\`\`
+`;
 }

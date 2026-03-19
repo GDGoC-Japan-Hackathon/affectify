@@ -40,7 +40,8 @@ export default function DesignGuides() {
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'likes'>('recent');
   const [sortOpen, setSortOpen] = useState(false);
 
-  const [allGuides, setAllGuides] = useState<DesignGuide[]>([]);
+  const [guides, setGuides] = useState<DesignGuide[]>([]);
+  const [likedGuides, setLikedGuides] = useState<DesignGuide[]>([]);
   const [likedGuideIds, setLikedGuideIds] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -61,13 +62,23 @@ export default function DesignGuides() {
     async function load() {
       try {
         setIsLoading(true);
-        const [all, liked, meResponse] = await Promise.all([
-          listDesignGuides({}),
+        const listOptions =
+          activeTab === 'templates'
+            ? { query: searchQuery, onlyTemplates: true }
+            : activeTab === 'community'
+              ? { query: searchQuery, visibility: 'public' as const }
+              : activeTab === 'my-guides'
+                ? { query: searchQuery, createdByMe: true }
+                : { query: searchQuery, likedByMe: true };
+
+        const [listed, liked, meResponse] = await Promise.all([
+          listDesignGuides(listOptions),
           listDesignGuides({ likedByMe: true }),
           getMe(),
         ]);
         if (cancelled) return;
-        setAllGuides(all);
+        setGuides(listed);
+        setLikedGuides(liked);
         setLikedGuideIds(new Set(liked.map(g => g.id)));
         setCurrentUserId(meResponse.user?.id?.toString() ?? '');
       } catch (error) {
@@ -80,10 +91,25 @@ export default function DesignGuides() {
 
     void load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeTab, searchQuery]);
 
   const toggleLike = async (guideId: string) => {
     const isLiked = likedGuideIds.has(guideId);
+    const targetGuide = guides.find((guide) => guide.id === guideId);
+    setGuides((prev) =>
+      prev.map((guide) =>
+        guide.id === guideId
+          ? { ...guide, likeCount: guide.likeCount + (isLiked ? -1 : 1) }
+          : guide,
+      ),
+    );
+    setLikedGuides((prev) => {
+      if (!targetGuide) return prev;
+      if (isLiked) {
+        return prev.filter((guide) => guide.id !== guideId);
+      }
+      return [...prev, { ...targetGuide, likeCount: targetGuide.likeCount + 1 }];
+    });
     // オプティミスティック更新
     setLikedGuideIds(prev => {
       const next = new Set(prev);
@@ -98,6 +124,20 @@ export default function DesignGuides() {
         await likeDesignGuide(guideId);
       }
     } catch {
+      setGuides((prev) =>
+        prev.map((guide) =>
+          guide.id === guideId
+            ? { ...guide, likeCount: guide.likeCount + (isLiked ? 1 : -1) }
+            : guide,
+        ),
+      );
+      setLikedGuides((prev) => {
+        if (!targetGuide) return prev;
+        if (isLiked) {
+          return [...prev, targetGuide].sort((a, b) => b.likeCount - a.likeCount);
+        }
+        return prev.filter((guide) => guide.id !== guideId);
+      });
       // 失敗したらロールバック
       setLikedGuideIds(prev => {
         const next = new Set(prev);
@@ -109,25 +149,11 @@ export default function DesignGuides() {
     }
   };
 
-  const filteredGuides = allGuides.filter(guide => {
-    const matchesSearch =
-      guide.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      guide.description.toLowerCase().includes(searchQuery.toLowerCase());
-
-    if (!matchesSearch) return false;
-
-    switch (activeTab) {
-      case 'templates':
-        return guide.isTemplate === true;
-      case 'community':
-        return guide.visibility === 'public' && !guide.isTemplate && guide.createdBy !== currentUserId;
-      case 'my-guides':
-        return guide.createdBy === currentUserId;
-      case 'liked':
-        return likedGuideIds.has(guide.id);
-      default:
-        return true;
+  const filteredGuides = guides.filter((guide) => {
+    if (activeTab === 'community') {
+      return !guide.isTemplate && guide.createdBy !== currentUserId;
     }
+    return true;
   }).sort((a, b) => {
     switch (sortBy) {
       case 'name': return a.name.localeCompare(b.name);
@@ -136,10 +162,6 @@ export default function DesignGuides() {
       default: return b.updatedAt.getTime() - a.updatedAt.getTime();
     }
   });
-
-  const likedGuides = allGuides
-    .filter(g => likedGuideIds.has(g.id))
-    .sort((a, b) => b.likeCount - a.likeCount);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
