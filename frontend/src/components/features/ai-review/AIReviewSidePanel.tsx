@@ -11,7 +11,18 @@ interface AIReviewSidePanelProps {
 }
 
 export function AIReviewSidePanel({ onHighlightNodes, onClearHighlight }: AIReviewSidePanelProps) {
-  const { cards, selectedCardId, selectCard, overallScore, openModal, loadReview } = useAIReview();
+  const {
+    cards,
+    selectedCardId,
+    selectCard,
+    overallScore,
+    openModal,
+    loadReview,
+    isLoading,
+    isReviewRunning,
+    hasLoadedReview,
+    error,
+  } = useAIReview();
 
   const unresolvedCards = cards.filter((c) => !c.resolved);
   const resolvedCount = cards.filter((c) => c.resolved).length;
@@ -46,17 +57,26 @@ export function AIReviewSidePanel({ onHighlightNodes, onClearHighlight }: AIRevi
         )}
       </div>
 
-      {cards.length === 0 ? (
-        /* レビュー未実行 */
+      {isLoading ? (
+        <div className="flex flex-1 items-center justify-center px-4 text-sm text-slate-500">
+          レビュー結果を読み込み中...
+        </div>
+      ) : cards.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 text-center">
           <Sparkles className="size-8 text-indigo-400" />
-          <p className="text-sm text-slate-600">設計書とコードをAIがレビューします</p>
+          <p className="text-sm text-slate-600">
+            {hasLoadedReview
+              ? "レビューは完了しましたが、表示できるフィードバックはまだありません"
+              : "設計書とコードをAIがレビューします"}
+          </p>
           <button
-            onClick={loadReview}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            onClick={() => void loadReview()}
+            disabled={isReviewRunning}
+            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            レビューを開始
+            {isReviewRunning ? "レビュー中..." : hasLoadedReview ? "再評価する" : "レビューを開始"}
           </button>
+          {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
       ) : (
         <>

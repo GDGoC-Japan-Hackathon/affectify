@@ -61,7 +61,7 @@ export default function WorkspacePage() {
   }
 
   return (
-    <AIReviewProvider>
+    <AIReviewProvider variantId={variantId}>
       <div className="flex h-screen w-screen">
         {/* キャンバス */}
         <div className="relative flex-1 overflow-hidden">

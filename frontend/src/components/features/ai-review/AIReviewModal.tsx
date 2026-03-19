@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, RotateCcw, FileText, FolderCode, CheckCircle, Loader2 } from "lucide-react";
@@ -102,7 +101,7 @@ function ScanningScreen({ onCancel }: { onCancel: () => void }) {
         className="flex items-center gap-2 rounded-xl border border-slate-600 bg-[#2a1a08] px-6 py-3 text-sm font-medium text-slate-300 hover:bg-[#3a2010]"
       >
         <X className="size-4" />
-        再評価をキャンセル
+        画面を閉じる
       </button>
     </div>
   );
@@ -113,22 +112,22 @@ interface AIReviewModalProps {
 }
 
 export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
-  const { isModalOpen, closeModal, selectedCardId, selectCard, loadReview } = useAIReview();
+  const {
+    isModalOpen,
+    closeModal,
+    selectedCardId,
+    selectCard,
+    loadReview,
+    isReviewRunning,
+    error,
+    cards,
+  } = useAIReview();
 
   const handleViewNodes = (nodeIds: string[], edgeIds: string[]) => {
     closeModal();
     onViewNodes?.(nodeIds, edgeIds);
   };
-  const [isScanning, setIsScanning] = useState(false);
   if (typeof document === "undefined") return null;
-
-  const handleReEvaluate = () => {
-    setIsScanning(true);
-    setTimeout(() => {
-      loadReview();
-      setIsScanning(false);
-    }, 3000);
-  };
 
   return createPortal(
     <AnimatePresence>
@@ -140,8 +139,8 @@ export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
           transition={{ type: "spring", damping: 30, stiffness: 300 }}
           className="fixed inset-0 z-50 flex flex-col bg-[#111827]"
         >
-          {isScanning ? (
-            <ScanningScreen onCancel={() => setIsScanning(false)} />
+          {isReviewRunning ? (
+            <ScanningScreen onCancel={closeModal} />
           ) : (
             <>
               {/* ヘッダー */}
@@ -152,7 +151,7 @@ export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleReEvaluate}
+                    onClick={() => void loadReview()}
                     className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                   >
                     <RotateCcw className="size-3.5" />
@@ -169,6 +168,11 @@ export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
 
               {/* 上部: 3つの箱 */}
               <ResolutionBuckets />
+              {error && (
+                <div className="border-b border-red-900 bg-red-950/40 px-6 py-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
 
               {/* 下部: カード一覧 + チャット */}
               <div className="flex flex-1 overflow-hidden">
@@ -179,7 +183,7 @@ export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
                 />
                 </div>
                 <div className="w-3/5 overflow-hidden">
-                  {selectedCardId ? (
+                  {selectedCardId && cards.some((card) => card.id === selectedCardId) ? (
                     <ReviewChat />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500">
