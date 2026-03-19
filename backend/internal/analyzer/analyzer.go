@@ -115,6 +115,7 @@ func (p *Parser) Parse() (*Result, error) {
 	for _, pkg := range pkgs {
 		p.extractEdges(pkg)
 	}
+	p.extractReceiverEdges()
 	p.assignPositions()
 
 	return &Result{
@@ -474,6 +475,35 @@ func (p *Parser) extractTypeName(t types.Type) string {
 		return p.extractTypeName(typ.Elem())
 	}
 	return ""
+}
+
+// extractReceiverEdges creates edges from struct/interface nodes to their methods.
+func (p *Parser) extractReceiverEdges() {
+	for _, node := range p.nodes {
+		if node.Kind != "method" || node.Receiver == "" {
+			continue
+		}
+
+		// Derive struct node ID from method ID: "pkgPath.(Receiver).Method" → "pkgPath.Receiver"
+		// Method ID format: "pkgPath.(ReceiverName).MethodName"
+		closeParen := strings.Index(node.ID, ").")
+		if closeParen < 0 {
+			continue
+		}
+		structID := strings.Replace(node.ID[:closeParen+1], ".("+node.Receiver, "."+node.Receiver, 1)
+
+		if _, ok := p.nodeMap[structID]; !ok {
+			continue
+		}
+
+		p.edgeID++
+		p.edges = append(p.edges, ParsedEdge{
+			FromID: structID,
+			ToID:   node.ID,
+			Kind:   "implement",
+			Style:  "dashed",
+		})
+	}
 }
 
 // assignPositions assigns grid layout x/y to all nodes.
