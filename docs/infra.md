@@ -8,6 +8,8 @@
 
 - Artifact Registry
 - Cloud Run
+- Cloud Run Jobs
+- GCS
 - Cloud SQL for PostgreSQL
 - Secret Manager
 - GitHub Actions
@@ -20,8 +22,12 @@
   Firebase App Hosting を第一候補にする
 - backend
   Cloud Run
+- worker
+  Cloud Run Jobs
 - database
   Cloud SQL for PostgreSQL
+- object storage
+  GCS
 - auth
   Firebase Authentication
 - container registry
@@ -37,6 +43,8 @@
 - Artifact Registry
 - Cloud SQL
 - Cloud Run
+- Cloud Run Jobs
+- GCS
 - Secret Manager
 - GitHub Actions 用 WIF
 
@@ -127,6 +135,33 @@ terraform apply -var="backend_image_tag=${GIT_SHA}"
 - `ci.yml`
 - `terraform-plan.yml`
 - `deploy-dev.yml`
+
+## Worker Execution Model
+
+重い非同期処理は Cloud Run API サービスに抱え込まず、Cloud Run Jobs で実行する。
+
+役割分担:
+
+- Cloud Run API
+  - 認証
+  - 入力検証
+  - job レコード作成
+  - GCS upload session 発行
+  - job 状態取得
+
+- Cloud Run Jobs
+  - `graph_build_jobs`
+  - `layout_jobs`
+  - `review_jobs`
+
+基本フロー:
+
+1. frontend が API を呼ぶ
+2. API が DB に job を作る
+3. API が Cloud Run Job を起動する
+4. worker が job を処理して DB の status を更新する
+
+最初は polling 前提で十分とする。
 
 ## GitHub Actions Secrets
 

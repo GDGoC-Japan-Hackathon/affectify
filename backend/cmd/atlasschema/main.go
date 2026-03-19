@@ -21,6 +21,15 @@ func main() {
 		&repoentity.DesignGuideLike{},
 		&repoentity.AnalysisReport{},
 		&repoentity.ActivityLog{},
+		&repoentity.VariantFile{},
+		&repoentity.VariantDesignGuide{},
+		&repoentity.GraphBuildJob{},
+		&repoentity.LayoutJob{},
+		&repoentity.ReviewJob{},
+		&repoentity.ReviewFeedback{},
+		&repoentity.ReviewFeedbackTarget{},
+		&repoentity.ReviewFeedbackChat{},
+		&repoentity.ReviewFeedbackAction{},
 	)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "load gorm schema: %v\n", err)

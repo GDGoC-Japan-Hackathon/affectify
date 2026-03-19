@@ -33,10 +33,14 @@ func newVariant(db *gorm.DB, opts ...gen.DOOption) variant {
 	_variant.Name = field.NewString(tableName, "name")
 	_variant.Description = field.NewString(tableName, "description")
 	_variant.IsMain = field.NewBool(tableName, "is_main")
-	_variant.ParentVariantID = field.NewInt64(tableName, "parent_variant_id")
-	_variant.DesignGuideID = field.NewInt64(tableName, "design_guide_id")
+	_variant.ForkedFromVariantID = field.NewInt64(tableName, "forked_from_variant_id")
 	_variant.AnalysisScore = field.NewInt32(tableName, "analysis_score")
+	_variant.Status = field.NewString(tableName, "status")
+	_variant.SourceLanguage = field.NewString(tableName, "source_language")
+	_variant.SourceRootURI = field.NewString(tableName, "source_root_uri")
 	_variant.CreatedBy = field.NewInt64(tableName, "created_by")
+	_variant.LastImportedAt = field.NewTime(tableName, "last_imported_at")
+	_variant.LastReviewedAt = field.NewTime(tableName, "last_reviewed_at")
 	_variant.CreatedAt = field.NewTime(tableName, "created_at")
 	_variant.UpdatedAt = field.NewTime(tableName, "updated_at")
 
@@ -48,18 +52,22 @@ func newVariant(db *gorm.DB, opts ...gen.DOOption) variant {
 type variant struct {
 	variantDo variantDo
 
-	ALL             field.Asterisk
-	ID              field.Int64
-	ProjectID       field.Int64
-	Name            field.String
-	Description     field.String
-	IsMain          field.Bool
-	ParentVariantID field.Int64
-	DesignGuideID   field.Int64
-	AnalysisScore   field.Int32
-	CreatedBy       field.Int64
-	CreatedAt       field.Time
-	UpdatedAt       field.Time
+	ALL                 field.Asterisk
+	ID                  field.Int64
+	ProjectID           field.Int64
+	Name                field.String
+	Description         field.String
+	IsMain              field.Bool
+	ForkedFromVariantID field.Int64
+	AnalysisScore       field.Int32
+	Status              field.String
+	SourceLanguage      field.String
+	SourceRootURI       field.String
+	CreatedBy           field.Int64
+	LastImportedAt      field.Time
+	LastReviewedAt      field.Time
+	CreatedAt           field.Time
+	UpdatedAt           field.Time
 
 	fieldMap map[string]field.Expr
 }
@@ -81,10 +89,14 @@ func (v *variant) updateTableName(table string) *variant {
 	v.Name = field.NewString(table, "name")
 	v.Description = field.NewString(table, "description")
 	v.IsMain = field.NewBool(table, "is_main")
-	v.ParentVariantID = field.NewInt64(table, "parent_variant_id")
-	v.DesignGuideID = field.NewInt64(table, "design_guide_id")
+	v.ForkedFromVariantID = field.NewInt64(table, "forked_from_variant_id")
 	v.AnalysisScore = field.NewInt32(table, "analysis_score")
+	v.Status = field.NewString(table, "status")
+	v.SourceLanguage = field.NewString(table, "source_language")
+	v.SourceRootURI = field.NewString(table, "source_root_uri")
 	v.CreatedBy = field.NewInt64(table, "created_by")
+	v.LastImportedAt = field.NewTime(table, "last_imported_at")
+	v.LastReviewedAt = field.NewTime(table, "last_reviewed_at")
 	v.CreatedAt = field.NewTime(table, "created_at")
 	v.UpdatedAt = field.NewTime(table, "updated_at")
 
@@ -111,16 +123,20 @@ func (v *variant) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (v *variant) fillFieldMap() {
-	v.fieldMap = make(map[string]field.Expr, 11)
+	v.fieldMap = make(map[string]field.Expr, 15)
 	v.fieldMap["id"] = v.ID
 	v.fieldMap["project_id"] = v.ProjectID
 	v.fieldMap["name"] = v.Name
 	v.fieldMap["description"] = v.Description
 	v.fieldMap["is_main"] = v.IsMain
-	v.fieldMap["parent_variant_id"] = v.ParentVariantID
-	v.fieldMap["design_guide_id"] = v.DesignGuideID
+	v.fieldMap["forked_from_variant_id"] = v.ForkedFromVariantID
 	v.fieldMap["analysis_score"] = v.AnalysisScore
+	v.fieldMap["status"] = v.Status
+	v.fieldMap["source_language"] = v.SourceLanguage
+	v.fieldMap["source_root_uri"] = v.SourceRootURI
 	v.fieldMap["created_by"] = v.CreatedBy
+	v.fieldMap["last_imported_at"] = v.LastImportedAt
+	v.fieldMap["last_reviewed_at"] = v.LastReviewedAt
 	v.fieldMap["created_at"] = v.CreatedAt
 	v.fieldMap["updated_at"] = v.UpdatedAt
 }
