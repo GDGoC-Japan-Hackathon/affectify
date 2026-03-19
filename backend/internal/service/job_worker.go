@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/graphbuild"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/layout"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
 )
@@ -104,8 +105,15 @@ func (s *JobWorkerService) syncGraph(ctx context.Context, variantID int64, impor
 	if len(files) == 0 {
 		return errors.New("variant source_root_uri does not contain any files")
 	}
-	if !containsGoFiles(files) {
-		return errors.New("current graph build supports Go repositories only")
+	if !containsGoModule(files) {
+		return errors.New("current graph build supports Go modules only: go.mod not found")
+	}
+	goFiles := filterGoFiles(files)
+	if len(goFiles) == 0 {
+		return fmt.Errorf(
+			"current graph build supports Go repositories only: found %d files, 0 .go files",
+			len(files),
+		)
 	}
 
 	board, err := graphbuild.NewParser(localDir).Parse()
@@ -113,7 +121,16 @@ func (s *JobWorkerService) syncGraph(ctx context.Context, variantID int64, impor
 		return err
 	}
 	if len(board.Nodes) == 0 {
-		return errors.New("graph build produced no nodes")
+		sampleFiles := goFiles
+		if len(sampleFiles) > 5 {
+			sampleFiles = sampleFiles[:5]
+		}
+		return fmt.Errorf(
+			"graph build produced no nodes: found %d files, %d Go files, but extracted 0 functions/methods (sample Go files: %s)",
+			len(files),
+			len(goFiles),
+			strings.Join(sampleFiles, ", "),
+		)
 	}
 
 	return s.variantRepo.SyncParsedGraph(ctx, variantID, importedAt, files, board)
@@ -258,9 +275,19 @@ func isLocalSourceURI(uri string) bool {
 	return strings.HasPrefix(uri, "file://") || filepath.IsAbs(uri)
 }
 
-func containsGoFiles(files []string) bool {
+func filterGoFiles(files []string) []string {
+	goFiles := make([]string, 0, len(files))
 	for _, file := range files {
 		if strings.HasSuffix(strings.ToLower(file), ".go") {
+			goFiles = append(goFiles, file)
+		}
+	}
+	return goFiles
+}
+
+func containsGoModule(files []string) bool {
+	for _, file := range files {
+		if filepath.ToSlash(file) == "go.mod" {
 			return true
 		}
 	}
@@ -274,6 +301,28 @@ func (s *JobWorkerService) runLayout(ctx context.Context, job *entity.LayoutJob)
 	job.ErrorMessage = nil
 	if err := s.variantRepo.SaveLayoutJob(ctx, job); err != nil {
 		return err
+	}
+
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failLayout(ctx, job, err)
+	}
+	if len(nodes) == 0 {
+		return s.failLayout(ctx, job, errors.New("layout requires at least one node"))
+	}
+
+	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failLayout(ctx, job, err)
+	}
+
+	computed := layout.Compute(nodes, edges, job.LayoutType)
+	positions := make(map[int64][2]float64, len(computed))
+	for nodeID, position := range computed {
+		positions[nodeID] = [2]float64{position.X, position.Y}
+	}
+	if err := s.variantRepo.ApplyNodePositions(ctx, job.VariantID, positions); err != nil {
+		return s.failLayout(ctx, job, err)
 	}
 
 	finished := time.Now()
@@ -319,6 +368,18 @@ func (s *JobWorkerService) failGraphBuild(ctx context.Context, job *entity.Graph
 	job.FinishedAt = (*entity.Time)(&now)
 	if err := s.variantRepo.SaveGraphBuildJob(ctx, job); err != nil {
 		return fmt.Errorf("graph build failed: %w (additionally failed to persist job error: %v)", cause, err)
+	}
+	return cause
+}
+
+func (s *JobWorkerService) failLayout(ctx context.Context, job *entity.LayoutJob, cause error) error {
+	now := time.Now()
+	message := cause.Error()
+	job.Status = entity.JobStatusFailed
+	job.ErrorMessage = &message
+	job.FinishedAt = (*entity.Time)(&now)
+	if err := s.variantRepo.SaveLayoutJob(ctx, job); err != nil {
+		return fmt.Errorf("layout failed: %w (additionally failed to persist job error: %v)", cause, err)
 	}
 	return cause
 }
