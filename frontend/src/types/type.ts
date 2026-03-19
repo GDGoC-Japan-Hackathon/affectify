@@ -1,4 +1,4 @@
-export type NodeKind = "function" | "method" | "interface" | "group" | "note" | "memo" | "image" | "drawing";
+export type NodeKind = "function" | "method" | "interface" | "struct" | "type" | "const" | "var" | "group" | "note" | "memo" | "image" | "drawing";
 
 export type EdgeKind = "call" | "import" | "implement";
 

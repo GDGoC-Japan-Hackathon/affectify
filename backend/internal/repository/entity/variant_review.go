@@ -1,13 +1,17 @@
 package entity
 
+import "gorm.io/datatypes"
+
 type VariantFile struct {
-	ID           int64   `gorm:"column:id;primaryKey;autoIncrement"`
-	VariantID    int64   `gorm:"column:variant_id;not null;uniqueIndex:idx_variant_files_variant_path;index"`
-	Path         string  `gorm:"column:path;type:text;not null;uniqueIndex:idx_variant_files_variant_path"`
-	Language     *string `gorm:"column:language;type:varchar(50);index"`
-	NodeCount    int32   `gorm:"column:node_count;not null;default:0"`
-	IsVisible    bool    `gorm:"column:is_visible;not null;default:true;index"`
-	DisplayOrder int32   `gorm:"column:display_order;not null;default:0"`
+	ID           int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	VariantID    int64          `gorm:"column:variant_id;not null;uniqueIndex:idx_variant_files_variant_path;index"`
+	Path         string         `gorm:"column:path;type:text;not null;uniqueIndex:idx_variant_files_variant_path"`
+	Language     *string        `gorm:"column:language;type:varchar(50);index"`
+	PackageName  *string        `gorm:"column:package_name;type:varchar(255)"`
+	Imports      datatypes.JSON `gorm:"column:imports;type:jsonb"`
+	NodeCount    int32          `gorm:"column:node_count;not null;default:0"`
+	IsVisible    bool           `gorm:"column:is_visible;not null;default:true;index"`
+	DisplayOrder int32          `gorm:"column:display_order;not null;default:0"`
 	Timestamped
 }
 
