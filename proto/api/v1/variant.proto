@@ -1,0 +1,182 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "api/v1/common.proto";
+import "api/v1/edge.proto";
+import "api/v1/node.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+service VariantService {
+  rpc ListVariants(ListVariantsRequest) returns (ListVariantsResponse) {}
+  rpc GetVariant(GetVariantRequest) returns (GetVariantResponse) {}
+  rpc CreateVariant(CreateVariantRequest) returns (CreateVariantResponse) {}
+  rpc UpdateVariant(UpdateVariantRequest) returns (UpdateVariantResponse) {}
+  rpc DeleteVariant(DeleteVariantRequest) returns (DeleteVariantResponse) {}
+  rpc GetVariantWorkspace(GetVariantWorkspaceRequest) returns (GetVariantWorkspaceResponse) {}
+  rpc CreateGraphBuildJob(CreateGraphBuildJobRequest) returns (CreateGraphBuildJobResponse) {}
+  rpc GetGraphBuildJob(GetGraphBuildJobRequest) returns (GetGraphBuildJobResponse) {}
+  rpc CreateLayoutJob(CreateLayoutJobRequest) returns (CreateLayoutJobResponse) {}
+  rpc GetLayoutJob(GetLayoutJobRequest) returns (GetLayoutJobResponse) {}
+}
+
+message Variant {
+  int64 id = 1;
+  int64 project_id = 2;
+  string name = 3;
+  string description = 4;
+  bool is_main = 5;
+  optional int64 forked_from_variant_id = 6;
+  optional int32 analysis_score = 8;
+  int32 node_count = 9;
+  int64 created_by = 10;
+  UserSummary creator = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  string status = 14;
+  string source_language = 15;
+  string source_root_uri = 16;
+  google.protobuf.Timestamp last_imported_at = 17;
+  google.protobuf.Timestamp last_reviewed_at = 18;
+}
+
+message VariantFile {
+  int64 id = 1;
+  int64 variant_id = 2;
+  string path = 3;
+  string language = 4;
+  int32 node_count = 5;
+  bool is_visible = 6;
+  int32 display_order = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message VariantDesignGuide {
+  int64 id = 1;
+  int64 variant_id = 2;
+  optional int64 base_design_guide_id = 3;
+  string title = 4;
+  string description = 5;
+  string content = 6;
+  int32 version = 7;
+  int64 created_by = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message GraphBuildJob {
+  int64 id = 1;
+  int64 variant_id = 2;
+  int64 requested_by = 3;
+  string status = 4;
+  string error_message = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp finished_at = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message LayoutJob {
+  int64 id = 1;
+  int64 variant_id = 2;
+  int64 requested_by = 3;
+  string layout_type = 4;
+  string status = 5;
+  string error_message = 6;
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp finished_at = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ListVariantsRequest {
+  int64 project_id = 1;
+}
+
+message ListVariantsResponse {
+  repeated Variant variants = 1;
+}
+
+message GetVariantRequest {
+  int64 id = 1;
+}
+
+message GetVariantResponse {
+  Variant variant = 1;
+}
+
+message CreateVariantRequest {
+  int64 project_id = 1;
+  string name = 2;
+  string description = 3;
+  optional int64 forked_from_variant_id = 4;
+  optional int64 base_design_guide_id = 5;
+}
+
+message CreateVariantResponse {
+  Variant variant = 1;
+}
+
+message UpdateVariantRequest {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  optional bool is_main = 4;
+  optional string source_language = 5;
+}
+
+message UpdateVariantResponse {
+  Variant variant = 1;
+}
+
+message DeleteVariantRequest {
+  int64 id = 1;
+}
+
+message DeleteVariantResponse {}
+
+message GetVariantWorkspaceRequest {
+  int64 variant_id = 1;
+}
+
+message GetVariantWorkspaceResponse {
+  Variant variant = 1;
+  repeated VariantFile files = 2;
+  VariantDesignGuide design_guide = 3;
+  repeated Node nodes = 4;
+  repeated Edge edges = 5;
+}
+
+message CreateGraphBuildJobRequest {
+  int64 variant_id = 1;
+}
+
+message CreateGraphBuildJobResponse {
+  GraphBuildJob job = 1;
+}
+
+message GetGraphBuildJobRequest {
+  int64 id = 1;
+}
+
+message GetGraphBuildJobResponse {
+  GraphBuildJob job = 1;
+}
+
+message CreateLayoutJobRequest {
+  int64 variant_id = 1;
+  string layout_type = 2;
+}
+
+message CreateLayoutJobResponse {
+  LayoutJob job = 1;
+}
+
+message GetLayoutJobRequest {
+  int64 id = 1;
+}
+
+message GetLayoutJobResponse {
+  LayoutJob job = 1;
+}

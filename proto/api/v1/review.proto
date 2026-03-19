@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+service ReviewService {
+  rpc CreateReviewJob(CreateReviewJobRequest) returns (CreateReviewJobResponse) {}
+  rpc GetReviewJob(GetReviewJobRequest) returns (GetReviewJobResponse) {}
+  rpc ListReviewFeedbacks(ListReviewFeedbacksRequest) returns (ListReviewFeedbacksResponse) {}
+  rpc ListReviewFeedbackChats(ListReviewFeedbackChatsRequest) returns (ListReviewFeedbackChatsResponse) {}
+  rpc AppendReviewFeedbackChat(AppendReviewFeedbackChatRequest) returns (AppendReviewFeedbackChatResponse) {}
+  rpc ResolveReviewFeedback(ResolveReviewFeedbackRequest) returns (ResolveReviewFeedbackResponse) {}
+}
+
+message ReviewJob {
+  int64 id = 1;
+  int64 variant_id = 2;
+  int64 requested_by = 3;
+  string status = 4;
+  string error_message = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp finished_at = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ReviewFeedback {
+  int64 id = 1;
+  int64 review_job_id = 2;
+  int64 variant_id = 3;
+  string feedback_type = 4;
+  string severity = 5;
+  string title = 6;
+  string description = 7;
+  string suggestion = 8;
+  string ai_recommendation = 9;
+  string resolution = 10;
+  string status = 11;
+  int32 display_order = 12;
+  google.protobuf.Timestamp created_at = 13;
+}
+
+message ReviewFeedbackTarget {
+  int64 id = 1;
+  int64 feedback_id = 2;
+  string target_type = 3;
+  string target_ref = 4;
+}
+
+message ReviewFeedbackChat {
+  int64 id = 1;
+  int64 feedback_id = 2;
+  string role = 3;
+  string content = 4;
+  optional int64 created_by = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message CreateReviewJobRequest {
+  int64 variant_id = 1;
+}
+
+message CreateReviewJobResponse {
+  ReviewJob job = 1;
+}
+
+message GetReviewJobRequest {
+  int64 id = 1;
+}
+
+message GetReviewJobResponse {
+  ReviewJob job = 1;
+}
+
+message ListReviewFeedbacksRequest {
+  int64 variant_id = 1;
+  optional int64 review_job_id = 2;
+  bool only_open = 3;
+}
+
+message ListReviewFeedbacksResponse {
+  repeated ReviewFeedback feedbacks = 1;
+  repeated ReviewFeedbackTarget targets = 2;
+}
+
+message ListReviewFeedbackChatsRequest {
+  int64 feedback_id = 1;
+}
+
+message ListReviewFeedbackChatsResponse {
+  repeated ReviewFeedbackChat chats = 1;
+}
+
+message AppendReviewFeedbackChatRequest {
+  int64 feedback_id = 1;
+  string content = 2;
+}
+
+message AppendReviewFeedbackChatResponse {
+  repeated ReviewFeedbackChat chats = 1;
+  ReviewFeedback feedback = 2;
+}
+
+message ResolveReviewFeedbackRequest {
+  int64 feedback_id = 1;
+  string resolution = 2;
+  string status = 3;
+}
+
+message ResolveReviewFeedbackResponse {
+  ReviewFeedback feedback = 1;
+}

@@ -1,8 +1,8 @@
 resource "google_cloud_run_v2_service" "this" {
-  name     = var.service_name
-  project  = var.project_id
-  location = var.region
-  deletion_protection = false
+  name                 = var.service_name
+  project              = var.project_id
+  location             = var.region
+  deletion_protection  = false
   invoker_iam_disabled = true
 
   template {
