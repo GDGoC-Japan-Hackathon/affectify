@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -110,6 +111,10 @@ func (s *JobWorkerService) syncGraph(ctx context.Context, variantID int64, impor
 }
 
 func (s *JobWorkerService) materializeVariantSource(ctx context.Context, sourceRootURI string) (string, []string, error) {
+	if isLocalSourceURI(sourceRootURI) {
+		return materializeLocalVariantSource(sourceRootURI)
+	}
+
 	bucketName, prefix, err := parseGCSURI(sourceRootURI)
 	if err != nil {
 		return "", nil, err
@@ -176,6 +181,47 @@ func (s *JobWorkerService) materializeVariantSource(ctx context.Context, sourceR
 	return localDir, files, nil
 }
 
+func materializeLocalVariantSource(sourceRootURI string) (string, []string, error) {
+	localDir := strings.TrimPrefix(sourceRootURI, "file://")
+	if !filepath.IsAbs(localDir) {
+		absPath, err := filepath.Abs(localDir)
+		if err != nil {
+			return "", nil, err
+		}
+		localDir = absPath
+	}
+
+	info, err := os.Stat(localDir)
+	if err != nil {
+		return "", nil, err
+	}
+	if !info.IsDir() {
+		return "", nil, fmt.Errorf("local source_root_uri is not a directory: %s", sourceRootURI)
+	}
+
+	var files []string
+	if err := filepath.WalkDir(localDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(localDir, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(relPath))
+		return nil
+	}); err != nil {
+		return "", nil, err
+	}
+
+	slices.Sort(files)
+	return localDir, files, nil
+}
+
 func parseGCSURI(uri string) (string, string, error) {
 	const prefix = "gs://"
 	if !strings.HasPrefix(uri, prefix) {
@@ -197,6 +243,10 @@ func parseGCSURI(uri string) (string, string, error) {
 		objectPrefix += "/"
 	}
 	return bucket, objectPrefix, nil
+}
+
+func isLocalSourceURI(uri string) bool {
+	return strings.HasPrefix(uri, "file://") || filepath.IsAbs(uri)
 }
 
 func (s *JobWorkerService) runLayout(ctx context.Context, job *entity.LayoutJob) error {

@@ -12,9 +12,9 @@ import (
 var ErrForbidden = errors.New("forbidden")
 
 type ProjectMemberDetail struct {
-	Member  entity.ProjectMember
-	User    *entity.User
-	Inviter *entity.User
+	Member      entity.ProjectMember
+	User        *entity.User
+	AddedByUser *entity.User
 }
 
 type ProjectDetail struct {
@@ -268,7 +268,7 @@ func (s *ProjectService) attachProjectDetails(ctx context.Context, projects []en
 
 		userIDs := make([]int64, 0, len(members)*2)
 		for _, member := range members {
-			userIDs = append(userIDs, member.UserID, member.InvitedBy)
+			userIDs = append(userIDs, member.UserID, member.AddedBy)
 		}
 		userByID, err := s.projectRepo.ListUsersByIDs(ctx, userIDs)
 		if err != nil {
@@ -278,9 +278,9 @@ func (s *ProjectService) attachProjectDetails(ctx context.Context, projects []en
 		for i := range members {
 			member := members[i]
 			memberDetailsByProjectID[member.ProjectID] = append(memberDetailsByProjectID[member.ProjectID], ProjectMemberDetail{
-				Member:  member,
-				User:    userByID[member.UserID],
-				Inviter: userByID[member.InvitedBy],
+				Member:      member,
+				User:        userByID[member.UserID],
+				AddedByUser: userByID[member.AddedBy],
 			})
 		}
 	}
