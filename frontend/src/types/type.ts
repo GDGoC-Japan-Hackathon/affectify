@@ -33,11 +33,11 @@ export interface User {
 
 export interface ProjectMemberSummary {
   userId: string;
-  invitedBy: string;
+  addedBy: string;
   role: string;
   joinedAt: Date;
   user?: User;
-  inviter?: User;
+  addedByUser?: User;
 }
 
 export interface Variant {

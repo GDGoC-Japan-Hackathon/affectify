@@ -43,7 +43,7 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
       return;
     }
 
-    toast.success(`${emailToInvite} を招待しました`);
+    toast.success(`${emailToInvite} をメンバーに追加しました`);
     setEmailToInvite('');
   };
 
@@ -53,7 +53,7 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
         <DialogHeader>
           <DialogTitle>プロジェクトを共有</DialogTitle>
           <DialogDescription>
-            メンバーを招待してプロジェクトを共有します
+            メンバーを追加してプロジェクトを共有します
           </DialogDescription>
         </DialogHeader>
 
@@ -80,7 +80,7 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
 
           {/* Invite Members */}
           <div className="space-y-3">
-            <Label>メンバーを招待</Label>
+            <Label>メンバーを追加</Label>
             <div className="flex gap-2">
               <Input
                 type="email"
@@ -91,7 +91,7 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
               />
               <Button onClick={handleInvite}>
                 <Mail className="w-4 h-4 mr-2" />
-                招待
+                追加
               </Button>
             </div>
           </div>
