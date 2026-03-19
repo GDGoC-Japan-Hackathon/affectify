@@ -47,12 +47,13 @@ func (h *ReviewServiceHandler) GetReviewJob(
 	req *connect.Request[apiv1.GetReviewJobRequest],
 ) (*connect.Response[apiv1.GetReviewJobResponse], error) {
 	// 状態取得系も認証前提に揃えておく。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
 	// service が返した内部 job を proto response に変換して返す。
-	job, err := h.reviewService.GetReviewJob(ctx, req.Msg.Id)
+	job, err := h.reviewService.GetReviewJob(ctx, identity.UID, req.Msg.Id)
 	if err != nil {
 		return nil, mapReviewError(err)
 	}
@@ -67,11 +68,12 @@ func (h *ReviewServiceHandler) ListReviewFeedbacks(
 	req *connect.Request[apiv1.ListReviewFeedbacksRequest],
 ) (*connect.Response[apiv1.ListReviewFeedbacksResponse], error) {
 	// feedback 一覧は variant / job 指定で service に検索を委譲する。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	bundle, err := h.reviewService.ListReviewFeedbacks(ctx, service.ListReviewFeedbacksInput{
+	bundle, err := h.reviewService.ListReviewFeedbacks(ctx, identity.UID, service.ListReviewFeedbacksInput{
 		VariantID:   req.Msg.VariantId,
 		ReviewJobID: req.Msg.ReviewJobId,
 		OnlyOpen:    req.Msg.OnlyOpen,
@@ -102,11 +104,12 @@ func (h *ReviewServiceHandler) ListReviewFeedbackChats(
 	req *connect.Request[apiv1.ListReviewFeedbackChatsRequest],
 ) (*connect.Response[apiv1.ListReviewFeedbackChatsResponse], error) {
 	// card 単位の chat は feedback_id だけを入口にする。
-	if _, err := auth.RequireIdentity(ctx); err != nil {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	chats, err := h.reviewService.ListReviewFeedbackChats(ctx, req.Msg.FeedbackId)
+	chats, err := h.reviewService.ListReviewFeedbackChats(ctx, identity.UID, req.Msg.FeedbackId)
 	if err != nil {
 		return nil, mapReviewError(err)
 	}
@@ -182,6 +185,8 @@ func mapReviewError(err error) error {
 		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, service.ErrUserNotFound):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, service.ErrForbidden):
+		return connect.NewError(connect.CodePermissionDenied, err)
 	default:
 		return connect.NewError(connect.CodeInternal, err)
 	}

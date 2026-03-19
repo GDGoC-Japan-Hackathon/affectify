@@ -35,6 +35,7 @@ type ReviewFeedbackBundle struct {
 type ReviewService struct {
 	db             *gorm.DB
 	userRepository *repository.UserRepository
+	projectRepo    *repository.ProjectRepository
 	reviewRepo     *repository.ReviewRepository
 	variantRepo    *repository.VariantRepository
 	jobDispatcher  JobDispatcher
@@ -44,6 +45,7 @@ func NewReviewService(db *gorm.DB, userRepository *repository.UserRepository, jo
 	return &ReviewService{
 		db:             db,
 		userRepository: userRepository,
+		projectRepo:    repository.NewProjectRepository(db),
 		reviewRepo:     repository.NewReviewRepository(db),
 		variantRepo:    repository.NewVariantRepository(db),
 		jobDispatcher:  jobDispatcher,
@@ -51,21 +53,13 @@ func NewReviewService(db *gorm.DB, userRepository *repository.UserRepository, jo
 }
 
 func (s *ReviewService) CreateReviewJob(ctx context.Context, firebaseUID string, variantID int64) (*entity.ReviewJob, error) {
-	requester, err := s.requireUser(ctx, firebaseUID)
+	variant, requester, err := s.requireVariantAccess(ctx, firebaseUID, variantID)
 	if err != nil {
 		return nil, err
-	}
-
-	variant, err := s.variantRepo.FindByID(ctx, variantID)
-	if err != nil {
-		return nil, err
-	}
-	if variant == nil {
-		return nil, ErrVariantNotFound
 	}
 
 	job := &entity.ReviewJob{
-		VariantID:   variantID,
+		VariantID:   variant.ID,
 		RequestedBy: requester.ID,
 		Status:      entity.JobStatusQueued,
 	}
@@ -85,7 +79,7 @@ func (s *ReviewService) CreateReviewJob(ctx context.Context, firebaseUID string,
 	return job, nil
 }
 
-func (s *ReviewService) GetReviewJob(ctx context.Context, id int64) (*entity.ReviewJob, error) {
+func (s *ReviewService) GetReviewJob(ctx context.Context, firebaseUID string, id int64) (*entity.ReviewJob, error) {
 	job, err := s.reviewRepo.FindReviewJobByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -93,10 +87,21 @@ func (s *ReviewService) GetReviewJob(ctx context.Context, id int64) (*entity.Rev
 	if job == nil {
 		return nil, ErrReviewJobNotFound
 	}
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID); err != nil {
+		return nil, err
+	}
 	return job, nil
 }
 
-func (s *ReviewService) ListReviewFeedbacks(ctx context.Context, input ListReviewFeedbacksInput) (*ReviewFeedbackBundle, error) {
+func (s *ReviewService) ListReviewFeedbacks(
+	ctx context.Context,
+	firebaseUID string,
+	input ListReviewFeedbacksInput,
+) (*ReviewFeedbackBundle, error) {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, input.VariantID); err != nil {
+		return nil, err
+	}
+
 	reviewJobID := input.ReviewJobID
 	if reviewJobID == nil {
 		latest, err := s.reviewRepo.FindLatestReviewJobByVariantID(ctx, input.VariantID)
@@ -133,8 +138,12 @@ func (s *ReviewService) ListReviewFeedbacks(ctx context.Context, input ListRevie
 	}, nil
 }
 
-func (s *ReviewService) ListReviewFeedbackChats(ctx context.Context, feedbackID int64) ([]entity.ReviewFeedbackChat, error) {
-	if _, err := s.getFeedback(ctx, feedbackID); err != nil {
+func (s *ReviewService) ListReviewFeedbackChats(
+	ctx context.Context,
+	firebaseUID string,
+	feedbackID int64,
+) ([]entity.ReviewFeedbackChat, error) {
+	if _, _, err := s.requireFeedbackAccess(ctx, firebaseUID, feedbackID); err != nil {
 		return nil, err
 	}
 
@@ -156,7 +165,7 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 	if err != nil {
 		return nil, nil, err
 	}
-	feedback, err := s.getFeedback(ctx, feedbackID)
+	feedback, _, err := s.requireFeedbackAccess(ctx, firebaseUID, feedbackID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -171,7 +180,7 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 		return nil, nil, err
 	}
 
-	chats, err := s.ListReviewFeedbackChats(ctx, feedbackID)
+	chats, err := s.ListReviewFeedbackChats(ctx, firebaseUID, feedbackID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -188,16 +197,12 @@ func (s *ReviewService) ResolveReviewFeedback(
 	if err != nil {
 		return nil, err
 	}
+	feedback, _, err := s.requireFeedbackAccess(ctx, firebaseUID, input.FeedbackID)
+	if err != nil {
+		return nil, err
+	}
 
-	var feedback entity.ReviewFeedback
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.First(&feedback, input.FeedbackID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrFeedbackNotFound
-			}
-			return err
-		}
-
 		if input.Resolution != "" {
 			resolution := entity.FeedbackResolution(input.Resolution)
 			feedback.Resolution = &resolution
@@ -230,7 +235,7 @@ func (s *ReviewService) ResolveReviewFeedback(
 		return nil, err
 	}
 
-	return &feedback, nil
+	return feedback, nil
 }
 
 func (s *ReviewService) requireUser(ctx context.Context, firebaseUID string) (*entity.User, error) {
@@ -254,4 +259,66 @@ func (s *ReviewService) getFeedback(ctx context.Context, id int64) (*entity.Revi
 		return nil, ErrFeedbackNotFound
 	}
 	return feedback, nil
+}
+
+func (s *ReviewService) requireVariantAccess(
+	ctx context.Context,
+	firebaseUID string,
+	variantID int64,
+) (*entity.Variant, *entity.User, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	variant, err := s.variantRepo.FindByID(ctx, variantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if variant == nil {
+		return nil, nil, ErrVariantNotFound
+	}
+
+	hasAccess, err := s.projectRepo.HasAccess(ctx, variant.ProjectID, requester.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !hasAccess {
+		return nil, nil, ErrForbidden
+	}
+
+	return variant, requester, nil
+}
+
+func (s *ReviewService) requireFeedbackAccess(
+	ctx context.Context,
+	firebaseUID string,
+	feedbackID int64,
+) (*entity.ReviewFeedback, *entity.User, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	feedback, err := s.getFeedback(ctx, feedbackID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	variant, err := s.variantRepo.FindByID(ctx, feedback.VariantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if variant == nil {
+		return nil, nil, ErrVariantNotFound
+	}
+	hasAccess, err := s.projectRepo.HasAccess(ctx, variant.ProjectID, requester.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !hasAccess {
+		return nil, nil, ErrForbidden
+	}
+
+	return feedback, requester, nil
 }
