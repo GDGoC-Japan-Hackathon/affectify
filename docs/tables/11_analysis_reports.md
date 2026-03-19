@@ -1,6 +1,6 @@
 # AnalysisReports
 
-バリエーションごとのAI分析結果を管理。レポート内容は JSONB で格納。
+variant ごとの AI 分析結果の履歴を管理。1回の `review_job` に対する集約結果を保持し、カードやチャットの詳細は review 系テーブルに分離する。
 
 ## テーブル定義
 
@@ -8,7 +8,9 @@
 CREATE TABLE analysis_reports (
   id SERIAL PRIMARY KEY,
   variant_id INTEGER NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
+  review_job_id INTEGER REFERENCES review_jobs(id) ON DELETE SET NULL,
   overall_score INTEGER NOT NULL CHECK (overall_score BETWEEN 0 AND 100),
+  summary TEXT,
   report_data JSONB NOT NULL,
   analyzed_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -19,6 +21,7 @@ CREATE TABLE analysis_reports (
 
 ```sql
 CREATE INDEX idx_analysis_reports_variant_id ON analysis_reports(variant_id);
+CREATE INDEX idx_analysis_reports_review_job_id ON analysis_reports(review_job_id);
 CREATE INDEX idx_analysis_reports_overall_score ON analysis_reports(overall_score);
 CREATE INDEX idx_analysis_reports_report_data ON analysis_reports USING GIN(report_data);
 ```
@@ -29,7 +32,9 @@ CREATE INDEX idx_analysis_reports_report_data ON analysis_reports USING GIN(repo
 |-----------|------|------|
 | id | SERIAL | レポートID |
 | variant_id | INTEGER | 分析対象バリエーションID (FK: variants) |
+| review_job_id | INTEGER | 生成元レビュージョブID (FK: review_jobs) |
 | overall_score | INTEGER | 総合スコア（0-100） |
+| summary | TEXT | レポート要約 |
 | report_data | JSONB | レポート全内容（下記構造参照） |
 | analyzed_at | TIMESTAMPTZ | 分析実行日時 |
 | created_at | TIMESTAMPTZ | レコード作成日時 |
@@ -97,3 +102,9 @@ CREATE INDEX idx_analysis_reports_report_data ON analysis_reports USING GIN(repo
   ]
 }
 ```
+
+## 設計メモ
+
+- 全画面 AI review のカード一覧・チャット・解決状態は `review_feedbacks` 系テーブルで管理する
+- `analysis_reports` は比較画面やプロジェクト一覧で使う集約値・履歴の保存先とする
+- 設計書本文は `variant_design_guides` を上書き更新する前提なので、レビュー時点の設計書内容を残したくなったら `report_data` に要約またはコピーを保持する

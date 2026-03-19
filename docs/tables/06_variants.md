@@ -1,6 +1,6 @@
 # Variants
 
-プロジェクトの設計バリエーションを管理。異なる設計パターン（DDD、Clean Architecture等）を試すために使用。
+プロジェクト内の設計案の作業コピーを管理。1つの variant が「現在のコード」「現在の適用設計書」「現在の graph」「現在のレビュー対象」を持つ主語になる。
 
 ## テーブル定義
 
@@ -11,10 +11,14 @@ CREATE TABLE variants (
   name VARCHAR(255) NOT NULL,
   description TEXT,
   is_main BOOLEAN DEFAULT FALSE,
-  parent_variant_id INTEGER REFERENCES variants(id) ON DELETE SET NULL,
-  design_guide_id INTEGER REFERENCES design_guides(id) ON DELETE SET NULL,
+  forked_from_variant_id INTEGER REFERENCES variants(id) ON DELETE SET NULL,
   analysis_score INTEGER,
+  status VARCHAR(30) NOT NULL DEFAULT 'active',
+  source_language VARCHAR(50),
+  source_root_uri TEXT,
   created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_imported_at TIMESTAMPTZ,
+  last_reviewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -24,8 +28,9 @@ CREATE TABLE variants (
 
 ```sql
 CREATE INDEX idx_variants_project_id ON variants(project_id);
-CREATE INDEX idx_variants_parent_variant_id ON variants(parent_variant_id);
+CREATE INDEX idx_variants_forked_from_variant_id ON variants(forked_from_variant_id);
 CREATE INDEX idx_variants_is_main ON variants(is_main);
+CREATE INDEX idx_variants_status ON variants(status);
 ```
 
 ## フィールド説明
@@ -37,10 +42,14 @@ CREATE INDEX idx_variants_is_main ON variants(is_main);
 | name | VARCHAR(255) | バリエーション名（例: "main", "ddd-implementation"） |
 | description | TEXT | バリエーション説明 |
 | is_main | BOOLEAN | メインバリエーションフラグ |
-| parent_variant_id | INTEGER | 派生元バリエーションID (FK: variants, 自己参照) |
-| design_guide_id | INTEGER | 適用されている設計書ID (FK: design_guides) |
+| forked_from_variant_id | INTEGER | 分岐元バリエーションID (FK: variants, 自己参照) |
 | analysis_score | INTEGER | AI分析スコア（0-100） |
+| status | VARCHAR(30) | 状態: `active`, `archived` |
+| source_language | VARCHAR(50) | 主言語（例: `go`, `typescript`） |
+| source_root_uri | TEXT | variant のコードルート保存先 (`gs://...`) |
 | created_by | INTEGER | 作成者 (FK: users) |
+| last_imported_at | TIMESTAMPTZ | 最後に graph を再生成した日時 |
+| last_reviewed_at | TIMESTAMPTZ | 最後に AI review を実行した日時 |
 | created_at | TIMESTAMPTZ | 作成日時 |
 | updated_at | TIMESTAMPTZ | 最終更新日時 |
 
@@ -70,5 +79,7 @@ CREATE POLICY variants_select_policy ON variants
 
 ## 設計メモ
 
+- variant は「設計案の作業単位」
+- コード実体の保存先は `variants.source_root_uri` に、適用中の設計書コピーは `variant_design_guides` に持つ
+- 分岐時は親 variant のコードと設計書コピーを複製して新 variant を作る
 - アクセス制御は親プロジェクトの権限に従う
-- 共有は `project_members` で管理し、`teams` や `project_shares` は使わない

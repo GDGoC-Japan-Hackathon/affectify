@@ -1,6 +1,6 @@
 # Nodes
 
-グラフ上のノード（関数、メソッド、インターフェース等）を管理。既存workspaceの BoardNode に準拠。
+グラフ上のノード（関数、メソッド、インターフェース等）を管理。各 node は `variant_files` にぶら下がり、どのファイルに属するかを `variant_file_id` で表す。
 
 ## テーブル定義
 
@@ -8,9 +8,9 @@
 CREATE TABLE nodes (
   id SERIAL PRIMARY KEY,
   variant_id INTEGER NOT NULL REFERENCES variants(id) ON DELETE CASCADE,
+  variant_file_id INTEGER REFERENCES variant_files(id) ON DELETE SET NULL,
   kind VARCHAR(50) NOT NULL,
   title VARCHAR(255) NOT NULL,
-  file_path TEXT,
   signature TEXT,
   receiver TEXT,
   code_text TEXT,
@@ -26,6 +26,7 @@ CREATE TABLE nodes (
 
 ```sql
 CREATE INDEX idx_nodes_variant_id ON nodes(variant_id);
+CREATE INDEX idx_nodes_variant_file_id ON nodes(variant_file_id);
 CREATE INDEX idx_nodes_kind ON nodes(kind);
 CREATE INDEX idx_nodes_title ON nodes(title);
 ```
@@ -36,9 +37,9 @@ CREATE INDEX idx_nodes_title ON nodes(title);
 |-----------|------|------|
 | id | SERIAL | ノードID |
 | variant_id | INTEGER | 所属バリエーションID (FK: variants) |
+| variant_file_id | INTEGER | 所属ファイルID (FK: variant_files) |
 | kind | VARCHAR(50) | ノード種別: `function`, `method`, `interface`, `group`, `note`, `image` |
 | title | VARCHAR(255) | ノード名（関数名、クラス名など） |
-| file_path | TEXT | ファイルパス |
 | signature | TEXT | シグネチャ（関数の引数・戻り値の型情報） |
 | receiver | TEXT | レシーバー（Go のメソッドレシーバーなど） |
 | code_text | TEXT | ソースコード |
@@ -58,3 +59,10 @@ CREATE INDEX idx_nodes_title ON nodes(title);
 | group | グループ（論理的なまとまり） |
 | note | メモ・ノート |
 | image | 画像アセット |
+
+## 設計メモ
+
+- ファイルパスの正本は `variant_files.path`
+- node は `variant_file_id` を通して所属ファイルを辿る
+- AI review で node を参照するときは DB の `nodes.id` をそのまま使う
+- `note`, `image`, `drawing` のようなファイル非依存ノードは `variant_file_id` を NULL にできる

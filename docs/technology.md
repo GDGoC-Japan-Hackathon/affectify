@@ -47,7 +47,7 @@
 - 添付/成果物：**GCS / Firebase Storage**
 
 ### 役割分担
-- Cloud SQL：users / teams / projects / memberships / roles / exports / jobs / audit_logs / finding（AI指摘）など
+- Cloud SQL：users / projects / project_members / roles / exports / jobs / audit_logs / finding（AI指摘）など
 - Storage：PNG、ボードスナップショット、エクスポートzip、インポートzip（必要なら）
 
 > 「UserテーブルはFirebase側に置く？」→ **No**（基本はCloud SQL）。  

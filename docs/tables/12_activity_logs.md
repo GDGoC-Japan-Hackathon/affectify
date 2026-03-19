@@ -46,7 +46,11 @@ CREATE INDEX idx_activity_logs_created_at ON activity_logs(created_at DESC);
 | create_variant | バリエーション作成 |
 | update_node | ノード更新 |
 | create_edge | エッジ作成 |
+| run_import | コード取り込み実行 |
 | run_analysis | AI分析実行 |
+| branch_variant | バリアント分岐 |
+| update_variant_design_guide | variant 上の設計書更新 |
+| update_variant_source | variant 上のコード更新 |
 | invite_member | メンバー招待 |
 | create_design_guide | 設計書作成 |
 | like_design_guide | 設計書いいね |
