@@ -67,6 +67,8 @@ go test ./...
 go run ./cmd/server
 ```
 
+ローカルの全体起動手順は [local-development.md](/Users/siraiyuto/Projects/affectify/docs/local-development.md) を参照。
+
 デモ用データ投入:
 
 ```bash
@@ -113,6 +115,8 @@ backend 側では次を使う。
 - API server は `graph_build_jobs` / `layout_jobs` / `review_jobs` の row を作る
 - `internal/service/job_dispatcher.go` が Cloud Run Job を `run` する
 - `cmd/worker` が `JOB_ID` を受けて対象 job を処理する
+
+ローカルでは `GCP_PROJECT_ID` / `GCP_REGION` が未設定なら `LocalJobDispatcher` が使われ、backend プロセス内で worker を直接実行する。
 
 現在の worker mode:
 

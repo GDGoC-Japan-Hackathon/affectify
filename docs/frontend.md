@@ -19,6 +19,8 @@ bun install
 bun run dev
 ```
 
+backend / database を含むローカル起動全体は [local-development.md](/Users/siraiyuto/Projects/affectify/docs/local-development.md) を参照。
+
 ## Runtime Notes
 
 frontend は Firebase の公開設定を使う。
