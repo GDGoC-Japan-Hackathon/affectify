@@ -124,6 +124,7 @@ message UpdateVariantRequest {
   string description = 3;
   optional bool is_main = 4;
   optional string source_language = 5;
+  optional string source_root_uri = 6;
 }
 
 message UpdateVariantResponse {
