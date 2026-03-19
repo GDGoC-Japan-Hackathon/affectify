@@ -104,6 +104,9 @@ func (s *JobWorkerService) syncGraph(ctx context.Context, variantID int64, impor
 	if len(files) == 0 {
 		return errors.New("variant source_root_uri does not contain any files")
 	}
+	if !containsGoFiles(files) {
+		return errors.New("current graph build supports Go repositories only")
+	}
 
 	board, err := graphbuild.NewParser(localDir).Parse()
 	if err != nil {
@@ -253,6 +256,15 @@ func parseGCSURI(uri string) (string, string, error) {
 
 func isLocalSourceURI(uri string) bool {
 	return strings.HasPrefix(uri, "file://") || filepath.IsAbs(uri)
+}
+
+func containsGoFiles(files []string) bool {
+	for _, file := range files {
+		if strings.HasSuffix(strings.ToLower(file), ".go") {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *JobWorkerService) runLayout(ctx context.Context, job *entity.LayoutJob) error {

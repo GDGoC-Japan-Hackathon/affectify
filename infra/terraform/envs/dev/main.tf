@@ -186,7 +186,7 @@ module "graph_build_job" {
   region                = var.region
   job_name              = var.graph_build_job_name
   service_account_email = google_service_account.backend.email
-  image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.backend_image_name}:${var.backend_image_tag}"
+  image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.worker_image_name}:${var.worker_image_tag}"
   cloud_sql_instances   = [module.cloud_sql.instance_connection_name]
   command               = ["/app/worker"]
   args                  = ["graph-build"]
@@ -221,7 +221,7 @@ module "review_job" {
   region                = var.region
   job_name              = var.review_job_name
   service_account_email = google_service_account.backend.email
-  image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.backend_image_name}:${var.backend_image_tag}"
+  image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.worker_image_name}:${var.worker_image_tag}"
   cloud_sql_instances   = [module.cloud_sql.instance_connection_name]
   command               = ["/app/worker"]
   args                  = ["review"]
