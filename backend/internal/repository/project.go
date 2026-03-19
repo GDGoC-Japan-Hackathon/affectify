@@ -169,7 +169,7 @@ func (r *ProjectRepository) CreateProjectBundle(ctx context.Context, input Creat
 		member := &entity.ProjectMember{
 			ProjectID: project.ID,
 			UserID:    input.OwnerID,
-			InvitedBy: input.OwnerID,
+			AddedBy:   input.OwnerID,
 			Role:      entity.ProjectMemberRoleAdmin,
 		}
 		if err := tx.Create(member).Error; err != nil {

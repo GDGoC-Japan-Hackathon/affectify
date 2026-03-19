@@ -47,7 +47,7 @@ func main() {
 	}
 
 	interceptors := connect.WithInterceptors(auth.NewInterceptor(verifier))
-	jobDispatcher := service.NewJobDispatcher(config.LoadJobRuntimeConfig())
+	jobDispatcher := service.NewJobDispatcher(db, config.LoadJobRuntimeConfig())
 
 	userRepository := repository.NewUserRepository(db)
 	healthService := service.NewHealthService()

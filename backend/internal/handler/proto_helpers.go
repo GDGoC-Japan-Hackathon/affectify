@@ -122,13 +122,13 @@ func toProtoProjectMember(detail *service.ProjectMemberDetail) *apiv1.ProjectMem
 	}
 
 	return &apiv1.ProjectMember{
-		ProjectId: detail.Member.ProjectID,
-		UserId:    detail.Member.UserID,
-		InvitedBy: detail.Member.InvitedBy,
-		Role:      string(detail.Member.Role),
-		JoinedAt:  timestamppb.New(time.Time(detail.Member.JoinedAt)),
-		User:      toProtoUserSummary(detail.User),
-		Inviter:   toProtoUserSummary(detail.Inviter),
+		ProjectId:   detail.Member.ProjectID,
+		UserId:      detail.Member.UserID,
+		AddedBy:     detail.Member.AddedBy,
+		Role:        string(detail.Member.Role),
+		JoinedAt:    timestamppb.New(time.Time(detail.Member.JoinedAt)),
+		User:        toProtoUserSummary(detail.User),
+		AddedByUser: toProtoUserSummary(detail.AddedByUser),
 	}
 }
 

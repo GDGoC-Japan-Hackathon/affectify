@@ -65,8 +65,8 @@ func (s *Seeder) RunDemo(ctx context.Context) error {
 		}
 
 		members := []entity.ProjectMember{
-			{ProjectID: project.ID, UserID: owner.ID, InvitedBy: owner.ID, JoinedAt: now},
-			{ProjectID: project.ID, UserID: member.ID, InvitedBy: owner.ID, JoinedAt: now},
+			{ProjectID: project.ID, UserID: owner.ID, AddedBy: owner.ID, JoinedAt: now},
+			{ProjectID: project.ID, UserID: member.ID, AddedBy: owner.ID, JoinedAt: now},
 		}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "project_id"}, {Name: "user_id"}},
