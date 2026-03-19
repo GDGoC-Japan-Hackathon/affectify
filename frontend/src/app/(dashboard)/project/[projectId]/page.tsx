@@ -33,7 +33,7 @@ export default function ProjectDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [compareVariants, setCompareVariants] = useState<string[]>([]);
-  const [members, setMembers] = useState<string[]>([]);
+  const [memberSummaries, setMemberSummaries] = useState<Project['memberSummaries']>([]);
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -52,7 +52,7 @@ export default function ProjectDetail() {
         if (cancelled) return;
         setProject(result);
         setVariants(result.variants);
-        setMembers(result.members);
+        setMemberSummaries(result.memberSummaries ?? []);
         setCurrentUserId(meResponse.user?.id?.toString() ?? null);
       } catch (error) {
         if (cancelled) return;
@@ -142,7 +142,7 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-6 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  <span>{members.length}人のメンバー</span>
+                  <span>{(memberSummaries ?? []).length}人のメンバー</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
@@ -165,19 +165,16 @@ export default function ProjectDetail() {
               {/* Member Avatars */}
               <div className="flex items-center">
                 <div className="flex -space-x-2">
-                  {members.slice(0, 3).map((memberId, i) => {
-                    const user = project.memberSummaries?.find((member) => member.userId === memberId)?.user;
-                    return (
-                      <Avatar key={memberId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
-                        <AvatarImage src={user?.avatar} />
-                        <AvatarFallback className="text-xs bg-gray-200">{user?.name?.[0] ?? '?'}</AvatarFallback>
-                      </Avatar>
-                    );
-                  })}
+                  {(memberSummaries ?? []).slice(0, 3).map((member, i) => (
+                    <Avatar key={member.userId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
+                      <AvatarImage src={member.user?.avatar} />
+                      <AvatarFallback className="text-xs bg-gray-200">{member.user?.name?.[0] ?? '?'}</AvatarFallback>
+                    </Avatar>
+                  ))}
                 </div>
-                {members.length > 3 && (
+                {(memberSummaries ?? []).length > 3 && (
                   <span className="ml-2 text-sm text-gray-500">
-                    +他{members.length - 3}名
+                    +他{(memberSummaries ?? []).length - 3}名
                   </span>
                 )}
               </div>
@@ -194,6 +191,8 @@ export default function ProjectDetail() {
                 </Button>
               )}
 
+              <CreateVariantDialog variants={variants} onCreateVariant={handleCreateVariant} />
+
               {compareVariants.length > 1 && (
                 <Link href={`/compare/${project.id}?variants=${compareVariants.join(',')}`}>
                   <Button variant="outline" className="gap-2">
@@ -209,12 +208,11 @@ export default function ProjectDetail() {
         {/* Main Variant */}
         {mainVariant && (
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-600" />
                 メイン設計案
               </h2>
-              <CreateVariantDialog variants={variants} onCreateVariant={handleCreateVariant} />
             </div>
             <VariantCard
               variant={mainVariant}
@@ -288,9 +286,11 @@ export default function ProjectDetail() {
         <ManageMembersDialog
           open={isManageOpen}
           onOpenChange={setIsManageOpen}
-          memberIds={members}
-          onMembersChange={setMembers}
+          projectId={project.id}
+          memberSummaries={memberSummaries ?? []}
+          currentUserId={currentUserId ?? ''}
           isOwner={isOwner}
+          onMembersChange={setMemberSummaries}
         />
       </div>
   );
