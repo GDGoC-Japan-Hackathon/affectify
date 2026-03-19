@@ -61,9 +61,14 @@ func (h *VariantSourceUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		http.Error(w, "files is required", http.StatusBadRequest)
 		return
 	}
+	relativePaths := r.MultipartForm.Value["relative_paths"]
+	if len(relativePaths) != len(fileHeaders) {
+		http.Error(w, "relative_paths must match files", http.StatusBadRequest)
+		return
+	}
 
 	files := make([]source.UploadedFile, 0, len(fileHeaders))
-	for _, fileHeader := range fileHeaders {
+	for i, fileHeader := range fileHeaders {
 		file, err := fileHeader.Open()
 		if err != nil {
 			http.Error(w, "failed to open file", http.StatusBadRequest)
@@ -75,8 +80,13 @@ func (h *VariantSourceUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 			http.Error(w, "failed to read file", http.StatusBadRequest)
 			return
 		}
+		relativePath := relativePaths[i]
+		if relativePath == "" {
+			http.Error(w, "relative_paths must not be empty", http.StatusBadRequest)
+			return
+		}
 		files = append(files, source.UploadedFile{
-			RelativePath: fileHeader.Filename,
+			RelativePath: relativePath,
 			Content:      content,
 		})
 	}
@@ -93,4 +103,3 @@ func (h *VariantSourceUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		"fileCount":     len(files),
 	})
 }
-
