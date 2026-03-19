@@ -30,7 +30,9 @@ func newAnalysisReport(db *gorm.DB, opts ...gen.DOOption) analysisReport {
 	_analysisReport.ALL = field.NewAsterisk(tableName)
 	_analysisReport.ID = field.NewInt64(tableName, "id")
 	_analysisReport.VariantID = field.NewInt64(tableName, "variant_id")
+	_analysisReport.ReviewJobID = field.NewInt64(tableName, "review_job_id")
 	_analysisReport.OverallScore = field.NewInt32(tableName, "overall_score")
+	_analysisReport.Summary = field.NewString(tableName, "summary")
 	_analysisReport.ReportData = field.NewField(tableName, "report_data")
 	_analysisReport.AnalyzedAt = field.NewTime(tableName, "analyzed_at")
 	_analysisReport.CreatedAt = field.NewTime(tableName, "created_at")
@@ -46,7 +48,9 @@ type analysisReport struct {
 	ALL          field.Asterisk
 	ID           field.Int64
 	VariantID    field.Int64
+	ReviewJobID  field.Int64
 	OverallScore field.Int32
+	Summary      field.String
 	ReportData   field.Field
 	AnalyzedAt   field.Time
 	CreatedAt    field.Time
@@ -68,7 +72,9 @@ func (a *analysisReport) updateTableName(table string) *analysisReport {
 	a.ALL = field.NewAsterisk(table)
 	a.ID = field.NewInt64(table, "id")
 	a.VariantID = field.NewInt64(table, "variant_id")
+	a.ReviewJobID = field.NewInt64(table, "review_job_id")
 	a.OverallScore = field.NewInt32(table, "overall_score")
+	a.Summary = field.NewString(table, "summary")
 	a.ReportData = field.NewField(table, "report_data")
 	a.AnalyzedAt = field.NewTime(table, "analyzed_at")
 	a.CreatedAt = field.NewTime(table, "created_at")
@@ -100,10 +106,12 @@ func (a *analysisReport) GetFieldByName(fieldName string) (field.OrderExpr, bool
 }
 
 func (a *analysisReport) fillFieldMap() {
-	a.fieldMap = make(map[string]field.Expr, 6)
+	a.fieldMap = make(map[string]field.Expr, 8)
 	a.fieldMap["id"] = a.ID
 	a.fieldMap["variant_id"] = a.VariantID
+	a.fieldMap["review_job_id"] = a.ReviewJobID
 	a.fieldMap["overall_score"] = a.OverallScore
+	a.fieldMap["summary"] = a.Summary
 	a.fieldMap["report_data"] = a.ReportData
 	a.fieldMap["analyzed_at"] = a.AnalyzedAt
 	a.fieldMap["created_at"] = a.CreatedAt

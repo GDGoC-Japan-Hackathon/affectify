@@ -16,17 +16,26 @@ import (
 )
 
 var (
-	Q               = new(Query)
-	ActivityLog     *activityLog
-	AnalysisReport  *analysisReport
-	DesignGuide     *designGuide
-	DesignGuideLike *designGuideLike
-	Edge            *edge
-	Node            *node
-	Project         *project
-	ProjectMember   *projectMember
-	User            *user
-	Variant         *variant
+	Q                    = new(Query)
+	ActivityLog          *activityLog
+	AnalysisReport       *analysisReport
+	DesignGuide          *designGuide
+	DesignGuideLike      *designGuideLike
+	Edge                 *edge
+	GraphBuildJob        *graphBuildJob
+	LayoutJob            *layoutJob
+	Node                 *node
+	Project              *project
+	ProjectMember        *projectMember
+	ReviewFeedback       *reviewFeedback
+	ReviewFeedbackAction *reviewFeedbackAction
+	ReviewFeedbackChat   *reviewFeedbackChat
+	ReviewFeedbackTarget *reviewFeedbackTarget
+	ReviewJob            *reviewJob
+	User                 *user
+	Variant              *variant
+	VariantDesignGuide   *variantDesignGuide
+	VariantFile          *variantFile
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
@@ -36,59 +45,95 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	DesignGuide = &Q.DesignGuide
 	DesignGuideLike = &Q.DesignGuideLike
 	Edge = &Q.Edge
+	GraphBuildJob = &Q.GraphBuildJob
+	LayoutJob = &Q.LayoutJob
 	Node = &Q.Node
 	Project = &Q.Project
 	ProjectMember = &Q.ProjectMember
+	ReviewFeedback = &Q.ReviewFeedback
+	ReviewFeedbackAction = &Q.ReviewFeedbackAction
+	ReviewFeedbackChat = &Q.ReviewFeedbackChat
+	ReviewFeedbackTarget = &Q.ReviewFeedbackTarget
+	ReviewJob = &Q.ReviewJob
 	User = &Q.User
 	Variant = &Q.Variant
+	VariantDesignGuide = &Q.VariantDesignGuide
+	VariantFile = &Q.VariantFile
 }
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:              db,
-		ActivityLog:     newActivityLog(db, opts...),
-		AnalysisReport:  newAnalysisReport(db, opts...),
-		DesignGuide:     newDesignGuide(db, opts...),
-		DesignGuideLike: newDesignGuideLike(db, opts...),
-		Edge:            newEdge(db, opts...),
-		Node:            newNode(db, opts...),
-		Project:         newProject(db, opts...),
-		ProjectMember:   newProjectMember(db, opts...),
-		User:            newUser(db, opts...),
-		Variant:         newVariant(db, opts...),
+		db:                   db,
+		ActivityLog:          newActivityLog(db, opts...),
+		AnalysisReport:       newAnalysisReport(db, opts...),
+		DesignGuide:          newDesignGuide(db, opts...),
+		DesignGuideLike:      newDesignGuideLike(db, opts...),
+		Edge:                 newEdge(db, opts...),
+		GraphBuildJob:        newGraphBuildJob(db, opts...),
+		LayoutJob:            newLayoutJob(db, opts...),
+		Node:                 newNode(db, opts...),
+		Project:              newProject(db, opts...),
+		ProjectMember:        newProjectMember(db, opts...),
+		ReviewFeedback:       newReviewFeedback(db, opts...),
+		ReviewFeedbackAction: newReviewFeedbackAction(db, opts...),
+		ReviewFeedbackChat:   newReviewFeedbackChat(db, opts...),
+		ReviewFeedbackTarget: newReviewFeedbackTarget(db, opts...),
+		ReviewJob:            newReviewJob(db, opts...),
+		User:                 newUser(db, opts...),
+		Variant:              newVariant(db, opts...),
+		VariantDesignGuide:   newVariantDesignGuide(db, opts...),
+		VariantFile:          newVariantFile(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	ActivityLog     activityLog
-	AnalysisReport  analysisReport
-	DesignGuide     designGuide
-	DesignGuideLike designGuideLike
-	Edge            edge
-	Node            node
-	Project         project
-	ProjectMember   projectMember
-	User            user
-	Variant         variant
+	ActivityLog          activityLog
+	AnalysisReport       analysisReport
+	DesignGuide          designGuide
+	DesignGuideLike      designGuideLike
+	Edge                 edge
+	GraphBuildJob        graphBuildJob
+	LayoutJob            layoutJob
+	Node                 node
+	Project              project
+	ProjectMember        projectMember
+	ReviewFeedback       reviewFeedback
+	ReviewFeedbackAction reviewFeedbackAction
+	ReviewFeedbackChat   reviewFeedbackChat
+	ReviewFeedbackTarget reviewFeedbackTarget
+	ReviewJob            reviewJob
+	User                 user
+	Variant              variant
+	VariantDesignGuide   variantDesignGuide
+	VariantFile          variantFile
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:              db,
-		ActivityLog:     q.ActivityLog.clone(db),
-		AnalysisReport:  q.AnalysisReport.clone(db),
-		DesignGuide:     q.DesignGuide.clone(db),
-		DesignGuideLike: q.DesignGuideLike.clone(db),
-		Edge:            q.Edge.clone(db),
-		Node:            q.Node.clone(db),
-		Project:         q.Project.clone(db),
-		ProjectMember:   q.ProjectMember.clone(db),
-		User:            q.User.clone(db),
-		Variant:         q.Variant.clone(db),
+		db:                   db,
+		ActivityLog:          q.ActivityLog.clone(db),
+		AnalysisReport:       q.AnalysisReport.clone(db),
+		DesignGuide:          q.DesignGuide.clone(db),
+		DesignGuideLike:      q.DesignGuideLike.clone(db),
+		Edge:                 q.Edge.clone(db),
+		GraphBuildJob:        q.GraphBuildJob.clone(db),
+		LayoutJob:            q.LayoutJob.clone(db),
+		Node:                 q.Node.clone(db),
+		Project:              q.Project.clone(db),
+		ProjectMember:        q.ProjectMember.clone(db),
+		ReviewFeedback:       q.ReviewFeedback.clone(db),
+		ReviewFeedbackAction: q.ReviewFeedbackAction.clone(db),
+		ReviewFeedbackChat:   q.ReviewFeedbackChat.clone(db),
+		ReviewFeedbackTarget: q.ReviewFeedbackTarget.clone(db),
+		ReviewJob:            q.ReviewJob.clone(db),
+		User:                 q.User.clone(db),
+		Variant:              q.Variant.clone(db),
+		VariantDesignGuide:   q.VariantDesignGuide.clone(db),
+		VariantFile:          q.VariantFile.clone(db),
 	}
 }
 
@@ -102,45 +147,72 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:              db,
-		ActivityLog:     q.ActivityLog.replaceDB(db),
-		AnalysisReport:  q.AnalysisReport.replaceDB(db),
-		DesignGuide:     q.DesignGuide.replaceDB(db),
-		DesignGuideLike: q.DesignGuideLike.replaceDB(db),
-		Edge:            q.Edge.replaceDB(db),
-		Node:            q.Node.replaceDB(db),
-		Project:         q.Project.replaceDB(db),
-		ProjectMember:   q.ProjectMember.replaceDB(db),
-		User:            q.User.replaceDB(db),
-		Variant:         q.Variant.replaceDB(db),
+		db:                   db,
+		ActivityLog:          q.ActivityLog.replaceDB(db),
+		AnalysisReport:       q.AnalysisReport.replaceDB(db),
+		DesignGuide:          q.DesignGuide.replaceDB(db),
+		DesignGuideLike:      q.DesignGuideLike.replaceDB(db),
+		Edge:                 q.Edge.replaceDB(db),
+		GraphBuildJob:        q.GraphBuildJob.replaceDB(db),
+		LayoutJob:            q.LayoutJob.replaceDB(db),
+		Node:                 q.Node.replaceDB(db),
+		Project:              q.Project.replaceDB(db),
+		ProjectMember:        q.ProjectMember.replaceDB(db),
+		ReviewFeedback:       q.ReviewFeedback.replaceDB(db),
+		ReviewFeedbackAction: q.ReviewFeedbackAction.replaceDB(db),
+		ReviewFeedbackChat:   q.ReviewFeedbackChat.replaceDB(db),
+		ReviewFeedbackTarget: q.ReviewFeedbackTarget.replaceDB(db),
+		ReviewJob:            q.ReviewJob.replaceDB(db),
+		User:                 q.User.replaceDB(db),
+		Variant:              q.Variant.replaceDB(db),
+		VariantDesignGuide:   q.VariantDesignGuide.replaceDB(db),
+		VariantFile:          q.VariantFile.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	ActivityLog     IActivityLogDo
-	AnalysisReport  IAnalysisReportDo
-	DesignGuide     IDesignGuideDo
-	DesignGuideLike IDesignGuideLikeDo
-	Edge            IEdgeDo
-	Node            INodeDo
-	Project         IProjectDo
-	ProjectMember   IProjectMemberDo
-	User            IUserDo
-	Variant         IVariantDo
+	ActivityLog          IActivityLogDo
+	AnalysisReport       IAnalysisReportDo
+	DesignGuide          IDesignGuideDo
+	DesignGuideLike      IDesignGuideLikeDo
+	Edge                 IEdgeDo
+	GraphBuildJob        IGraphBuildJobDo
+	LayoutJob            ILayoutJobDo
+	Node                 INodeDo
+	Project              IProjectDo
+	ProjectMember        IProjectMemberDo
+	ReviewFeedback       IReviewFeedbackDo
+	ReviewFeedbackAction IReviewFeedbackActionDo
+	ReviewFeedbackChat   IReviewFeedbackChatDo
+	ReviewFeedbackTarget IReviewFeedbackTargetDo
+	ReviewJob            IReviewJobDo
+	User                 IUserDo
+	Variant              IVariantDo
+	VariantDesignGuide   IVariantDesignGuideDo
+	VariantFile          IVariantFileDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		ActivityLog:     q.ActivityLog.WithContext(ctx),
-		AnalysisReport:  q.AnalysisReport.WithContext(ctx),
-		DesignGuide:     q.DesignGuide.WithContext(ctx),
-		DesignGuideLike: q.DesignGuideLike.WithContext(ctx),
-		Edge:            q.Edge.WithContext(ctx),
-		Node:            q.Node.WithContext(ctx),
-		Project:         q.Project.WithContext(ctx),
-		ProjectMember:   q.ProjectMember.WithContext(ctx),
-		User:            q.User.WithContext(ctx),
-		Variant:         q.Variant.WithContext(ctx),
+		ActivityLog:          q.ActivityLog.WithContext(ctx),
+		AnalysisReport:       q.AnalysisReport.WithContext(ctx),
+		DesignGuide:          q.DesignGuide.WithContext(ctx),
+		DesignGuideLike:      q.DesignGuideLike.WithContext(ctx),
+		Edge:                 q.Edge.WithContext(ctx),
+		GraphBuildJob:        q.GraphBuildJob.WithContext(ctx),
+		LayoutJob:            q.LayoutJob.WithContext(ctx),
+		Node:                 q.Node.WithContext(ctx),
+		Project:              q.Project.WithContext(ctx),
+		ProjectMember:        q.ProjectMember.WithContext(ctx),
+		ReviewFeedback:       q.ReviewFeedback.WithContext(ctx),
+		ReviewFeedbackAction: q.ReviewFeedbackAction.WithContext(ctx),
+		ReviewFeedbackChat:   q.ReviewFeedbackChat.WithContext(ctx),
+		ReviewFeedbackTarget: q.ReviewFeedbackTarget.WithContext(ctx),
+		ReviewJob:            q.ReviewJob.WithContext(ctx),
+		User:                 q.User.WithContext(ctx),
+		Variant:              q.Variant.WithContext(ctx),
+		VariantDesignGuide:   q.VariantDesignGuide.WithContext(ctx),
+		VariantFile:          q.VariantFile.WithContext(ctx),
 	}
 }
 

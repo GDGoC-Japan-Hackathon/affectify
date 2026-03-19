@@ -5,7 +5,9 @@ import "gorm.io/datatypes"
 type AnalysisReport struct {
 	ID           int64          `gorm:"column:id;primaryKey;autoIncrement"`
 	VariantID    int64          `gorm:"column:variant_id;not null;index"`
+	ReviewJobID  *int64         `gorm:"column:review_job_id;index"`
 	OverallScore int32          `gorm:"column:overall_score;not null;index"`
+	Summary      *string        `gorm:"column:summary;type:text"`
 	ReportData   datatypes.JSON `gorm:"column:report_data;type:jsonb;not null"`
 	AnalyzedAt   Time           `gorm:"column:analyzed_at;not null;default:now()"`
 	CreatedOnly
