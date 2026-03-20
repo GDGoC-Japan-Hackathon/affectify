@@ -160,6 +160,35 @@ func (r *VariantRepository) ListNodesByVariantID(ctx context.Context, variantID 
 	return nodes, nil
 }
 
+func (r *VariantRepository) FindNodeByID(ctx context.Context, id int64) (*entity.Node, error) {
+	q := query.Use(r.db)
+	n := q.Node
+	node, err := n.WithContext(ctx).Where(n.ID.Eq(id)).First()
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func (r *VariantRepository) CreateNode(ctx context.Context, node *entity.Node) error {
+	return r.db.WithContext(ctx).Create(node).Error
+}
+
+func (r *VariantRepository) SaveNode(ctx context.Context, node *entity.Node) error {
+	return r.db.WithContext(ctx).Save(node).Error
+}
+
+func (r *VariantRepository) DeleteNodeByID(ctx context.Context, id int64) (bool, error) {
+	result := r.db.WithContext(ctx).Delete(&entity.Node{}, id)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
 func (r *VariantRepository) ListEdgesByVariantID(ctx context.Context, variantID int64) ([]entity.Edge, error) {
 	q := query.Use(r.db)
 	e := q.Edge
