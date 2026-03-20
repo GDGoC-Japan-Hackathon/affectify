@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
@@ -343,7 +344,7 @@ func (s *ReviewService) GenerateResolutionDraft(
 		}
 	}
 
-	return buildResolutionDraftFallback(feedback, resolution), nil
+	return buildResolutionDraftFallback(feedback, resolution, targets, nodes), nil
 }
 
 func buildAIReviewReply(feedback *entity.ReviewFeedback, userMessage string) string {
@@ -367,15 +368,60 @@ func buildAIReviewReply(feedback *entity.ReviewFeedback, userMessage string) str
 	return "設計書とコードの両方に改善余地があります。" + base
 }
 
-func buildResolutionDraftFallback(feedback *entity.ReviewFeedback, resolution string) string {
+func buildResolutionDraftFallback(
+	feedback *entity.ReviewFeedback,
+	resolution string,
+	targets []entity.ReviewFeedbackTarget,
+	nodes []entity.Node,
+) string {
+	targetText := buildResolutionTargetText(targets, nodes)
 	switch entity.FeedbackResolution(resolution) {
 	case entity.FeedbackResolutionUpdateDesignGuide:
-		return "設計書にこの指摘の背景と意図を追記し、責務分担と依存関係の前提を明確にする。実装側がその設計意図に沿うよう、関連箇所の期待動作も合わせて記述する。"
+		return fmt.Sprintf("%s に関する設計意図と依存関係の前提を設計書へ明記し、%s の責務と期待動作を読み手が判断できるように更新する。", feedback.Title, targetText)
 	case entity.FeedbackResolutionFixCode:
-		return "コード側でこの指摘に該当する依存関係と責務の分離を見直し、関連する実装を修正する。必要に応じて周辺の呼び出し元やインターフェースの使い方も合わせて整理する。"
+		return fmt.Sprintf("%s に関連する %s の実装を見直し、依存関係と責務分離が指摘内容に沿うようコードを修正する。必要なら呼び出し元と interface の使い方も合わせて整理する。", feedback.Title, targetText)
 	default:
-		return "設計書に意図と責務分担を明記したうえで、コード側でも該当箇所の依存関係と実装を修正し、両者の整合を取る。"
+		return fmt.Sprintf("%s に関して、設計書では %s の意図と責務分担を明記し、コードでは同じ対象の依存関係と実装を修正して両者の整合を取る。", feedback.Title, targetText)
 	}
+}
+
+func buildResolutionTargetText(targets []entity.ReviewFeedbackTarget, nodes []entity.Node) string {
+	nodeTitles := make([]string, 0, len(targets))
+	filePaths := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if target.FilePath != nil && strings.TrimSpace(*target.FilePath) != "" {
+			filePaths = append(filePaths, *target.FilePath)
+		}
+		if target.NodeID == nil {
+			continue
+		}
+		for _, node := range nodes {
+			if node.ID == *target.NodeID {
+				nodeTitles = append(nodeTitles, node.Title)
+				break
+			}
+		}
+	}
+	if len(nodeTitles) > 0 {
+		return strings.Join(uniqueStrings(nodeTitles), " / ")
+	}
+	if len(filePaths) > 0 {
+		return strings.Join(uniqueStrings(filePaths), " / ")
+	}
+	return "関連箇所"
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (s *ReviewService) ResolveReviewFeedback(

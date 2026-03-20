@@ -238,6 +238,9 @@ func (c *Client) GenerateResolutionDraft(ctx context.Context, input ResolutionDr
 	if text == "" {
 		return "", errors.New("vertex ai returned empty resolution draft")
 	}
+	if err := validateResolutionDraft(text, input); err != nil {
+		return "", err
+	}
 	return text, nil
 }
 
@@ -671,7 +674,9 @@ const chatSystemInstruction = `あなたは設計・コードレビュー worksp
 const resolutionDraftSystemInstruction = `あなたはレビュー指摘の解決内容を要約する日本語の AI アシスタントです。
 返答は 2-4 文の自然な日本語のみで、箇条書きや見出しは不要です。
 選ばれた resolution に従って、何をどう変更するかを具体的に書いてください。
-設計書更新なら設計上の変更点、コード修正なら対象となる依存や責務の変更点を含めてください。`
+設計書更新なら設計上の変更点、コード修正なら対象となる依存や責務の変更点を含めてください。
+必ず対象となる node 名、file path、interface 名、関数名のいずれか1つ以上を文中に含めてください。
+「品質向上を図る」「一貫性を高める」「具体的な指針を追記する」のような抽象表現だけで終わってはいけません。`
 
 const applyChangesSystemInstruction = `あなたは確定済みレビュー決定を実際の設計書とコードに反映する日本語の AI ソフトウェアエンジニアです。
 返答は必ず JSON のみで返してください。
@@ -698,13 +703,127 @@ func buildChatPrompt(input ChatInput) string {
 
 func buildResolutionDraftPrompt(input ResolutionDraftInput) string {
 	return fmt.Sprintf(
-		"このレビュー指摘に対して、resolution=%s で対応する前提の最終決定メモを日本語で下書きしてください。ユーザーが承認して保存する文章なので、短くても具体的にしてください。",
+		"このレビュー指摘に対して、resolution=%s で対応する前提の最終決定メモを日本語で下書きしてください。\n"+
+			"ユーザーが承認して保存する文章です。抽象的な方針説明ではなく、実際に何をどう変えるかを書いてください。\n"+
+			"指摘タイトル: %s\n"+
+			"指摘内容: %s\n"+
+			"改善提案: %s\n"+
+			"AIの現在提案: %s\n"+
+			"対象の要約:\n%s\n"+
+			"少なくとも1つの具体的な対象名（file path / node title / interface / 関数名）を文中に含めてください。",
 		input.Resolution,
+		input.Feedback.Title,
+		input.Feedback.Description,
+		input.Feedback.Suggestion,
+		derefResolution(input.Feedback.AIRecommendation),
+		summarizeResolutionTargets(input),
 	)
 }
 
 func buildApplyChangesPrompt(payload string) string {
 	return "以下の JSON を入力として、確定済みレビュー決定を設計書とコードへ反映してください。設計書本文と更新ファイル全文だけを JSON で返してください。\n" + payload
+}
+
+func summarizeResolutionTargets(input ResolutionDraftInput) string {
+	filePaths := make([]string, 0, len(input.Targets))
+	nodeIDs := make([]int64, 0, len(input.Targets))
+	edgeIDs := make([]int64, 0, len(input.Targets))
+	for _, target := range input.Targets {
+		if target.FilePath != nil && strings.TrimSpace(*target.FilePath) != "" {
+			filePaths = append(filePaths, *target.FilePath)
+		}
+		if target.NodeID != nil {
+			nodeIDs = append(nodeIDs, *target.NodeID)
+		}
+		if target.EdgeID != nil {
+			edgeIDs = append(edgeIDs, *target.EdgeID)
+		}
+	}
+
+	nodeTitles := make([]string, 0, len(nodeIDs))
+	for _, node := range input.Nodes {
+		for _, id := range nodeIDs {
+			if node.ID == id {
+				nodeTitles = append(nodeTitles, node.Title)
+				break
+			}
+		}
+	}
+
+	parts := make([]string, 0, 3)
+	if len(filePaths) > 0 {
+		parts = append(parts, "files="+strings.Join(uniqueStrings(filePaths), ", "))
+	}
+	if len(nodeTitles) > 0 {
+		parts = append(parts, "nodes="+strings.Join(uniqueStrings(nodeTitles), ", "))
+	}
+	if len(edgeIDs) > 0 {
+		parts = append(parts, fmt.Sprintf("edge_ids=%v", edgeIDs))
+	}
+	if len(parts) == 0 {
+		return "明示的な target はありません。必要なら設計書と workspace 要約から最も関係の深い対象を特定してください。"
+	}
+	return strings.Join(parts, "\n")
+}
+
+func validateResolutionDraft(text string, input ResolutionDraftInput) error {
+	lower := strings.ToLower(text)
+	genericPhrases := []string{
+		"品質向上を図",
+		"一貫性を高め",
+		"具体的な指針を追記",
+		"設計ガイドを更新",
+		"関連する設計項目",
+	}
+	for _, phrase := range genericPhrases {
+		if strings.Contains(text, phrase) {
+			return fmt.Errorf("resolution draft is too generic: %s", phrase)
+		}
+	}
+
+	candidates := make([]string, 0, len(input.Targets)+len(input.Nodes))
+	for _, target := range input.Targets {
+		if target.FilePath != nil {
+			candidates = append(candidates, strings.ToLower(*target.FilePath))
+		}
+		if target.NodeID != nil {
+			for _, node := range input.Nodes {
+				if node.ID == *target.NodeID {
+					candidates = append(candidates, strings.ToLower(node.Title))
+					break
+				}
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		candidates = append(candidates, strings.ToLower(input.Feedback.Title))
+	}
+	for _, candidate := range candidates {
+		if candidate != "" && strings.Contains(lower, candidate) {
+			return nil
+		}
+	}
+	return errors.New("resolution draft does not mention any concrete target")
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func derefResolution(value *entity.FeedbackResolution) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }
 
 func reviewOutputSchema() map[string]any {
@@ -1318,13 +1437,6 @@ func derefString(value *string) string {
 		return ""
 	}
 	return *value
-}
-
-func derefResolution(value *entity.FeedbackResolution) string {
-	if value == nil {
-		return ""
-	}
-	return string(*value)
 }
 
 func stringOrEmpty[T any](value *T, selector func(*T) string) string {
