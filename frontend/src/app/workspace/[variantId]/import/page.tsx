@@ -16,7 +16,8 @@ import {
   Square,
 } from "lucide-react";
 
-import { createGraphBuildJob, getGraphBuildJob, updateVariant } from "@/lib/api/variants";
+import { createGraphBuildJob, createLayoutJob, getGraphBuildJob, getLayoutJob, updateVariant } from "@/lib/api/variants";
+import { createReviewJob, getReviewJob } from "@/lib/api/review";
 import { uploadVariantSource } from "@/lib/api/variant-sources";
 import { useAuth } from "@/lib/auth";
 
@@ -209,6 +210,7 @@ export default function ImportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [buildStatus, setBuildStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [buildError, setBuildError] = useState("");
+  const [buildStageLabel, setBuildStageLabel] = useState("コードグラフを生成しています。");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -273,20 +275,51 @@ export default function ImportPage() {
         sourceRootUri: upload.sourceRootUri,
       });
 
+      setBuildStageLabel("コードグラフを生成しています。");
       const job = await createGraphBuildJob(variantId);
 
       while (true) {
         const current = await getGraphBuildJob(job.id);
         if (current.status === "succeeded") {
-          setBuildStatus("done");
-          window.setTimeout(() => router.push(`/workspace/${variantId}`), 1200);
-          return;
+          break;
         }
         if (current.status === "failed") {
           throw new Error(current.errorMessage || "グラフビルドに失敗しました");
         }
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
       }
+
+      setBuildStageLabel("ノードを自動整列しています。");
+      const layoutJob = await createLayoutJob(variantId, "grid");
+
+      while (true) {
+        const current = await getLayoutJob(layoutJob.id);
+        if (current.status === "succeeded") {
+          break;
+        }
+        if (current.status === "failed") {
+          throw new Error(current.errorMessage || "レイアウトに失敗しました");
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
+
+      setBuildStageLabel("AIレビューを実行しています。");
+      const reviewJob = await createReviewJob(variantId);
+
+      while (true) {
+        const current = await getReviewJob(reviewJob.id);
+        if (current.status === "succeeded") {
+          break;
+        }
+        if (current.status === "failed") {
+          throw new Error(current.errorMessage || "AIレビューに失敗しました");
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
+
+      setBuildStageLabel("準備が完了しました。workspace に移動します。");
+      setBuildStatus("done");
+      window.setTimeout(() => router.push(`/workspace/${variantId}`), 1200);
     } catch (error) {
       setBuildStatus("error");
       setBuildError(error instanceof Error ? error.message : "インポートに失敗しました");
@@ -467,9 +500,7 @@ export default function ImportPage() {
               <>
                 <Loader2 className="mx-auto mb-4 size-12 animate-spin text-indigo-600" />
                 <h2 className="mb-2 text-xl font-semibold text-slate-900">解析中...</h2>
-                <p className="text-sm text-slate-500">
-                  選択したファイルを backend に保存し、コードグラフを生成しています。
-                </p>
+                <p className="text-sm text-slate-500">{buildStageLabel}</p>
               </>
             )}
             {buildStatus === "done" && (

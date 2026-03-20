@@ -30,6 +30,7 @@ func main() {
 		&repoentity.ReviewFeedbackTarget{},
 		&repoentity.ReviewFeedbackChat{},
 		&repoentity.ReviewFeedbackAction{},
+		&repoentity.ReviewFeedbackReaction{},
 	)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "load gorm schema: %v\n", err)

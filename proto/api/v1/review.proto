@@ -13,6 +13,7 @@ service ReviewService {
   rpc ListReviewFeedbackChats(ListReviewFeedbackChatsRequest) returns (ListReviewFeedbackChatsResponse) {}
   rpc AppendReviewFeedbackChat(AppendReviewFeedbackChatRequest) returns (AppendReviewFeedbackChatResponse) {}
   rpc ResolveReviewFeedback(ResolveReviewFeedbackRequest) returns (ResolveReviewFeedbackResponse) {}
+  rpc RateReviewFeedback(RateReviewFeedbackRequest) returns (RateReviewFeedbackResponse) {}
 }
 
 message ReviewJob {
@@ -40,6 +41,7 @@ message ReviewFeedback {
   string status = 11;
   int32 display_order = 12;
   google.protobuf.Timestamp created_at = 13;
+  string user_reaction = 14;
 }
 
 message ReviewFeedbackTarget {
@@ -110,5 +112,14 @@ message ResolveReviewFeedbackRequest {
 }
 
 message ResolveReviewFeedbackResponse {
+  ReviewFeedback feedback = 1;
+}
+
+message RateReviewFeedbackRequest {
+  int64 feedback_id = 1;
+  string reaction = 2;
+}
+
+message RateReviewFeedbackResponse {
   ReviewFeedback feedback = 1;
 }

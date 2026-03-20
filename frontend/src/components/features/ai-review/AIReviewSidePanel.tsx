@@ -28,6 +28,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
     cards,
     selectedCardId,
     selectCard,
+    rateCard,
     overallScore,
     openModal,
     loadReview,
@@ -134,15 +135,13 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
           {/* ヘッダー */}
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <span className="text-sm font-semibold text-slate-900">フィードバック</span>
-            {cards.length > 0 && (
-              <button
-                onClick={() => openModal()}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                title="全画面で開く"
-              >
-                <Maximize2 className="size-4" />
-              </button>
-            )}
+            <button
+              onClick={() => openModal()}
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title="全画面で開く"
+            >
+              <Maximize2 className="size-4" />
+            </button>
           </div>
 
           {isLoading ? (
@@ -187,6 +186,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
                       isSelected={selectedCardId === card.id}
                       onClick={() => handleCardClick(card.id)}
                       onChatOpen={() => openModal(card.id)}
+                      onRate={(reaction) => void rateCard(card.id, reaction)}
                       compact
                     />
                   ))}

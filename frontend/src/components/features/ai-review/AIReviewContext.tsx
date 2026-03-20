@@ -18,6 +18,7 @@ import {
   listReviewFeedbackChats,
   listReviewFeedbacks,
   resolveReviewFeedback,
+  rateReviewFeedback,
   type ReviewFeedback,
   type ReviewFeedbackChat,
   type ReviewFeedbackTarget,
@@ -25,6 +26,7 @@ import {
 import type {
   ChatMessage,
   FeedbackCard,
+  FeedbackReaction,
   FeedbackSeverity,
   FeedbackStatus,
   FeedbackType,
@@ -46,6 +48,7 @@ type AIReviewContextType = {
   selectCard: (id: string | null) => void;
   resolveCard: (id: string, resolution: Resolution) => Promise<void>;
   unresolveCard: (id: string) => Promise<void>;
+  rateCard: (id: string, reaction: FeedbackReaction) => Promise<void>;
   sendMessage: (cardId: string, content: string) => Promise<void>;
   loadReview: () => Promise<void>;
   refreshReview: () => Promise<void>;
@@ -120,6 +123,7 @@ function mapFeedbackCards(
       aiRecommendation: isResolution(feedback.aiRecommendation)
         ? feedback.aiRecommendation
         : undefined,
+      userReaction: feedback.userReaction === "good" || feedback.userReaction === "bad" ? feedback.userReaction : undefined,
       resolved: feedback.status !== "open",
       chatHistory: previousCard?.chatHistory ?? [],
       chatsLoaded: previousCard?.chatsLoaded ?? false,
@@ -294,6 +298,27 @@ export function AIReviewProvider({
     }
   }, [cards]);
 
+  const rateCard = useCallback(async (id: string, reaction: FeedbackReaction) => {
+    try {
+      const feedback = await rateReviewFeedback(id, reaction);
+      setCards((previousCards) =>
+        previousCards.map((card) =>
+          card.id === id
+            ? {
+                ...card,
+                userReaction:
+                  feedback.userReaction === "good" || feedback.userReaction === "bad"
+                    ? feedback.userReaction
+                    : reaction,
+              }
+            : card,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "フィードバック評価の保存に失敗しました");
+    }
+  }, []);
+
   const sendMessage = useCallback(async (cardId: string, content: string) => {
     try {
       const response = await appendReviewFeedbackChat(cardId, content);
@@ -342,6 +367,7 @@ export function AIReviewProvider({
       selectCard,
       resolveCard,
       unresolveCard,
+      rateCard,
       sendMessage,
       loadReview,
       refreshReview,
@@ -359,6 +385,7 @@ export function AIReviewProvider({
       overallScore,
       refreshReview,
       resolveCard,
+      rateCard,
       selectCard,
       selectedCardId,
       sendMessage,

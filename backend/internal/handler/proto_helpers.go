@@ -40,6 +40,21 @@ func toProtoStruct(metadata datatypes.JSON) *structpb.Struct {
 	return result
 }
 
+func toProtoAnalysisReport(report *entity.AnalysisReport) *apiv1.AnalysisReport {
+	if report == nil {
+		return nil
+	}
+
+	return &apiv1.AnalysisReport{
+		Id:           report.ID,
+		VariantId:    report.VariantID,
+		OverallScore: report.OverallScore,
+		ReportData:   toProtoStruct(report.ReportData),
+		AnalyzedAt:   timestamppb.New(time.Time(report.AnalyzedAt)),
+		CreatedAt:    timestamppb.New(report.CreatedAt),
+	}
+}
+
 func toProtoVariant(detail *service.VariantDetail) *apiv1.Variant {
 	if detail == nil || detail.Variant == nil {
 		return nil
@@ -309,7 +324,7 @@ func toProtoReviewJob(job *entity.ReviewJob) *apiv1.ReviewJob {
 	}
 }
 
-func toProtoReviewFeedback(feedback *entity.ReviewFeedback) *apiv1.ReviewFeedback {
+func toProtoReviewFeedback(feedback *entity.ReviewFeedback, userReaction *string) *apiv1.ReviewFeedback {
 	if feedback == nil {
 		return nil
 	}
@@ -329,7 +344,15 @@ func toProtoReviewFeedback(feedback *entity.ReviewFeedback) *apiv1.ReviewFeedbac
 		Status:           string(feedback.Status),
 		DisplayOrder:     feedback.DisplayOrder,
 		CreatedAt:        timestamppb.New(feedback.CreatedAt),
+		UserReaction:     feedbackActionValue(userReaction),
 	}
+}
+
+func feedbackActionValue(action *string) string {
+	if action == nil {
+		return ""
+	}
+	return *action
 }
 
 func toProtoReviewFeedbackTarget(target *entity.ReviewFeedbackTarget) *apiv1.ReviewFeedbackTarget {
