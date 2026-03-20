@@ -158,6 +158,12 @@ resource "google_project_iam_member" "github_storage_admin" {
   member  = "serviceAccount:${google_service_account.github_deployer.email}"
 }
 
+resource "google_project_iam_member" "github_serviceusage_admin" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageAdmin"
+  member  = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
 resource "google_project_iam_member" "github_sa_user" {
   project = var.project_id
   role    = "roles/iam.serviceAccountUser"
