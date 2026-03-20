@@ -12,7 +12,8 @@ import { DrawingCard } from "./DrawingCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, SaveAll, Eraser } from "lucide-react";
+import { NodeSearchBar } from "./NodeSearchBar";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, SaveAll, Eraser, Search } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs } from "@/utils/graphLayout";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ import {
   getLayoutJob,
   getVariantWorkspace,
 } from "@/lib/api/variants";
+import { createNode, updateNodeCode, updateNodePosition } from "@/lib/api/nodes";
 
 interface WhiteboardProps {
   variantId: string;
@@ -204,6 +206,14 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
   }, [highlightedNodeIds, setNodes]);
 
   useEffect(() => {
+    highlightedNodeIdsRef.current = highlightedNodeIds;
+  }, [highlightedNodeIds]);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
     setEdges(applyReviewHighlights(toFlowEdges(boardEdges, sccEdgeIds), highlightedEdgeIds));
   }, [boardEdges, highlightedEdgeIds, sccEdgeIds, setEdges]);
   const reactFlow = useReactFlow();
@@ -246,6 +256,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
   const zMax = useRef(100);
   const hoverNodeId = useRef<string | null>(null);
   const hoverSavedZ = useRef<number>(0);
+  const highlightedNodeIdsRef = useRef(highlightedNodeIds);
   const historyPastRef = useRef<HistorySnapshot[]>([]);
   const historyFutureRef = useRef<HistorySnapshot[]>([]);
   const [, setHistoryTick] = useState(0);
@@ -257,6 +268,8 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
   const isLayoutAdjustingRef = useRef(false);
   const isCodeEditSessionRef = useRef(false);
   const codeEditSessionTimerRef = useRef<number | null>(null);
+  const codeSaveTimerRef = useRef<number | null>(null);
+  const nodesRef = useRef(nodes);
   const suppressSelectChangeRef = useRef(false);
   const isOverFlowElementRef = useRef(false);
   const isBoardDrawingRef = useRef(false);
@@ -374,6 +387,18 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
     setSelectedCheckpointId(id);
   }, [nodes, cloneNodesSnapshot, pushHistorySnapshot]);
 
+  const savePositionsToDb = useCallback(async () => {
+    const toastId = toast.loading("座標を保存中...");
+    try {
+      await Promise.all(
+        nodes.map((n) => updateNodePosition(n.id, n.position.x, n.position.y)),
+      );
+      toast.success("座標を保存しました", { id: toastId });
+    } catch {
+      toast.error("保存に失敗しました", { id: toastId });
+    }
+  }, [nodes]);
+
   const restoreCheckpoint = useCallback(() => {
     const target = checkpoints.find((cp) => cp.id === selectedCheckpointId);
     if (!target) return;
@@ -448,6 +473,10 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
           hoverNodeId.current = null;
         }
 
+        const reviewIds = highlightedNodeIdsRef.current;
+        const hasReview = reviewIds && reviewIds.size > 0;
+        const reviewOpacity = (id: string) => (hasReview ? (reviewIds.has(id) ? 1 : 0.2) : 1);
+
         return nds.map((n) => {
           if (nodeId) {
             const isDimmed = focusMode && !connectedIds.has(n.id);
@@ -455,14 +484,14 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
               return { ...n, data: { ...n.data, highlighted: true }, style: { ...n.style, opacity: 1 }, zIndex: 9999999 };
             }
             if (n.id === prevHoverId && prevHoverId !== nodeId) {
-              return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: isDimmed ? 0.15 : 1 }, zIndex: prevSavedZ };
+              return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: isDimmed ? 0.15 : reviewOpacity(n.id) }, zIndex: prevSavedZ };
             }
-            return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: isDimmed ? 0.15 : 1 } };
+            return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: isDimmed ? 0.15 : reviewOpacity(n.id) } };
           } else {
             if (n.id === prevHoverId) {
-              return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: 1 }, zIndex: prevSavedZ };
+              return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: reviewOpacity(n.id) }, zIndex: prevSavedZ };
             }
-            return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: 1 } };
+            return { ...n, data: { ...n.data, highlighted: false }, style: { ...n.style, opacity: reviewOpacity(n.id) } };
           }
         });
       });
@@ -471,6 +500,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
   );
 
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const windowZMax = useRef(9999);
   const [windowZIndexes, setWindowZIndexes] = useState<Record<number, number>>({});
   const layoutAnimFrameRef = useRef<number | null>(null);
@@ -598,6 +628,11 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
       if ((e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y") {
         e.preventDefault();
         redo();
+        return;
+      }
+      if (e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsSearchOpen(true);
       }
     };
 
@@ -656,40 +691,39 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
   const [viewerWindows, setViewerWindows] = useState<ViewerWindow[]>([]);
 
   // 新規ノード追加
-  const newNodeCounter = useRef(0);
   const handleAddNode = useCallback(
-    (afterNodeId: string | null, filePath: string, name: string) => {
-      pushHistorySnapshot();
-      newNodeCounter.current += 1;
-      const newId = `new-node-${Date.now()}-${newNodeCounter.current}`;
+    async (afterNodeId: string | null, filePath: string, name: string) => {
       const funcName = name || "newFunction";
       const refNode = afterNodeId ? nodes.find((n) => n.id === afterNodeId) : nodes.find((n) => (n.data as unknown as BoardNode).file_path === filePath);
       const x = refNode?.position.x ?? 100;
       const y = refNode ? (afterNodeId ? refNode.position.y + 250 : refNode.position.y - 250) : 100;
-      const newBoardNode: BoardNode = {
-        id: newId,
-        title: funcName,
-        kind: "function",
-        code_text: `func ${funcName}() {\n\t\n}`,
-        file_path: filePath,
-        signature: "",
-        receiver: "",
-        x,
-        y,
-      };
-      setNodes((nds) => {
-        const newNode = { id: newId, type: "codeCard" as const, position: { x, y }, data: { ...newBoardNode }, zIndex: 0 };
-        if (!afterNodeId) {
-          const firstInFileIdx = nds.findIndex((n) => (n.data as unknown as BoardNode).file_path === filePath);
-          if (firstInFileIdx === -1) return [...nds, newNode];
-          return [...nds.slice(0, firstInFileIdx), newNode, ...nds.slice(firstInFileIdx)];
-        }
-        const afterIdx = nds.findIndex((n) => n.id === afterNodeId);
-        if (afterIdx === -1) return [...nds, newNode];
-        return [...nds.slice(0, afterIdx + 1), newNode, ...nds.slice(afterIdx + 1)];
-      });
+
+      try {
+        const created = await createNode(variantId, {
+          kind: "function",
+          title: funcName,
+          codeText: `func ${funcName}() {\n\t\n}`,
+          x,
+          y,
+        });
+        const newBoardNode: BoardNode = { ...created, file_path: filePath };
+        pushHistorySnapshot();
+        setNodes((nds) => {
+          const newNode = { id: created.id, type: "codeCard" as const, position: { x, y }, data: { ...newBoardNode }, zIndex: 0 };
+          if (!afterNodeId) {
+            const firstInFileIdx = nds.findIndex((n) => (n.data as unknown as BoardNode).file_path === filePath);
+            if (firstInFileIdx === -1) return [...nds, newNode];
+            return [...nds.slice(0, firstInFileIdx), newNode, ...nds.slice(firstInFileIdx)];
+          }
+          const afterIdx = nds.findIndex((n) => n.id === afterNodeId);
+          if (afterIdx === -1) return [...nds, newNode];
+          return [...nds.slice(0, afterIdx + 1), newNode, ...nds.slice(afterIdx + 1)];
+        });
+      } catch {
+        toast.error("ノードの作成に失敗しました");
+      }
     },
-    [nodes, setNodes, pushHistorySnapshot],
+    [nodes, setNodes, pushHistorySnapshot, variantId],
   );
 
   // メモ・画像ノードをビューポート中央に挿入
@@ -734,6 +768,17 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
       }, 700);
 
       setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, code_text: code } } : n)));
+
+      // DBへのデバウンス保存（1.5秒後）
+      if (codeSaveTimerRef.current !== null) {
+        window.clearTimeout(codeSaveTimerRef.current);
+      }
+      codeSaveTimerRef.current = window.setTimeout(() => {
+        const node = nodesRef.current.find((n) => n.id === nodeId);
+        if (!node) return;
+        const boardNode = node.data as unknown as BoardNode;
+        void updateNodeCode(nodeId, code, boardNode);
+      }, 1500);
     },
     [setNodes, pushHistorySnapshot],
   );
@@ -1217,6 +1262,20 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
 
   return (
     <div ref={boardRef} className={`w-full h-full relative ${isSelectionMode ? "select-none" : ""}`}>
+      {/* ノード検索オーバーレイ */}
+      {isSearchOpen && (
+        <NodeSearchBar
+          nodes={boardNodes}
+          onSelect={(nodeId) => {
+            const node = nodes.find((n) => n.id === nodeId);
+            if (node) {
+              fitView({ nodes: [node], duration: 400, padding: 0.3 });
+            }
+          }}
+          onClose={() => setIsSearchOpen(false)}
+        />
+      )}
+
       {/* 左上：ファイルツリーボタン（パネル閉時のみ表示） */}
       <AnimatePresence>
         {!fileTreeOpen && (
@@ -1323,6 +1382,9 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
+          <button onClick={() => setIsSearchOpen(true)} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ノード検索 (Cmd+K)">
+            <Search className="size-5 text-gray-700" />
+          </button>
 <button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
             <RotateCcw className="size-5 text-gray-700" />
           </button>
@@ -1338,8 +1400,11 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
 
             {isSaveMenuOpen && (
               <div ref={saveMenuPanelRef} className="absolute right-0 mt-2 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                <button onClick={() => void savePositionsToDb()} className="mb-2 w-full rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-indigo-700" title="全ノードの座標をDBに保存">
+                  座標をDBに保存
+                </button>
                 <button onClick={saveCheckpoint} className="mb-2 w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50" title="名前付きで現在地点を保存">
-                  名前付きで保存
+                  名前付きで保存（ローカル）
                 </button>
 
                 <div className="mb-2 max-h-40 overflow-y-auto rounded-md border border-gray-200">

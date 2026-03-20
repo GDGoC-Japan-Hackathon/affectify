@@ -21,7 +21,7 @@ interface CodeViewerWindowProps {
   onNodeHover?: (nodeId: string | null) => void;
   onNodeClick?: (nodeId: string) => void;
   onCodeSync?: (nodeId: string, code: string) => void;
-  onAddNode?: (afterNodeId: string | null, filePath: string, name: string) => void;
+  onAddNode?: (afterNodeId: string | null, filePath: string, name: string) => void | Promise<void>;
   initialPosition?: { x: number; y: number };
   zIndex?: number;
   onFocus?: () => void;
@@ -166,7 +166,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   const handleConfirmAdd = useCallback(() => {
     if (!addPopup) return;
     const name = newFuncName.trim() || "newFunction";
-    onAddNodeRef.current?.(addPopup.afterNodeId, activeTabRef.current, name);
+    void onAddNodeRef.current?.(addPopup.afterNodeId, activeTabRef.current, name);
     setAddPopup(null);
   }, [addPopup, newFuncName]);
 
