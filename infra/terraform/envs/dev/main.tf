@@ -209,6 +209,8 @@ module "graph_build_job" {
   service_account_email = google_service_account.backend.email
   image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.worker_image_name}:${var.worker_image_tag}"
   cloud_sql_instances   = [module.cloud_sql.instance_connection_name]
+  cpu                   = "2"
+  memory                = "4Gi"
   command               = ["/app/worker"]
   args                  = ["graph-build"]
   secret_env = {
@@ -245,6 +247,8 @@ module "review_job" {
   service_account_email = google_service_account.backend.email
   image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.worker_image_name}:${var.worker_image_tag}"
   cloud_sql_instances   = [module.cloud_sql.instance_connection_name]
+  cpu                   = "1"
+  memory                = "1Gi"
   command               = ["/app/worker"]
   args                  = ["review"]
   secret_env = {
