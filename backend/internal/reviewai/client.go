@@ -293,6 +293,7 @@ func (c *Client) GenerateApplyChanges(ctx context.Context, input ApplyInput) (*a
 
 	resp, err := client.Models.GenerateContent(ctx, c.cfg.Model, []*genai.Content{
 		{
+			Role: "user",
 			Parts: []*genai.Part{{
 				Text: buildApplyChangesPrompt(string(body)),
 			}},
