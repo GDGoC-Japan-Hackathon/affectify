@@ -184,6 +184,7 @@ module "cloud_run" {
     GCP_PROJECT_ID           = var.project_id
     GCP_REGION               = var.region
     GRAPH_BUILD_JOB_NAME     = var.graph_build_job_name
+    LAYOUT_JOB_NAME          = var.layout_job_name
     INSTANCE_CONNECTION_NAME = module.cloud_sql.instance_connection_name
     FIREBASE_PROJECT_ID      = var.project_id
     REVIEW_JOB_NAME          = var.review_job_name
@@ -276,10 +277,56 @@ module "review_job" {
   ]
 }
 
+module "layout_job" {
+  source = "../../modules/cloud_run_job"
+
+  project_id            = var.project_id
+  region                = var.region
+  job_name              = var.layout_job_name
+  service_account_email = google_service_account.backend.email
+  image                 = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.worker_image_name}:${var.worker_image_tag}"
+  cloud_sql_instances   = [module.cloud_sql.instance_connection_name]
+  cpu                   = "1"
+  memory                = "512Mi"
+  command               = ["/app/worker"]
+  args                  = ["layout"]
+  secret_env = {
+    DB_PASSWORD               = "db-password"
+    FIREBASE_CREDENTIALS_JSON = "firebase-admin-credentials"
+  }
+  env = {
+    DB_NAME                  = var.cloud_sql_database_name
+    DB_USER                  = var.cloud_sql_user_name
+    GCP_PROJECT_ID           = var.project_id
+    GCP_REGION               = var.region
+    INSTANCE_CONNECTION_NAME = module.cloud_sql.instance_connection_name
+    FIREBASE_PROJECT_ID      = var.project_id
+    SOURCE_BUCKET_NAME       = google_storage_bucket.variant_sources.name
+    VERTEX_AI_MODEL          = var.vertex_ai_model
+  }
+
+  depends_on = [
+    module.project_services,
+    module.artifact_registry,
+    module.secret_manager,
+    module.cloud_sql,
+    google_service_account.backend,
+    google_storage_bucket.variant_sources,
+  ]
+}
+
 resource "google_cloud_run_v2_job_iam_member" "backend_run_graph_build_job" {
   project  = var.project_id
   location = var.region
   name     = module.graph_build_job.job_name
+  role     = "roles/run.jobsExecutorWithOverrides"
+  member   = "serviceAccount:${google_service_account.backend.email}"
+}
+
+resource "google_cloud_run_v2_job_iam_member" "backend_run_layout_job" {
+  project  = var.project_id
+  location = var.region
+  name     = module.layout_job.job_name
   role     = "roles/run.jobsExecutorWithOverrides"
   member   = "serviceAccount:${google_service_account.backend.email}"
 }

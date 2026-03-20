@@ -56,6 +56,12 @@ variable "graph_build_job_name" {
   default     = "whitecoder-graph-build"
 }
 
+variable "layout_job_name" {
+  description = "Cloud Run Job name for layout worker"
+  type        = string
+  default     = "whitecoder-layout"
+}
+
 variable "review_job_name" {
   description = "Cloud Run Job name for review worker"
   type        = string
