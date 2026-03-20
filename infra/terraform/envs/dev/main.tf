@@ -93,6 +93,12 @@ resource "google_project_iam_member" "backend_aiplatform_user" {
   member  = "serviceAccount:${google_service_account.backend.email}"
 }
 
+resource "google_service_account_iam_member" "backend_self_token_creator" {
+  service_account_id = google_service_account.backend.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.backend.email}"
+}
+
 resource "google_storage_bucket" "variant_sources" {
   name                        = var.source_bucket_name
   project                     = var.project_id
@@ -102,6 +108,13 @@ resource "google_storage_bucket" "variant_sources" {
 
   versioning {
     enabled = true
+  }
+
+  cors {
+    origin          = ["*"]
+    method          = ["PUT", "GET", "HEAD"]
+    response_header = ["Content-Type", "ETag"]
+    max_age_seconds = 3600
   }
 
   depends_on = [module.project_services]

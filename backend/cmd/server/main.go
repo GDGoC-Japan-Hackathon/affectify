@@ -66,6 +66,7 @@ func main() {
 	designGuideHandler := handler.NewDesignGuideServiceHandler(designGuideService)
 	variantHandler := handler.NewVariantServiceHandler(variantService)
 	variantSourceUploadHandler := handler.NewVariantSourceUploadHandler(verifier, variantService)
+	variantSourceUploadPlanHandler := handler.NewVariantSourceUploadPlanHandler(verifier, variantService)
 	reviewHandler := handler.NewReviewServiceHandler(reviewService)
 
 	mux := http.NewServeMux()
@@ -81,6 +82,7 @@ func main() {
 	mux.Handle(designGuidePath, designGuideHTTPHandler)
 	variantPath, variantHTTPHandler := apiv1connect.NewVariantServiceHandler(variantHandler, interceptors)
 	mux.Handle(variantPath, variantHTTPHandler)
+	mux.Handle("/variant-sources/upload-plan", middleware.WithCORS(variantSourceUploadPlanHandler))
 	mux.Handle("/variant-sources/upload", middleware.WithCORS(variantSourceUploadHandler))
 	reviewPath, reviewHTTPHandler := apiv1connect.NewReviewServiceHandler(reviewHandler, interceptors)
 	mux.Handle(reviewPath, reviewHTTPHandler)
