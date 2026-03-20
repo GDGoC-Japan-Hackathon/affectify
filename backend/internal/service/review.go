@@ -7,8 +7,10 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/config"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/reviewai"
 )
 
 var (
@@ -46,6 +48,7 @@ type ReviewService struct {
 	reviewRepo     *repository.ReviewRepository
 	variantRepo    *repository.VariantRepository
 	jobDispatcher  JobDispatcher
+	reviewAI       *reviewai.Client
 }
 
 func NewReviewService(db *gorm.DB, userRepository *repository.UserRepository, jobDispatcher JobDispatcher) *ReviewService {
@@ -56,6 +59,7 @@ func NewReviewService(db *gorm.DB, userRepository *repository.UserRepository, jo
 		reviewRepo:     repository.NewReviewRepository(db),
 		variantRepo:    repository.NewVariantRepository(db),
 		jobDispatcher:  jobDispatcher,
+		reviewAI:       reviewai.NewClient(config.LoadVertexAIConfig()),
 	}
 }
 
@@ -194,10 +198,31 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 		return nil, nil, err
 	}
 
+	replyContent := buildAIReviewReply(feedback, content)
+	if s.reviewAI != nil && s.reviewAI.Enabled() {
+		files, filesErr := s.variantRepo.ListFilesByVariantID(ctx, feedback.VariantID)
+		nodes, nodesErr := s.variantRepo.ListNodesByVariantID(ctx, feedback.VariantID)
+		edges, edgesErr := s.variantRepo.ListEdgesByVariantID(ctx, feedback.VariantID)
+		guide, guideErr := s.variantRepo.FindDesignGuideByVariantID(ctx, feedback.VariantID)
+		if filesErr == nil && nodesErr == nil && edgesErr == nil && guideErr == nil {
+			aiReply, aiErr := s.reviewAI.GenerateChatReply(ctx, reviewai.ChatInput{
+				Guide:       guide,
+				Files:       files,
+				Nodes:       nodes,
+				Edges:       edges,
+				Feedback:    feedback,
+				UserMessage: content,
+			})
+			if aiErr == nil && strings.TrimSpace(aiReply) != "" {
+				replyContent = aiReply
+			}
+		}
+	}
+
 	reply := &entity.ReviewFeedbackChat{
 		FeedbackID: feedbackID,
 		Role:       entity.ChatRoleAI,
-		Content:    buildAIReviewReply(feedback, content),
+		Content:    replyContent,
 	}
 	if err := s.reviewRepo.CreateFeedbackChat(ctx, reply); err != nil {
 		return nil, nil, err

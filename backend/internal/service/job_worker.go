@@ -17,22 +17,26 @@ import (
 	"google.golang.org/api/iterator"
 	"gorm.io/gorm"
 
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/config"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/graphbuild"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/layout"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/reviewai"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/reviewgen"
 )
 
 type JobWorkerService struct {
 	variantRepo *repository.VariantRepository
 	reviewRepo  *repository.ReviewRepository
+	reviewAI    *reviewai.Client
 }
 
 func NewJobWorkerService(db *gorm.DB) *JobWorkerService {
 	return &JobWorkerService{
 		variantRepo: repository.NewVariantRepository(db),
 		reviewRepo:  repository.NewReviewRepository(db),
+		reviewAI:    reviewai.NewClient(config.LoadVertexAIConfig()),
 	}
 }
 
@@ -420,6 +424,18 @@ func (s *JobWorkerService) runReview(ctx context.Context, job *entity.ReviewJob)
 	}
 
 	result := reviewgen.Generate(designGuide, files, nodes, edges)
+	if s.reviewAI != nil && s.reviewAI.Enabled() {
+		aiResult, err := s.reviewAI.GenerateReview(ctx, reviewai.ReviewInput{
+			Guide: designGuide,
+			Files: files,
+			Nodes: nodes,
+			Edges: edges,
+		})
+		if err != nil {
+			return s.failReview(ctx, job, fmt.Errorf("vertex ai review generation failed: %w", err))
+		}
+		result = aiResult
+	}
 	writes := make([]repository.FeedbackWrite, 0, len(result.Feedbacks))
 	for index, feedback := range result.Feedbacks {
 		aiRecommendation := feedback.AIRecommendation
