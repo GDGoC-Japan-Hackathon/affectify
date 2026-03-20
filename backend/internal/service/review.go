@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -27,9 +28,15 @@ type ResolveReviewFeedbackInput struct {
 	Status     string
 }
 
+type RateReviewFeedbackInput struct {
+	FeedbackID int64
+	Reaction   string
+}
+
 type ReviewFeedbackBundle struct {
-	Feedbacks []entity.ReviewFeedback
-	Targets   []entity.ReviewFeedbackTarget
+	Feedbacks     []entity.ReviewFeedback
+	Targets       []entity.ReviewFeedbackTarget
+	UserReactions map[int64]string
 }
 
 type ReviewService struct {
@@ -98,7 +105,8 @@ func (s *ReviewService) ListReviewFeedbacks(
 	firebaseUID string,
 	input ListReviewFeedbacksInput,
 ) (*ReviewFeedbackBundle, error) {
-	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, input.VariantID); err != nil {
+	_, requester, err := s.requireVariantAccess(ctx, firebaseUID, input.VariantID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -132,9 +140,15 @@ func (s *ReviewService) ListReviewFeedbacks(
 		return nil, err
 	}
 
+	reactions, err := s.reviewRepo.FindFeedbackReactionsByUser(ctx, requester.ID, feedbackIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ReviewFeedbackBundle{
-		Feedbacks: feedbacks,
-		Targets:   targets,
+		Feedbacks:     feedbacks,
+		Targets:       targets,
+		UserReactions: reactions,
 	}, nil
 }
 
@@ -180,12 +194,42 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 		return nil, nil, err
 	}
 
+	reply := &entity.ReviewFeedbackChat{
+		FeedbackID: feedbackID,
+		Role:       entity.ChatRoleAI,
+		Content:    buildAIReviewReply(feedback, content),
+	}
+	if err := s.reviewRepo.CreateFeedbackChat(ctx, reply); err != nil {
+		return nil, nil, err
+	}
+
 	chats, err := s.ListReviewFeedbackChats(ctx, firebaseUID, feedbackID)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return chats, feedback, nil
+}
+
+func buildAIReviewReply(feedback *entity.ReviewFeedback, userMessage string) string {
+	base := feedback.Suggestion
+	if base == "" {
+		base = "まずは指摘箇所の責務と依存関係を整理してください。"
+	}
+
+	if feedback.AIRecommendation == nil {
+		return "補足ありがとうございます。現状では、" + base
+	}
+	if *feedback.AIRecommendation == entity.FeedbackResolutionUpdateDesignGuide {
+		return "設計書側の意図を先に明文化すると議論しやすくなります。" + base
+	}
+	if *feedback.AIRecommendation == entity.FeedbackResolutionFixCode {
+		return "コード側の依存や責務の切り方を確認してください。" + base
+	}
+	if strings.TrimSpace(userMessage) != "" {
+		return "設計書とコードの両方を見直すのが良さそうです。" + base
+	}
+	return "設計書とコードの両方に改善余地があります。" + base
 }
 
 func (s *ReviewService) ResolveReviewFeedback(
@@ -236,6 +280,37 @@ func (s *ReviewService) ResolveReviewFeedback(
 	}
 
 	return feedback, nil
+}
+
+func (s *ReviewService) RateReviewFeedback(
+	ctx context.Context,
+	firebaseUID string,
+	input RateReviewFeedbackInput,
+) (*entity.ReviewFeedback, string, error) {
+	requester, err := s.requireUser(ctx, firebaseUID)
+	if err != nil {
+		return nil, "", err
+	}
+	feedback, _, err := s.requireFeedbackAccess(ctx, firebaseUID, input.FeedbackID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	reaction := input.Reaction
+	if reaction != "good" && reaction != "bad" {
+		return nil, "", errors.New("invalid feedback reaction")
+	}
+
+	record := &entity.ReviewFeedbackReaction{
+		FeedbackID: feedback.ID,
+		UserID:     requester.ID,
+		Reaction:   reaction,
+	}
+	if err := s.reviewRepo.UpsertFeedbackReaction(ctx, record); err != nil {
+		return nil, "", err
+	}
+
+	return feedback, reaction, nil
 }
 
 func (s *ReviewService) requireUser(ctx context.Context, firebaseUID string) (*entity.User, error) {

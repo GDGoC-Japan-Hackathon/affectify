@@ -85,7 +85,11 @@ func (h *ReviewServiceHandler) ListReviewFeedbacks(
 	// service の bundle を frontend で使う proto slice に展開する。
 	feedbacks := make([]*apiv1.ReviewFeedback, 0, len(bundle.Feedbacks))
 	for i := range bundle.Feedbacks {
-		feedbacks = append(feedbacks, toProtoReviewFeedback(&bundle.Feedbacks[i]))
+		var reaction *string
+		if value, ok := bundle.UserReactions[bundle.Feedbacks[i].ID]; ok {
+			reaction = &value
+		}
+		feedbacks = append(feedbacks, toProtoReviewFeedback(&bundle.Feedbacks[i], reaction))
 	}
 
 	targets := make([]*apiv1.ReviewFeedbackTarget, 0, len(bundle.Targets))
@@ -147,7 +151,7 @@ func (h *ReviewServiceHandler) AppendReviewFeedbackChat(
 
 	return connect.NewResponse(&apiv1.AppendReviewFeedbackChatResponse{
 		Chats:    items,
-		Feedback: toProtoReviewFeedback(feedback),
+		Feedback: toProtoReviewFeedback(feedback, nil),
 	}), nil
 }
 
@@ -172,7 +176,29 @@ func (h *ReviewServiceHandler) ResolveReviewFeedback(
 	}
 
 	return connect.NewResponse(&apiv1.ResolveReviewFeedbackResponse{
-		Feedback: toProtoReviewFeedback(feedback),
+		Feedback: toProtoReviewFeedback(feedback, nil),
+	}), nil
+}
+
+func (h *ReviewServiceHandler) RateReviewFeedback(
+	ctx context.Context,
+	req *connect.Request[apiv1.RateReviewFeedbackRequest],
+) (*connect.Response[apiv1.RateReviewFeedbackResponse], error) {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+
+	feedback, reaction, err := h.reviewService.RateReviewFeedback(ctx, identity.UID, service.RateReviewFeedbackInput{
+		FeedbackID: req.Msg.FeedbackId,
+		Reaction:   req.Msg.Reaction,
+	})
+	if err != nil {
+		return nil, mapReviewError(err)
+	}
+
+	return connect.NewResponse(&apiv1.RateReviewFeedbackResponse{
+		Feedback: toProtoReviewFeedback(feedback, &reaction),
 	}), nil
 }
 

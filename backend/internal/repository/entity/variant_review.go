@@ -133,3 +133,15 @@ type ReviewFeedbackAction struct {
 func (ReviewFeedbackAction) TableName() string {
 	return "review_feedback_actions"
 }
+
+type ReviewFeedbackReaction struct {
+	ID         int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	FeedbackID int64  `gorm:"column:feedback_id;not null;uniqueIndex:idx_review_feedback_reactions_feedback_user;index"`
+	UserID     int64  `gorm:"column:user_id;not null;uniqueIndex:idx_review_feedback_reactions_feedback_user;index"`
+	Reaction   string `gorm:"column:reaction;type:varchar(20);not null"`
+	Timestamped
+}
+
+func (ReviewFeedbackReaction) TableName() string {
+	return "review_feedback_reactions"
+}

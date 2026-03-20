@@ -21,6 +21,7 @@ import (
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/layout"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/reviewgen"
 )
 
 type JobWorkerService struct {
@@ -400,10 +401,88 @@ func (s *JobWorkerService) runReview(ctx context.Context, job *entity.ReviewJob)
 	if variant == nil {
 		return s.failReview(ctx, job, ErrVariantNotFound)
 	}
-	if err := s.variantRepo.UpdateLastReviewedAt(ctx, job.VariantID, now); err != nil {
+
+	files, err := s.variantRepo.ListFilesByVariantID(ctx, job.VariantID)
+	if err != nil {
 		return s.failReview(ctx, job, err)
 	}
-	if err := s.reviewRepo.CreatePlaceholderAnalysisReport(ctx, job.VariantID, job.ID, now); err != nil {
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReview(ctx, job, err)
+	}
+	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReview(ctx, job, err)
+	}
+	designGuide, err := s.variantRepo.FindDesignGuideByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReview(ctx, job, err)
+	}
+
+	result := reviewgen.Generate(designGuide, files, nodes, edges)
+	writes := make([]repository.FeedbackWrite, 0, len(result.Feedbacks))
+	for index, feedback := range result.Feedbacks {
+		aiRecommendation := feedback.AIRecommendation
+		model := entity.ReviewFeedback{
+			ReviewJobID:      job.ID,
+			VariantID:        job.VariantID,
+			FeedbackType:     feedback.Type,
+			Severity:         feedback.Severity,
+			Title:            feedback.Title,
+			Description:      feedback.Description,
+			Suggestion:       feedback.Suggestion,
+			AIRecommendation: &aiRecommendation,
+			Status:           entity.FeedbackStatusOpen,
+			DisplayOrder:     int32(index + 1),
+		}
+
+		targets := make([]entity.ReviewFeedbackTarget, 0, len(feedback.TargetNodeIDs)+len(feedback.TargetEdgeIDs)+len(feedback.TargetFilePaths))
+		for _, nodeID := range feedback.TargetNodeIDs {
+			targets = append(targets, entity.ReviewFeedbackTarget{
+				TargetType: entity.FeedbackTargetTypeNode,
+				TargetRef:  fmt.Sprintf("%d", nodeID),
+			})
+		}
+		for _, edgeID := range feedback.TargetEdgeIDs {
+			targets = append(targets, entity.ReviewFeedbackTarget{
+				TargetType: entity.FeedbackTargetTypeEdge,
+				TargetRef:  fmt.Sprintf("%d", edgeID),
+			})
+		}
+		for _, path := range feedback.TargetFilePaths {
+			targets = append(targets, entity.ReviewFeedbackTarget{
+				TargetType: entity.FeedbackTargetTypeFile,
+				TargetRef:  path,
+			})
+		}
+
+		chats := []entity.ReviewFeedbackChat{
+			{
+				Role:    entity.ChatRoleAI,
+				Content: buildInitialAIReviewChat(feedback),
+			},
+		}
+		writes = append(writes, repository.FeedbackWrite{
+			Feedback: model,
+			Targets:  targets,
+			Chats:    chats,
+		})
+	}
+
+	if err := s.reviewRepo.ReplaceGeneratedReview(
+		ctx,
+		job.VariantID,
+		job.ID,
+		result.OverallScore,
+		result.Summary,
+		result.ReportData,
+		now,
+		writes,
+	); err != nil {
+		return s.failReview(ctx, job, err)
+	}
+
+	if err := s.variantRepo.UpdateLastReviewedAt(ctx, job.VariantID, now); err != nil {
 		return s.failReview(ctx, job, err)
 	}
 
@@ -411,6 +490,26 @@ func (s *JobWorkerService) runReview(ctx context.Context, job *entity.ReviewJob)
 	job.Status = entity.JobStatusSucceeded
 	job.FinishedAt = (*entity.Time)(&finished)
 	return s.reviewRepo.SaveReviewJob(ctx, job)
+}
+
+func buildInitialAIReviewChat(feedback reviewgen.Feedback) string {
+	return fmt.Sprintf(
+		"%s。提案は「%s」です。まずは %s を確認するのがよいです。",
+		feedback.Description,
+		feedback.Suggestion,
+		initialResolutionFocus(feedback.AIRecommendation),
+	)
+}
+
+func initialResolutionFocus(resolution entity.FeedbackResolution) string {
+	switch resolution {
+	case entity.FeedbackResolutionUpdateDesignGuide:
+		return "設計書の前提と責務分割"
+	case entity.FeedbackResolutionFixCode:
+		return "コード上の依存と責務境界"
+	default:
+		return "設計書とコードの両方"
+	}
 }
 
 func (s *JobWorkerService) failGraphBuild(ctx context.Context, job *entity.GraphBuildJob, cause error) error {
