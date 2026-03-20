@@ -164,9 +164,9 @@ func (p *Parser) relToBase(path string) string {
 		absPath = path
 	}
 	if relPath, err := filepath.Rel(p.baseDir, absPath); err == nil {
-		return relPath
+		return filepath.ToSlash(relPath)
 	}
-	return absPath
+	return filepath.ToSlash(absPath)
 }
 
 func (p *Parser) funcDeclToNode(pkg *packages.Package, decl *ast.FuncDecl, filePath string) ParsedNode {
