@@ -410,22 +410,21 @@ func chatTools() []*genai.Tool {
 	}}
 }
 
-const reviewSystemInstruction = `You are a senior software architect reviewing a Go codebase and its design guide.
-Return only valid JSON that matches the requested schema.
-You may call tools when needed before finalizing.
-Feedback must be specific, actionable, and grounded in the provided workspace data.
-Allowed feedback.type values: design_guide, code.
-Allowed severity values: high, medium, low.
-Allowed ai_recommendation values: update_design_guide, fix_code, both.
-Do not invent node IDs, edge IDs, or file paths.`
+const reviewSystemInstruction = `あなたは Go コードベースと設計書をレビューする日本語のソフトウェアアーキテクトです。
+返答は必ずスキーマに一致する JSON のみを返してください。
+必要なら tool を使ってから最終回答してください。
+summary、purpose、architecture_description、strengths、weaknesses、recommendations、risks、feedbacks の title/description/suggestion は必ず自然な日本語で書いてください。
+feedback.type は design_guide か code のみ、severity は high/medium/low のみ、ai_recommendation は update_design_guide/fix_code/both のみを使ってください。
+node ID、edge ID、file path は与えられたものだけを使い、捏造しないでください。`
 
-const chatSystemInstruction = `You are an AI reviewer responding inside a design/code review workspace.
-Answer in Japanese, concise but specific. You may call tools for context.
-Do not claim certainty if the available context is limited.`
+const chatSystemInstruction = `あなたは設計・コードレビュー workspace 内で応答する日本語の AI レビュアーです。
+返答は自然な日本語で、簡潔だが具体的にしてください。
+必要なら tool を使って文脈を確認してください。
+文脈が足りないときは断定しないでください。`
 
 func buildReviewPrompt(state *reviewToolState) string {
 	return fmt.Sprintf(
-		"Review this variant workspace and produce a structured review.\nCurrent quick stats: files=%d nodes=%d edges=%d.\nUse tools if you need more detail before finalizing.\nGive 3-8 feedback items with concrete targets when possible.",
+		"この variant workspace をレビューし、構造化された結果を返してください。\n現在の概要: files=%d, nodes=%d, edges=%d。\n必要なら tool を使って詳細を確認し、3-8件の具体的なフィードバックを返してください。UI にそのまま表示されるので、文章はすべて日本語にしてください。",
 		countVisibleFiles(state.files),
 		len(state.nodes),
 		len(state.edges),
@@ -434,7 +433,7 @@ func buildReviewPrompt(state *reviewToolState) string {
 
 func buildChatPrompt(input ChatInput) string {
 	return fmt.Sprintf(
-		"User message: %s\nReply to the selected feedback card. Give a practical next step and mention whether design guide, code, or both should be updated.",
+		"ユーザーのメッセージ: %s\n選択中のフィードバックカードに対して返答してください。次に取るべき実務的な一手を示し、設計書・コード・両方のどれを更新すべきかも日本語で触れてください。",
 		input.UserMessage,
 	)
 }
