@@ -64,7 +64,7 @@ type AIReviewContextType = {
 const AIReviewContext = createContext<AIReviewContextType | null>(null);
 
 const REVIEW_POLL_INTERVAL_MS = 1500;
-const REVIEW_POLL_TIMEOUT_MS = 60_000;
+const REVIEW_POLL_TIMEOUT_MS = 300_000;
 
 function isResolution(value: string): value is Resolution {
   return value === "update_design_guide" || value === "fix_code" || value === "both";
@@ -282,7 +282,7 @@ export function AIReviewProvider({
     setIsApplyRunning(true);
     try {
       const job = await createReviewApplyJob(latestReviewJobId);
-      const deadline = Date.now() + REVIEW_POLL_TIMEOUT_MS * 2;
+      const deadline = Date.now() + REVIEW_POLL_TIMEOUT_MS;
       let currentStatus = job.status;
 
       while (currentStatus === "queued" || currentStatus === "running") {
@@ -382,6 +382,24 @@ export function AIReviewProvider({
   }, []);
 
   const sendMessage = useCallback(async (cardId: string, content: string) => {
+    const optimisticMessage: ChatMessage = {
+      role: "user",
+      content,
+      timestamp: new Date(),
+    };
+
+    setCards((previousCards) =>
+      previousCards.map((card) =>
+        card.id === cardId
+          ? {
+              ...card,
+              chatHistory: [...card.chatHistory, optimisticMessage],
+              chatsLoaded: true,
+            }
+          : card,
+      ),
+    );
+
     try {
       const response = await appendReviewFeedbackChat(cardId, content);
       setCards((previousCards) =>
