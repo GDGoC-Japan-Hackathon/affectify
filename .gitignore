@@ -10,3 +10,5 @@ google-hackathon-feat-import
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+
+examples/
