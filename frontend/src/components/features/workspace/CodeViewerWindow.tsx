@@ -21,7 +21,7 @@ interface CodeViewerWindowProps {
   onNodeHover?: (nodeId: string | null) => void;
   onNodeClick?: (nodeId: string) => void;
   onCodeSync?: (nodeId: string, code: string) => void;
-  onAddNode?: (afterNodeId: string | null, filePath: string, name: string) => void;
+  onAddNode?: (afterNodeId: string | null, filePath: string, name: string) => void | Promise<void>;
   initialPosition?: { x: number; y: number };
   zIndex?: number;
   onFocus?: () => void;
@@ -40,9 +40,6 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   activeTabRef.current = activeTab;
 
   const [copied, setCopied] = useState(false);
-  const [isDoubleClickViewEnabled, setIsDoubleClickViewEnabled] = useState(true);
-  const isDoubleClickViewEnabledRef = useRef(isDoubleClickViewEnabled);
-  isDoubleClickViewEnabledRef.current = isDoubleClickViewEnabled;
   const [position, setPosition] = useState(() => {
     if (initialPosition) return initialPosition;
     const x = typeof window !== "undefined" ? Math.max(100, window.innerWidth - 600) : 100;
@@ -166,7 +163,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
   const handleConfirmAdd = useCallback(() => {
     if (!addPopup) return;
     const name = newFuncName.trim() || "newFunction";
-    onAddNodeRef.current?.(addPopup.afterNodeId, activeTabRef.current, name);
+    void onAddNodeRef.current?.(addPopup.afterNodeId, activeTabRef.current, name);
     setAddPopup(null);
   }, [addPopup, newFuncName]);
 
@@ -239,18 +236,9 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
               {nodes.length} 関数 / {fileContent.split("\n").length} 行
             </span>
             <div className="flex items-center gap-1">
-              <button
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => setIsDoubleClickViewEnabled((prev) => !prev)}
-                className={`px-2 py-1 rounded text-[10px] border transition-colors ${
-                  isDoubleClickViewEnabled
-                    ? "bg-blue-50 border-blue-200 text-blue-700"
-                    : "bg-gray-100 border-gray-200 text-gray-500"
-                }`}
-                title="ダブルクリックで関数を見る"
-              >
-                ダブルクリックで関数を見る {isDoubleClickViewEnabled ? "ON" : "OFF"}
-              </button>
+              <span className="px-2 py-1 rounded text-[10px] border border-gray-200 text-gray-600">
+                Cmd+クリックで関数を見る
+              </span>
               {isSmall ? (
                 <button
                   onClick={() => {
@@ -352,7 +340,7 @@ export function CodeViewerWindow({ tabs, activeTab, onTabChange, onTabClose, onC
               editor.onMouseDown((e) => {
                 const lineNumber = e.target.position?.lineNumber;
                 if (lineNumber == null) return;
-                if (isDoubleClickViewEnabledRef.current && e.event.detail === 2) {
+                if (e.event.detail === 1 && (e.event.metaKey || e.event.ctrlKey)) {
                   const node = lineNodeMapRef.current[lineNumber - 1];
                   if (node) onNodeClickRef.current?.(node.id);
                 }

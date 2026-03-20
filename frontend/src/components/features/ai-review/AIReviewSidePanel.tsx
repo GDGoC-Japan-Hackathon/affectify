@@ -94,7 +94,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
   }
 
   return (
-    <div className="relative flex w-72 shrink-0 flex-col border-l border-slate-200 bg-slate-50/80 backdrop-blur-sm">
+    <div className="relative flex w-72 shrink-0 flex-col border-l border-slate-200 bg-white">
       {/* 閉じるボタン（左辺中央） */}
       <button
         onClick={() => setCollapsed(true)}
@@ -134,7 +134,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
       {activeTab === "review" && (
         <>
           {/* ヘッダー */}
-          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <span className="text-sm font-semibold text-slate-900">フィードバック</span>
             <button
               onClick={() => openModal()}
@@ -169,7 +169,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
           ) : (
             <>
               {overallScore !== null && (
-                <div className="border-b border-slate-200 bg-white px-4 py-3">
+                <div className="border-b border-slate-200 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className={`text-xl font-bold ${overallScore >= 80 ? "text-green-600" : overallScore >= 60 ? "text-yellow-600" : "text-red-600"}`}>
                       {overallScore}点
@@ -201,7 +201,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
                   <p className="py-4 text-center text-xs text-slate-500">すべて解決済み</p>
                 )}
               </div>
-              <div className="border-t border-slate-200 bg-white p-3">
+              <div className="border-t border-slate-200 p-3">
                 <button
                   onClick={() => void loadReview()}
                   disabled={isReviewRunning}

@@ -1,15 +1,5 @@
 # TODO
 
-## Import / Source Storage
-
-- 現在の import は `multipart -> backend upload -> source_root_uri 更新 -> graph_build_job` で動かしている。
-- この方式は当面維持でよい。local では `LocalStore`、GCP 環境では `GCSStore` を使う。
-- 本命の高速化は `browser -> GCS direct upload (signed URL / resumable upload)` に寄せる。
-- 将来は backend が upload session を発行し、frontend は GCS に直接 upload する。
-- `variant.source_root_uri` は upload 完了後に backend 側で確定・更新する形へ寄せたい。
-- コード実体は zip ではなく `GCS prefix 配下の展開済みファイル群` を正本にする。
-- ファイル編集 API (`CreateFile`, `UpdateFileContent`, `DeleteFile`) は GCS 上の対象ファイルだけを更新する形にする。
-
 ## security
 
 - 認可とかが怪しいところがある
@@ -26,3 +16,4 @@
 - Go言語対応であることを明記
 - データ分析によってAIを成長させる
 - AIに渡す情報を圧縮して渡す工夫
+- Nodeの削除UIゴミ箱とかworkspce
