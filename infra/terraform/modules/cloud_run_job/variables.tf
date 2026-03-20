@@ -62,3 +62,13 @@ variable "timeout" {
   type    = string
   default = "1800s"
 }
+
+variable "cpu" {
+  type    = string
+  default = "1"
+}
+
+variable "memory" {
+  type    = string
+  default = "512Mi"
+}
