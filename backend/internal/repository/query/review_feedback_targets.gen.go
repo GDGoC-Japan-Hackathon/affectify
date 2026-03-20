@@ -30,8 +30,9 @@ func newReviewFeedbackTarget(db *gorm.DB, opts ...gen.DOOption) reviewFeedbackTa
 	_reviewFeedbackTarget.ALL = field.NewAsterisk(tableName)
 	_reviewFeedbackTarget.ID = field.NewInt64(tableName, "id")
 	_reviewFeedbackTarget.FeedbackID = field.NewInt64(tableName, "feedback_id")
-	_reviewFeedbackTarget.TargetType = field.NewString(tableName, "target_type")
-	_reviewFeedbackTarget.TargetRef = field.NewString(tableName, "target_ref")
+	_reviewFeedbackTarget.NodeID = field.NewInt64(tableName, "node_id")
+	_reviewFeedbackTarget.EdgeID = field.NewInt64(tableName, "edge_id")
+	_reviewFeedbackTarget.FilePath = field.NewString(tableName, "file_path")
 
 	_reviewFeedbackTarget.fillFieldMap()
 
@@ -44,8 +45,9 @@ type reviewFeedbackTarget struct {
 	ALL        field.Asterisk
 	ID         field.Int64
 	FeedbackID field.Int64
-	TargetType field.String
-	TargetRef  field.String
+	NodeID     field.Int64
+	EdgeID     field.Int64
+	FilePath   field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -64,8 +66,9 @@ func (r *reviewFeedbackTarget) updateTableName(table string) *reviewFeedbackTarg
 	r.ALL = field.NewAsterisk(table)
 	r.ID = field.NewInt64(table, "id")
 	r.FeedbackID = field.NewInt64(table, "feedback_id")
-	r.TargetType = field.NewString(table, "target_type")
-	r.TargetRef = field.NewString(table, "target_ref")
+	r.NodeID = field.NewInt64(table, "node_id")
+	r.EdgeID = field.NewInt64(table, "edge_id")
+	r.FilePath = field.NewString(table, "file_path")
 
 	r.fillFieldMap()
 
@@ -94,11 +97,12 @@ func (r *reviewFeedbackTarget) GetFieldByName(fieldName string) (field.OrderExpr
 }
 
 func (r *reviewFeedbackTarget) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 4)
+	r.fieldMap = make(map[string]field.Expr, 5)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["feedback_id"] = r.FeedbackID
-	r.fieldMap["target_type"] = r.TargetType
-	r.fieldMap["target_ref"] = r.TargetRef
+	r.fieldMap["node_id"] = r.NodeID
+	r.fieldMap["edge_id"] = r.EdgeID
+	r.fieldMap["file_path"] = r.FilePath
 }
 
 func (r reviewFeedbackTarget) clone(db *gorm.DB) reviewFeedbackTarget {

@@ -15,13 +15,15 @@ type JobDispatcher interface {
 	DispatchGraphBuildJob(ctx context.Context, jobID int64) error
 	DispatchLayoutJob(ctx context.Context, jobID int64) error
 	DispatchReviewJob(ctx context.Context, jobID int64) error
+	DispatchReviewApplyJob(ctx context.Context, jobID int64) error
 }
 
 type NoopJobDispatcher struct{}
 
-func (NoopJobDispatcher) DispatchGraphBuildJob(context.Context, int64) error { return nil }
-func (NoopJobDispatcher) DispatchLayoutJob(context.Context, int64) error     { return nil }
-func (NoopJobDispatcher) DispatchReviewJob(context.Context, int64) error     { return nil }
+func (NoopJobDispatcher) DispatchGraphBuildJob(context.Context, int64) error  { return nil }
+func (NoopJobDispatcher) DispatchLayoutJob(context.Context, int64) error      { return nil }
+func (NoopJobDispatcher) DispatchReviewJob(context.Context, int64) error      { return nil }
+func (NoopJobDispatcher) DispatchReviewApplyJob(context.Context, int64) error { return nil }
 
 type LocalJobDispatcher struct {
 	workerService *JobWorkerService
@@ -60,12 +62,22 @@ func (d *LocalJobDispatcher) DispatchReviewJob(ctx context.Context, jobID int64)
 	return nil
 }
 
+func (d *LocalJobDispatcher) DispatchReviewApplyJob(ctx context.Context, jobID int64) error {
+	go func() {
+		if err := d.workerService.RunReviewApplyJob(context.Background(), jobID); err != nil {
+			log.Printf("local review-apply job %d failed: %v", jobID, err)
+		}
+	}()
+	return nil
+}
+
 type CloudRunJobDispatcher struct {
-	projectID         string
-	region            string
-	graphBuildJobName string
-	layoutJobName     string
-	reviewJobName     string
+	projectID          string
+	region             string
+	graphBuildJobName  string
+	layoutJobName      string
+	reviewJobName      string
+	reviewApplyJobName string
 }
 
 func NewJobDispatcher(db *gorm.DB, cfg config.JobRuntimeConfig) JobDispatcher {
@@ -74,11 +86,12 @@ func NewJobDispatcher(db *gorm.DB, cfg config.JobRuntimeConfig) JobDispatcher {
 	}
 
 	return &CloudRunJobDispatcher{
-		projectID:         cfg.ProjectID,
-		region:            cfg.Region,
-		graphBuildJobName: cfg.GraphBuildJobName,
-		layoutJobName:     cfg.LayoutJobName,
-		reviewJobName:     cfg.ReviewJobName,
+		projectID:          cfg.ProjectID,
+		region:             cfg.Region,
+		graphBuildJobName:  cfg.GraphBuildJobName,
+		layoutJobName:      cfg.LayoutJobName,
+		reviewJobName:      cfg.ReviewJobName,
+		reviewApplyJobName: cfg.ReviewApplyJobName,
 	}
 }
 
@@ -101,6 +114,13 @@ func (d *CloudRunJobDispatcher) DispatchReviewJob(ctx context.Context, jobID int
 		return nil
 	}
 	return d.runJob(ctx, d.reviewJobName, jobID)
+}
+
+func (d *CloudRunJobDispatcher) DispatchReviewApplyJob(ctx context.Context, jobID int64) error {
+	if d.reviewApplyJobName == "" {
+		return nil
+	}
+	return d.runJob(ctx, d.reviewApplyJobName, jobID)
 }
 
 func (d *CloudRunJobDispatcher) runJob(ctx context.Context, jobName string, jobID int64) error {

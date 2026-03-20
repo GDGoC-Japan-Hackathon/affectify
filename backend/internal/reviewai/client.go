@@ -40,7 +40,36 @@ type ChatInput struct {
 	Nodes       []entity.Node
 	Edges       []entity.Edge
 	Feedback    *entity.ReviewFeedback
+	Targets     []entity.ReviewFeedbackTarget
 	UserMessage string
+}
+
+type ResolutionDraftInput struct {
+	Guide      *entity.VariantDesignGuide
+	Files      []entity.VariantFile
+	Nodes      []entity.Node
+	Edges      []entity.Edge
+	Feedback   *entity.ReviewFeedback
+	Targets    []entity.ReviewFeedbackTarget
+	Resolution string
+}
+
+type ApplyInput struct {
+	Guide             *entity.VariantDesignGuide
+	Files             map[string]string
+	ResolvedFeedbacks []ApplyFeedback
+	UpdateDesignGuide bool
+	UpdateCode        bool
+}
+
+type ApplyFeedback struct {
+	Title          string
+	Description    string
+	Resolution     string
+	ResolutionNote string
+	FilePaths      []string
+	NodeIDs        []int64
+	EdgeIDs        []int64
 }
 
 type reviewOutput struct {
@@ -84,6 +113,16 @@ type feedbackOutput struct {
 	TargetNodeIDs    []int64  `json:"target_node_ids"`
 	TargetEdgeIDs    []int64  `json:"target_edge_ids"`
 	TargetFilePaths  []string `json:"target_file_paths"`
+}
+
+type applyOutput struct {
+	DesignGuideContent string            `json:"design_guide_content"`
+	FileUpdates        []ApplyFileUpdate `json:"file_updates"`
+}
+
+type ApplyFileUpdate struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 func (c *Client) GenerateReview(ctx context.Context, input ReviewInput) (reviewgen.Result, error) {
@@ -162,6 +201,114 @@ func (c *Client) GenerateChatReply(ctx context.Context, input ChatInput) (string
 		return "", errors.New("vertex ai returned empty chat reply")
 	}
 	return reply, nil
+}
+
+func (c *Client) GenerateResolutionDraft(ctx context.Context, input ResolutionDraftInput) (string, error) {
+	client, err := c.newGenAIClient(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	toolState := newResolutionToolState(input)
+	text, err := c.runToolChat(
+		ctx,
+		client,
+		resolutionDraftSystemInstruction,
+		buildResolutionDraftPrompt(input),
+		resolutionDraftTools(),
+		func(call *genai.FunctionCall) (map[string]any, error) {
+			return toolState.execute(call)
+		},
+		&genai.GenerateContentConfig{
+			Temperature:     genai.Ptr[float32](0.3),
+			MaxOutputTokens: 512,
+			Tools:           resolutionDraftTools(),
+			ToolConfig: &genai.ToolConfig{
+				FunctionCallingConfig: &genai.FunctionCallingConfig{
+					Mode: genai.FunctionCallingConfigModeAuto,
+				},
+			},
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", errors.New("vertex ai returned empty resolution draft")
+	}
+	return text, nil
+}
+
+func (c *Client) GenerateApplyChanges(ctx context.Context, input ApplyInput) (*applyOutput, error) {
+	client, err := c.newGenAIClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fileEntries := make([]map[string]string, 0, len(input.Files))
+	paths := make([]string, 0, len(input.Files))
+	for path := range input.Files {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		fileEntries = append(fileEntries, map[string]string{
+			"path":    path,
+			"content": input.Files[path],
+		})
+	}
+
+	payload := map[string]any{
+		"update_design_guide": input.UpdateDesignGuide,
+		"update_code":         input.UpdateCode,
+		"design_guide": map[string]any{
+			"title":       stringOrEmpty(input.Guide, func(g *entity.VariantDesignGuide) string { return g.Title }),
+			"description": stringOrEmpty(input.Guide, func(g *entity.VariantDesignGuide) string { return derefString(g.Description) }),
+			"content":     stringOrEmpty(input.Guide, func(g *entity.VariantDesignGuide) string { return g.Content }),
+		},
+		"resolved_feedbacks": input.ResolvedFeedbacks,
+		"files":              fileEntries,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &genai.GenerateContentConfig{
+		Temperature:        genai.Ptr[float32](0.2),
+		MaxOutputTokens:    8192,
+		ResponseMIMEType:   "application/json",
+		ResponseJsonSchema: applyOutputSchema(),
+	}
+
+	config := *cfg
+	config.SystemInstruction = &genai.Content{
+		Parts: []*genai.Part{{Text: applyChangesSystemInstruction}},
+	}
+
+	resp, err := client.Models.GenerateContent(ctx, c.cfg.Model, []*genai.Content{
+		{
+			Parts: []*genai.Part{{
+				Text: buildApplyChangesPrompt(string(body)),
+			}},
+		},
+	}, &config)
+	if err != nil {
+		return nil, err
+	}
+
+	text := strings.TrimSpace(resp.Text())
+	if text == "" {
+		return nil, errors.New("vertex ai returned empty apply result")
+	}
+
+	var out applyOutput
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		return nil, fmt.Errorf("parse vertex ai apply json: %w", err)
+	}
+	return &out, nil
 }
 
 func (c *Client) newGenAIClient(ctx context.Context) (*genai.Client, error) {
@@ -301,6 +448,28 @@ func newChatToolState(input ChatInput) *chatToolState {
 
 func (s *chatToolState) execute(call *genai.FunctionCall) (map[string]any, error) {
 	switch call.Name {
+	case "list_files":
+		limit := clampLimit(readIntArg(call.Args, "limit", 12), 1, 50)
+		return map[string]any{
+			"output": listFilesPayload(s.input.Files, s.input.Nodes, limit),
+		}, nil
+	case "list_nodes":
+		limit := clampLimit(readIntArg(call.Args, "limit", 20), 1, 80)
+		kind := strings.TrimSpace(readStringArg(call.Args, "kind"))
+		return map[string]any{
+			"output": listNodesPayload(s.input.Nodes, s.input.Files, kind, limit),
+		}, nil
+	case "list_edges":
+		limit := clampLimit(readIntArg(call.Args, "limit", 24), 1, 100)
+		kind := strings.TrimSpace(readStringArg(call.Args, "kind"))
+		return map[string]any{
+			"output": listEdgesPayload(s.input.Edges, kind, limit),
+		}, nil
+	case "get_node_context":
+		nodeID := readInt64Arg(call.Args, "node_id", 0)
+		return map[string]any{
+			"output": nodeContextPayload(nodeID, s.input.Nodes, s.input.Files, s.input.Edges),
+		}, nil
 	case "get_feedback_context":
 		feedback := s.input.Feedback
 		if feedback == nil {
@@ -315,6 +484,10 @@ func (s *chatToolState) execute(call *genai.FunctionCall) (map[string]any, error
 				"status":            string(feedback.Status),
 				"ai_recommendation": derefResolution(feedback.AIRecommendation),
 			},
+		}, nil
+	case "get_feedback_targets":
+		return map[string]any{
+			"output": feedbackTargetsPayload(s.input.Targets, s.input.Files, s.input.Nodes, s.input.Edges),
 		}, nil
 	case "get_design_guide":
 		return map[string]any{
@@ -337,6 +510,26 @@ func (s *chatToolState) execute(call *genai.FunctionCall) (map[string]any, error
 	default:
 		return nil, fmt.Errorf("unsupported tool: %s", call.Name)
 	}
+}
+
+type resolutionToolState struct {
+	input ResolutionDraftInput
+}
+
+func newResolutionToolState(input ResolutionDraftInput) *resolutionToolState {
+	return &resolutionToolState{input: input}
+}
+
+func (s *resolutionToolState) execute(call *genai.FunctionCall) (map[string]any, error) {
+	chatState := newChatToolState(ChatInput{
+		Guide:    s.input.Guide,
+		Files:    s.input.Files,
+		Nodes:    s.input.Nodes,
+		Edges:    s.input.Edges,
+		Feedback: s.input.Feedback,
+		Targets:  s.input.Targets,
+	})
+	return chatState.execute(call)
 }
 
 func reviewTools() []*genai.Tool {
@@ -392,8 +585,56 @@ func chatTools() []*genai.Tool {
 	return []*genai.Tool{{
 		FunctionDeclarations: []*genai.FunctionDeclaration{
 			{
+				Name:        "list_files",
+				Description: "Lists imported files with path and node count. Use when you need to inspect related files for the current discussion.",
+				ParametersJsonSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"limit": map[string]any{"type": "integer"},
+					},
+				},
+			},
+			{
+				Name:        "list_nodes",
+				Description: "Lists graph nodes. Optionally filter by node kind such as function, method, or interface.",
+				ParametersJsonSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"kind":  map[string]any{"type": "string"},
+						"limit": map[string]any{"type": "integer"},
+					},
+				},
+			},
+			{
+				Name:        "list_edges",
+				Description: "Lists graph edges. Optionally filter by edge kind such as call or implement.",
+				ParametersJsonSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"kind":  map[string]any{"type": "string"},
+						"limit": map[string]any{"type": "integer"},
+					},
+				},
+			},
+			{
+				Name:        "get_node_context",
+				Description: "Returns one node with its code text, file path, and directly related edges. Use when you need to inspect a specific node deeply.",
+				ParametersJsonSchema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"node_id": map[string]any{"type": "integer"},
+					},
+					"required": []string{"node_id"},
+				},
+			},
+			{
 				Name:                 "get_feedback_context",
 				Description:          "Returns the selected review feedback card details.",
+				ParametersJsonSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+			},
+			{
+				Name:                 "get_feedback_targets",
+				Description:          "Returns the current feedback target files, nodes, and edges with enough detail to inspect the exact affected area.",
 				ParametersJsonSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 			},
 			{
@@ -410,6 +651,10 @@ func chatTools() []*genai.Tool {
 	}}
 }
 
+func resolutionDraftTools() []*genai.Tool {
+	return chatTools()
+}
+
 const reviewSystemInstruction = `あなたは Go コードベースと設計書をレビューする日本語のソフトウェアアーキテクトです。
 返答は必ずスキーマに一致する JSON のみを返してください。
 必要なら tool を使ってから最終回答してください。
@@ -420,7 +665,20 @@ node ID、edge ID、file path は与えられたものだけを使い、捏造�
 const chatSystemInstruction = `あなたは設計・コードレビュー workspace 内で応答する日本語の AI レビュアーです。
 返答は自然な日本語で、簡潔だが具体的にしてください。
 必要なら tool を使って文脈を確認してください。
+特定の指摘対象を詳しく見る必要があるときは get_feedback_targets で候補を確認し、必要なら get_node_context で個別 node を掘ってください。
 文脈が足りないときは断定しないでください。`
+
+const resolutionDraftSystemInstruction = `あなたはレビュー指摘の解決内容を要約する日本語の AI アシスタントです。
+返答は 2-4 文の自然な日本語のみで、箇条書きや見出しは不要です。
+選ばれた resolution に従って、何をどう変更するかを具体的に書いてください。
+設計書更新なら設計上の変更点、コード修正なら対象となる依存や責務の変更点を含めてください。`
+
+const applyChangesSystemInstruction = `あなたは確定済みレビュー決定を実際の設計書とコードに反映する日本語の AI ソフトウェアエンジニアです。
+返答は必ず JSON のみで返してください。
+update_design_guide が true のときだけ design_guide_content を更新し、false のときは空文字にしてください。
+update_code が true のときだけ file_updates を返し、対象外ファイルは含めないでください。
+file_updates の content は更新後の全文にしてください。path は入力に含まれるものだけを使い、捏造しないでください。
+resolved_feedbacks の resolution_note を最優先で反映してください。`
 
 func buildReviewPrompt(state *reviewToolState) string {
 	return fmt.Sprintf(
@@ -436,6 +694,17 @@ func buildChatPrompt(input ChatInput) string {
 		"ユーザーのメッセージ: %s\n選択中のフィードバックカードに対して返答してください。次に取るべき実務的な一手を示し、設計書・コード・両方のどれを更新すべきかも日本語で触れてください。",
 		input.UserMessage,
 	)
+}
+
+func buildResolutionDraftPrompt(input ResolutionDraftInput) string {
+	return fmt.Sprintf(
+		"このレビュー指摘に対して、resolution=%s で対応する前提の最終決定メモを日本語で下書きしてください。ユーザーが承認して保存する文章なので、短くても具体的にしてください。",
+		input.Resolution,
+	)
+}
+
+func buildApplyChangesPrompt(payload string) string {
+	return "以下の JSON を入力として、確定済みレビュー決定を設計書とコードへ反映してください。設計書本文と更新ファイル全文だけを JSON で返してください。\n" + payload
 }
 
 func reviewOutputSchema() map[string]any {
@@ -511,6 +780,27 @@ func reviewOutputSchema() map[string]any {
 							"type":  "array",
 							"items": map[string]any{"type": "string"},
 						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func applyOutputSchema() map[string]any {
+	return map[string]any{
+		"type":     "object",
+		"required": []string{"design_guide_content", "file_updates"},
+		"properties": map[string]any{
+			"design_guide_content": map[string]any{"type": "string"},
+			"file_updates": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type":     "object",
+					"required": []string{"path", "content"},
+					"properties": map[string]any{
+						"path":    map[string]any{"type": "string"},
+						"content": map[string]any{"type": "string"},
 					},
 				},
 			},
@@ -752,6 +1042,149 @@ func listEdgesPayload(edges []entity.Edge, kind string, limit int) []map[string]
 	return out
 }
 
+func feedbackTargetsPayload(
+	targets []entity.ReviewFeedbackTarget,
+	files []entity.VariantFile,
+	nodes []entity.Node,
+	edges []entity.Edge,
+) map[string]any {
+	fileByPath := make(map[string]entity.VariantFile, len(files))
+	for _, file := range files {
+		fileByPath[file.Path] = file
+	}
+
+	nodeByID := make(map[int64]entity.Node, len(nodes))
+	for _, node := range nodes {
+		nodeByID[node.ID] = node
+	}
+
+	edgeByID := make(map[int64]entity.Edge, len(edges))
+	for _, edge := range edges {
+		edgeByID[edge.ID] = edge
+	}
+
+	filesOut := make([]map[string]any, 0)
+	nodesOut := make([]map[string]any, 0)
+	edgesOut := make([]map[string]any, 0)
+	seenFiles := map[string]struct{}{}
+	seenNodes := map[int64]struct{}{}
+	seenEdges := map[int64]struct{}{}
+
+	for _, target := range targets {
+		if target.FilePath != nil {
+			path := *target.FilePath
+			if _, ok := seenFiles[path]; !ok {
+				seenFiles[path] = struct{}{}
+				file := fileByPath[path]
+				filesOut = append(filesOut, map[string]any{
+					"path":      path,
+					"language":  derefString(file.Language),
+					"nodeCount": file.NodeCount,
+					"isVisible": file.IsVisible,
+				})
+			}
+		}
+		if target.NodeID != nil {
+			id := *target.NodeID
+			if _, ok := seenNodes[id]; !ok {
+				seenNodes[id] = struct{}{}
+				node, ok := nodeByID[id]
+				if ok {
+					nodesOut = append(nodesOut, map[string]any{
+						"id":        node.ID,
+						"kind":      string(node.Kind),
+						"title":     node.Title,
+						"signature": derefString(node.Signature),
+						"receiver":  derefString(node.Receiver),
+						"file_path": filePathForNode(node, files),
+					})
+				}
+			}
+		}
+		if target.EdgeID != nil {
+			id := *target.EdgeID
+			if _, ok := seenEdges[id]; !ok {
+				seenEdges[id] = struct{}{}
+				edge, ok := edgeByID[id]
+				if ok {
+					edgesOut = append(edgesOut, map[string]any{
+						"id":           edge.ID,
+						"kind":         string(edge.Kind),
+						"from_node_id": edge.FromNodeID,
+						"to_node_id":   edge.ToNodeID,
+						"label":        derefString(edge.Label),
+					})
+				}
+			}
+		}
+	}
+
+	return map[string]any{
+		"files": filesOut,
+		"nodes": nodesOut,
+		"edges": edgesOut,
+	}
+}
+
+func nodeContextPayload(
+	nodeID int64,
+	nodes []entity.Node,
+	files []entity.VariantFile,
+	edges []entity.Edge,
+) map[string]any {
+	if nodeID == 0 {
+		return map[string]any{}
+	}
+
+	var target *entity.Node
+	for i := range nodes {
+		if nodes[i].ID == nodeID {
+			target = &nodes[i]
+			break
+		}
+	}
+	if target == nil {
+		return map[string]any{}
+	}
+
+	relatedEdges := make([]map[string]any, 0)
+	for _, edge := range edges {
+		if edge.FromNodeID == nodeID || edge.ToNodeID == nodeID {
+			relatedEdges = append(relatedEdges, map[string]any{
+				"id":           edge.ID,
+				"kind":         string(edge.Kind),
+				"from_node_id": edge.FromNodeID,
+				"to_node_id":   edge.ToNodeID,
+				"label":        derefString(edge.Label),
+			})
+		}
+	}
+
+	return map[string]any{
+		"id":         target.ID,
+		"kind":       string(target.Kind),
+		"title":      target.Title,
+		"signature":  derefString(target.Signature),
+		"receiver":   derefString(target.Receiver),
+		"file_path":  filePathForNode(*target, files),
+		"code_text":  truncate(derefString(target.CodeText), 4000),
+		"edge_count": len(relatedEdges),
+		"edges":      relatedEdges,
+	}
+}
+
+func filePathForNode(node entity.Node, files []entity.VariantFile) string {
+	if node.VariantFileID == nil {
+		return ""
+	}
+	for _, file := range files {
+		if file.ID == *node.VariantFileID {
+			return file.Path
+		}
+	}
+	return ""
+}
+
 func recommendationMaps(items []recommendationOutput) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
@@ -847,6 +1280,24 @@ func readIntArg(args map[string]any, key string, fallback int) int {
 		return int(value)
 	case float64:
 		return int(value)
+	default:
+		return fallback
+	}
+}
+
+func readInt64Arg(args map[string]any, key string, fallback int64) int64 {
+	if args == nil {
+		return fallback
+	}
+	switch value := args[key].(type) {
+	case int:
+		return int64(value)
+	case int32:
+		return int64(value)
+	case int64:
+		return value
+	case float64:
+		return int64(value)
 	default:
 		return fallback
 	}

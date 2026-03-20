@@ -9,6 +9,7 @@ import (
 	apiv1 "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1/apiv1connect"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/auth"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/service"
 )
 
@@ -60,6 +61,44 @@ func (h *ReviewServiceHandler) GetReviewJob(
 
 	return connect.NewResponse(&apiv1.GetReviewJobResponse{
 		Job: toProtoReviewJob(job),
+	}), nil
+}
+
+func (h *ReviewServiceHandler) CreateReviewApplyJob(
+	ctx context.Context,
+	req *connect.Request[apiv1.CreateReviewApplyJobRequest],
+) (*connect.Response[apiv1.CreateReviewApplyJobResponse], error) {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+
+	job, err := h.reviewService.CreateReviewApplyJob(ctx, identity.UID, req.Msg.ReviewJobId)
+	if err != nil {
+		return nil, mapReviewError(err)
+	}
+
+	return connect.NewResponse(&apiv1.CreateReviewApplyJobResponse{
+		Job: toProtoReviewApplyJob(job),
+	}), nil
+}
+
+func (h *ReviewServiceHandler) GetReviewApplyJob(
+	ctx context.Context,
+	req *connect.Request[apiv1.GetReviewApplyJobRequest],
+) (*connect.Response[apiv1.GetReviewApplyJobResponse], error) {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+
+	job, err := h.reviewService.GetReviewApplyJob(ctx, identity.UID, req.Msg.Id)
+	if err != nil {
+		return nil, mapReviewError(err)
+	}
+
+	return connect.NewResponse(&apiv1.GetReviewApplyJobResponse{
+		Job: toProtoReviewApplyJob(job),
 	}), nil
 }
 
@@ -155,6 +194,28 @@ func (h *ReviewServiceHandler) AppendReviewFeedbackChat(
 	}), nil
 }
 
+func (h *ReviewServiceHandler) GenerateReviewResolutionDraft(
+	ctx context.Context,
+	req *connect.Request[apiv1.GenerateReviewResolutionDraftRequest],
+) (*connect.Response[apiv1.GenerateReviewResolutionDraftResponse], error) {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+
+	draft, err := h.reviewService.GenerateResolutionDraft(ctx, identity.UID, service.GenerateResolutionDraftInput{
+		FeedbackID: req.Msg.FeedbackId,
+		Resolution: protoReviewFeedbackResolutionToEntity(req.Msg.Resolution),
+	})
+	if err != nil {
+		return nil, mapReviewError(err)
+	}
+
+	return connect.NewResponse(&apiv1.GenerateReviewResolutionDraftResponse{
+		ResolutionNote: draft,
+	}), nil
+}
+
 func (h *ReviewServiceHandler) ResolveReviewFeedback(
 	ctx context.Context,
 	req *connect.Request[apiv1.ResolveReviewFeedbackRequest],
@@ -167,9 +228,10 @@ func (h *ReviewServiceHandler) ResolveReviewFeedback(
 
 	// request の resolution/status を service 用 input に詰め替えて委譲する。
 	feedback, err := h.reviewService.ResolveReviewFeedback(ctx, identity.UID, service.ResolveReviewFeedbackInput{
-		FeedbackID: req.Msg.FeedbackId,
-		Resolution: req.Msg.Resolution,
-		Status:     req.Msg.Status,
+		FeedbackID:     req.Msg.FeedbackId,
+		Resolution:     protoReviewFeedbackResolutionToEntity(req.Msg.Resolution),
+		Status:         protoReviewFeedbackStatusToEntity(req.Msg.Status),
+		ResolutionNote: req.Msg.ResolutionNote,
 	})
 	if err != nil {
 		return nil, mapReviewError(err)
@@ -191,7 +253,7 @@ func (h *ReviewServiceHandler) RateReviewFeedback(
 
 	feedback, reaction, err := h.reviewService.RateReviewFeedback(ctx, identity.UID, service.RateReviewFeedbackInput{
 		FeedbackID: req.Msg.FeedbackId,
-		Reaction:   req.Msg.Reaction,
+		Reaction:   protoReviewFeedbackReactionToEntity(req.Msg.Reaction),
 	})
 	if err != nil {
 		return nil, mapReviewError(err)
@@ -202,10 +264,48 @@ func (h *ReviewServiceHandler) RateReviewFeedback(
 	}), nil
 }
 
+func protoReviewFeedbackResolutionToEntity(value apiv1.ReviewFeedbackResolution) string {
+	switch value {
+	case apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_UPDATE_DESIGN_GUIDE:
+		return string(entity.FeedbackResolutionUpdateDesignGuide)
+	case apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_FIX_CODE:
+		return string(entity.FeedbackResolutionFixCode)
+	case apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_BOTH:
+		return string(entity.FeedbackResolutionBoth)
+	default:
+		return ""
+	}
+}
+
+func protoReviewFeedbackStatusToEntity(value apiv1.ReviewFeedbackStatus) string {
+	switch value {
+	case apiv1.ReviewFeedbackStatus_REVIEW_FEEDBACK_STATUS_OPEN:
+		return string(entity.FeedbackStatusOpen)
+	case apiv1.ReviewFeedbackStatus_REVIEW_FEEDBACK_STATUS_RESOLVED:
+		return string(entity.FeedbackStatusResolved)
+	case apiv1.ReviewFeedbackStatus_REVIEW_FEEDBACK_STATUS_DISMISSED:
+		return string(entity.FeedbackStatusDismissed)
+	default:
+		return ""
+	}
+}
+
+func protoReviewFeedbackReactionToEntity(value apiv1.ReviewFeedbackReaction) string {
+	switch value {
+	case apiv1.ReviewFeedbackReaction_REVIEW_FEEDBACK_REACTION_GOOD:
+		return "good"
+	case apiv1.ReviewFeedbackReaction_REVIEW_FEEDBACK_REACTION_BAD:
+		return "bad"
+	default:
+		return ""
+	}
+}
+
 func mapReviewError(err error) error {
 	// service の業務エラーを Connect の status code に寄せる。
 	switch {
 	case errors.Is(err, service.ErrReviewJobNotFound),
+		errors.Is(err, service.ErrReviewApplyJobNotFound),
 		errors.Is(err, service.ErrFeedbackNotFound),
 		errors.Is(err, service.ErrVariantNotFound):
 		return connect.NewError(connect.CodeNotFound, err)

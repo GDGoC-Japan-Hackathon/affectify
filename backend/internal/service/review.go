@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	ErrReviewJobNotFound = errors.New("review job not found")
-	ErrFeedbackNotFound  = errors.New("review feedback not found")
+	ErrReviewJobNotFound      = errors.New("review job not found")
+	ErrReviewApplyJobNotFound = errors.New("review apply job not found")
+	ErrFeedbackNotFound       = errors.New("review feedback not found")
 )
 
 type ListReviewFeedbacksInput struct {
@@ -25,14 +26,20 @@ type ListReviewFeedbacksInput struct {
 }
 
 type ResolveReviewFeedbackInput struct {
-	FeedbackID int64
-	Resolution string
-	Status     string
+	FeedbackID     int64
+	Resolution     string
+	Status         string
+	ResolutionNote string
 }
 
 type RateReviewFeedbackInput struct {
 	FeedbackID int64
 	Reaction   string
+}
+
+type GenerateResolutionDraftInput struct {
+	FeedbackID int64
+	Resolution string
 }
 
 type ReviewFeedbackBundle struct {
@@ -97,6 +104,54 @@ func (s *ReviewService) GetReviewJob(ctx context.Context, firebaseUID string, id
 	}
 	if job == nil {
 		return nil, ErrReviewJobNotFound
+	}
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID); err != nil {
+		return nil, err
+	}
+	return job, nil
+}
+
+func (s *ReviewService) CreateReviewApplyJob(ctx context.Context, firebaseUID string, reviewJobID int64) (*entity.ReviewApplyJob, error) {
+	job, err := s.reviewRepo.FindReviewJobByID(ctx, reviewJobID)
+	if err != nil {
+		return nil, err
+	}
+	if job == nil {
+		return nil, ErrReviewJobNotFound
+	}
+	_, requester, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID)
+	if err != nil {
+		return nil, err
+	}
+
+	applyJob := &entity.ReviewApplyJob{
+		VariantID:   job.VariantID,
+		ReviewJobID: job.ID,
+		RequestedBy: requester.ID,
+		Status:      entity.JobStatusQueued,
+	}
+	if err := s.reviewRepo.CreateReviewApplyJob(ctx, applyJob); err != nil {
+		return nil, err
+	}
+	if s.jobDispatcher != nil {
+		if err := s.jobDispatcher.DispatchReviewApplyJob(ctx, applyJob.ID); err != nil {
+			message := err.Error()
+			applyJob.Status = entity.JobStatusFailed
+			applyJob.ErrorMessage = &message
+			_ = s.reviewRepo.SaveReviewApplyJob(ctx, applyJob)
+			return nil, err
+		}
+	}
+	return applyJob, nil
+}
+
+func (s *ReviewService) GetReviewApplyJob(ctx context.Context, firebaseUID string, id int64) (*entity.ReviewApplyJob, error) {
+	job, err := s.reviewRepo.FindReviewApplyJobByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if job == nil {
+		return nil, ErrReviewApplyJobNotFound
 	}
 	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, job.VariantID); err != nil {
 		return nil, err
@@ -204,13 +259,15 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 		nodes, nodesErr := s.variantRepo.ListNodesByVariantID(ctx, feedback.VariantID)
 		edges, edgesErr := s.variantRepo.ListEdgesByVariantID(ctx, feedback.VariantID)
 		guide, guideErr := s.variantRepo.FindDesignGuideByVariantID(ctx, feedback.VariantID)
-		if filesErr == nil && nodesErr == nil && edgesErr == nil && guideErr == nil {
+		targets, targetsErr := s.reviewRepo.ListFeedbackTargetsByFeedbackIDs(ctx, []int64{feedback.ID})
+		if filesErr == nil && nodesErr == nil && edgesErr == nil && guideErr == nil && targetsErr == nil {
 			aiReply, aiErr := s.reviewAI.GenerateChatReply(ctx, reviewai.ChatInput{
 				Guide:       guide,
 				Files:       files,
 				Nodes:       nodes,
 				Edges:       edges,
 				Feedback:    feedback,
+				Targets:     targets,
 				UserMessage: content,
 			})
 			if aiErr == nil && strings.TrimSpace(aiReply) != "" {
@@ -236,6 +293,59 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 	return chats, feedback, nil
 }
 
+func (s *ReviewService) GenerateResolutionDraft(
+	ctx context.Context,
+	firebaseUID string,
+	input GenerateResolutionDraftInput,
+) (string, error) {
+	feedback, _, err := s.requireFeedbackAccess(ctx, firebaseUID, input.FeedbackID)
+	if err != nil {
+		return "", err
+	}
+	resolution := strings.TrimSpace(input.Resolution)
+	if resolution == "" {
+		return "", errors.New("resolution is required")
+	}
+
+	files, err := s.variantRepo.ListFilesByVariantID(ctx, feedback.VariantID)
+	if err != nil {
+		return "", err
+	}
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, feedback.VariantID)
+	if err != nil {
+		return "", err
+	}
+	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, feedback.VariantID)
+	if err != nil {
+		return "", err
+	}
+	guide, err := s.variantRepo.FindDesignGuideByVariantID(ctx, feedback.VariantID)
+	if err != nil {
+		return "", err
+	}
+	targets, err := s.reviewRepo.ListFeedbackTargetsByFeedbackIDs(ctx, []int64{feedback.ID})
+	if err != nil {
+		return "", err
+	}
+
+	if s.reviewAI != nil && s.reviewAI.Enabled() {
+		draft, err := s.reviewAI.GenerateResolutionDraft(ctx, reviewai.ResolutionDraftInput{
+			Guide:      guide,
+			Files:      files,
+			Nodes:      nodes,
+			Edges:      edges,
+			Feedback:   feedback,
+			Targets:    targets,
+			Resolution: resolution,
+		})
+		if err == nil && strings.TrimSpace(draft) != "" {
+			return draft, nil
+		}
+	}
+
+	return buildResolutionDraftFallback(feedback, resolution), nil
+}
+
 func buildAIReviewReply(feedback *entity.ReviewFeedback, userMessage string) string {
 	base := feedback.Suggestion
 	if base == "" {
@@ -255,6 +365,17 @@ func buildAIReviewReply(feedback *entity.ReviewFeedback, userMessage string) str
 		return "設計書とコードの両方を見直すのが良さそうです。" + base
 	}
 	return "設計書とコードの両方に改善余地があります。" + base
+}
+
+func buildResolutionDraftFallback(feedback *entity.ReviewFeedback, resolution string) string {
+	switch entity.FeedbackResolution(resolution) {
+	case entity.FeedbackResolutionUpdateDesignGuide:
+		return "設計書にこの指摘の背景と意図を追記し、責務分担と依存関係の前提を明確にする。実装側がその設計意図に沿うよう、関連箇所の期待動作も合わせて記述する。"
+	case entity.FeedbackResolutionFixCode:
+		return "コード側でこの指摘に該当する依存関係と責務の分離を見直し、関連する実装を修正する。必要に応じて周辺の呼び出し元やインターフェースの使い方も合わせて整理する。"
+	default:
+		return "設計書に意図と責務分担を明記したうえで、コード側でも該当箇所の依存関係と実装を修正し、両者の整合を取る。"
+	}
 }
 
 func (s *ReviewService) ResolveReviewFeedback(
@@ -278,6 +399,12 @@ func (s *ReviewService) ResolveReviewFeedback(
 		}
 		if input.Status != "" {
 			feedback.Status = entity.FeedbackStatus(input.Status)
+		}
+		note := strings.TrimSpace(input.ResolutionNote)
+		if note == "" {
+			feedback.ResolutionNote = nil
+		} else {
+			feedback.ResolutionNote = &note
 		}
 
 		if err := tx.Save(&feedback).Error; err != nil {
