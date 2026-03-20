@@ -62,6 +62,12 @@ variable "review_job_name" {
   default     = "whitecoder-review"
 }
 
+variable "vertex_ai_model" {
+  description = "Vertex AI Gemini model name for AI review/chat"
+  type        = string
+  default     = "gemini-2.5-flash"
+}
+
 variable "source_bucket_name" {
   description = "GCS bucket name for variant source files"
   type        = string

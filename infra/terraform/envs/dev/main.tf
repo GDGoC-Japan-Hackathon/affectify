@@ -1,6 +1,7 @@
 locals {
   enabled_services = [
     "artifactregistry.googleapis.com",
+    "aiplatform.googleapis.com",
     "cloudbuild.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
@@ -86,6 +87,12 @@ resource "google_project_iam_member" "backend_secret_accessor" {
   member  = "serviceAccount:${google_service_account.backend.email}"
 }
 
+resource "google_project_iam_member" "backend_aiplatform_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.backend.email}"
+}
+
 resource "google_storage_bucket" "variant_sources" {
   name                        = var.source_bucket_name
   project                     = var.project_id
@@ -168,6 +175,7 @@ module "cloud_run" {
     FIREBASE_PROJECT_ID      = var.project_id
     REVIEW_JOB_NAME          = var.review_job_name
     SOURCE_BUCKET_NAME       = google_storage_bucket.variant_sources.name
+    VERTEX_AI_MODEL          = var.vertex_ai_model
   }
 
   depends_on = [
@@ -202,6 +210,7 @@ module "graph_build_job" {
     INSTANCE_CONNECTION_NAME = module.cloud_sql.instance_connection_name
     FIREBASE_PROJECT_ID      = var.project_id
     SOURCE_BUCKET_NAME       = google_storage_bucket.variant_sources.name
+    VERTEX_AI_MODEL          = var.vertex_ai_model
   }
 
   depends_on = [
@@ -237,6 +246,7 @@ module "review_job" {
     INSTANCE_CONNECTION_NAME = module.cloud_sql.instance_connection_name
     FIREBASE_PROJECT_ID      = var.project_id
     SOURCE_BUCKET_NAME       = google_storage_bucket.variant_sources.name
+    VERTEX_AI_MODEL          = var.vertex_ai_model
   }
 
   depends_on = [
