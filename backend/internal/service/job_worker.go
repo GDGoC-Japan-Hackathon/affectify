@@ -491,7 +491,7 @@ func (s *JobWorkerService) runReview(ctx context.Context, job *entity.ReviewJob)
 		chats := []entity.ReviewFeedbackChat{
 			{
 				Role:    entity.ChatRoleAI,
-				Content: buildInitialAIReviewChat(feedback),
+				Content: initialAIReviewChatContent(feedback),
 			},
 		}
 		writes = append(writes, repository.FeedbackWrite{
@@ -646,12 +646,19 @@ func (s *JobWorkerService) runReviewApply(ctx context.Context, job *entity.Revie
 	return s.reviewRepo.SaveReviewApplyJob(ctx, job)
 }
 
+func initialAIReviewChatContent(feedback reviewgen.Feedback) string {
+	if text := strings.TrimSpace(feedback.InitialChatMessage); text != "" {
+		return text
+	}
+	return buildInitialAIReviewChat(feedback)
+}
+
 func buildInitialAIReviewChat(feedback reviewgen.Feedback) string {
 	return fmt.Sprintf(
-		"%s。提案は「%s」です。まずは %s を確認するのがよいです。",
+		"%s。%s を見ながら、%s 方向で整理していけそうです。",
 		feedback.Description,
-		feedback.Suggestion,
 		initialResolutionFocus(feedback.AIRecommendation),
+		feedback.Suggestion,
 	)
 }
 

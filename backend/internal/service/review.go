@@ -366,22 +366,22 @@ func (s *ReviewService) GenerateResolutionDraft(
 func buildAIReviewReply(feedback *entity.ReviewFeedback, userMessage string) string {
 	base := feedback.Suggestion
 	if base == "" {
-		base = "まずは指摘箇所の責務と依存関係を整理してください。"
+		base = "関連する責務や依存関係を見ながら、どこを直すのが自然か一緒に詰めたいです。"
 	}
 
 	if feedback.AIRecommendation == nil {
-		return "補足ありがとうございます。現状では、" + base
+		return "ありがとうございます。いまの情報だと、" + base + " この方向で反映案を考えてみますが、よろしいでしょうか。"
 	}
 	if *feedback.AIRecommendation == entity.FeedbackResolutionUpdateDesignGuide {
-		return "設計書側の意図を先に明文化すると議論しやすくなります。" + base
+		return "いまの話だと、先に設計書側の意図を整えるのがよさそうです。" + base + " この方向でまとめてよろしいでしょうか。"
 	}
 	if *feedback.AIRecommendation == entity.FeedbackResolutionFixCode {
-		return "コード側の依存や責務の切り方を確認してください。" + base
+		return "いまの話だと、コード側の依存や責務の切り方を直す方向が合いそうです。" + base + " この方針で進めてよろしいでしょうか。"
 	}
 	if strings.TrimSpace(userMessage) != "" {
-		return "設計書とコードの両方を見直すのが良さそうです。" + base
+		return "いまの状況だと、設計書とコードの両方を合わせて直すのが自然そうです。" + base + " この方針で反映してよいか確認させてください。"
 	}
-	return "設計書とコードの両方に改善余地があります。" + base
+	return "設計書とコードの両方に手を入れる余地がありそうです。" + base + " この方向で進めてよろしいでしょうか。"
 }
 
 func inferRecommendationFromChat(

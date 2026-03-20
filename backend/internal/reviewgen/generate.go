@@ -9,15 +9,16 @@ import (
 )
 
 type Feedback struct {
-	Type             entity.FeedbackType
-	Severity         entity.FeedbackSeverity
-	Title            string
-	Description      string
-	Suggestion       string
-	AIRecommendation entity.FeedbackResolution
-	TargetNodeIDs    []int64
-	TargetEdgeIDs    []int64
-	TargetFilePaths  []string
+	Type               entity.FeedbackType
+	Severity           entity.FeedbackSeverity
+	Title              string
+	Description        string
+	Suggestion         string
+	InitialChatMessage string
+	AIRecommendation   entity.FeedbackResolution
+	TargetNodeIDs      []int64
+	TargetEdgeIDs      []int64
+	TargetFilePaths    []string
 }
 
 type Result struct {
