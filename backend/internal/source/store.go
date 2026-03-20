@@ -30,15 +30,15 @@ type UploadDescriptor struct {
 }
 
 type UploadTarget struct {
-	RelativePath string
-	UploadURL    string
-	ContentType  string
+	RelativePath string `json:"relativePath"`
+	UploadURL    string `json:"uploadURL"`
+	ContentType  string `json:"contentType"`
 }
 
 type UploadPlan struct {
-	SourceRootURI string
-	Targets       []UploadTarget
-	ExpiresAt     time.Time
+	SourceRootURI string         `json:"sourceRootUri"`
+	Targets       []UploadTarget `json:"targets"`
+	ExpiresAt     time.Time      `json:"expiresAt"`
 }
 
 type Store interface {
