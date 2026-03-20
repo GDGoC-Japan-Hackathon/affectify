@@ -3,16 +3,26 @@ import { create } from "@bufbuild/protobuf";
 import { createConnectClient } from "@/lib/connect";
 import {
   AppendReviewFeedbackChatRequestSchema,
+  CreateReviewApplyJobRequestSchema,
   CreateReviewJobRequestSchema,
+  GenerateReviewResolutionDraftRequestSchema,
+  GetReviewApplyJobRequestSchema,
   GetReviewJobRequestSchema,
   ListReviewFeedbackChatsRequestSchema,
   ListReviewFeedbacksRequestSchema,
+  ReviewFeedbackChatRole,
+  ReviewFeedbackReaction,
+  ReviewFeedbackResolution,
+  ReviewFeedbackSeverity,
+  ReviewFeedbackStatus,
+  ReviewFeedbackType,
   ResolveReviewFeedbackRequestSchema,
   RateReviewFeedbackRequestSchema,
   ReviewService,
   type ReviewFeedback as ProtoReviewFeedback,
   type ReviewFeedbackChat as ProtoReviewFeedbackChat,
   type ReviewFeedbackTarget as ProtoReviewFeedbackTarget,
+  type ReviewApplyJob as ProtoReviewApplyJob,
   type ReviewJob as ProtoReviewJob,
 } from "@/gen/api/v1/review_pb";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
@@ -20,6 +30,17 @@ import type { Timestamp } from "@bufbuild/protobuf/wkt";
 export interface ReviewJob {
   id: string;
   variantId: string;
+  status: string;
+  errorMessage: string;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface ReviewApplyJob {
+  id: string;
+  variantId: string;
+  reviewJobId: string;
   status: string;
   errorMessage: string;
   startedAt: Date | null;
@@ -38,6 +59,7 @@ export interface ReviewFeedback {
   suggestion: string;
   aiRecommendation: string;
   resolution: string;
+  resolutionNote: string;
   status: string;
   displayOrder: number;
   createdAt: Date;
@@ -47,8 +69,9 @@ export interface ReviewFeedback {
 export interface ReviewFeedbackTarget {
   id: string;
   feedbackId: string;
-  targetType: string;
-  targetRef: string;
+  nodeId?: string;
+  edgeId?: string;
+  filePath?: string;
 }
 
 export interface ReviewFeedbackChat {
@@ -94,6 +117,34 @@ export async function getReviewJob(id: string): Promise<ReviewJob> {
   }
 
   return mapReviewJob(response.job);
+}
+
+export async function createReviewApplyJob(reviewJobId: string): Promise<ReviewApplyJob> {
+  const response = await reviewClient.createReviewApplyJob(
+    create(CreateReviewApplyJobRequestSchema, {
+      reviewJobId: BigInt(reviewJobId),
+    }),
+  );
+
+  if (!response.job) {
+    throw new Error("適用ジョブの作成に失敗しました");
+  }
+
+  return mapReviewApplyJob(response.job);
+}
+
+export async function getReviewApplyJob(id: string): Promise<ReviewApplyJob> {
+  const response = await reviewClient.getReviewApplyJob(
+    create(GetReviewApplyJobRequestSchema, {
+      id: BigInt(id),
+    }),
+  );
+
+  if (!response.job) {
+    throw new Error("適用ジョブの取得に失敗しました");
+  }
+
+  return mapReviewApplyJob(response.job);
 }
 
 export async function listReviewFeedbacks(options: ListReviewFeedbacksOptions): Promise<{
@@ -144,16 +195,32 @@ export async function appendReviewFeedbackChat(
   };
 }
 
+export async function generateReviewResolutionDraft(
+  feedbackId: string,
+  resolution: "update_design_guide" | "fix_code" | "both",
+): Promise<string> {
+  const response = await reviewClient.generateReviewResolutionDraft(
+    create(GenerateReviewResolutionDraftRequestSchema, {
+      feedbackId: BigInt(feedbackId),
+      resolution: toProtoResolution(resolution),
+    }),
+  );
+
+  return response.resolutionNote;
+}
+
 export async function resolveReviewFeedback(
   feedbackId: string,
   resolution: string,
+  resolutionNote = "",
   status = "resolved",
 ): Promise<ReviewFeedback> {
   const response = await reviewClient.resolveReviewFeedback(
     create(ResolveReviewFeedbackRequestSchema, {
       feedbackId: BigInt(feedbackId),
-      resolution,
-      status,
+      resolution: toProtoResolution(resolution),
+      status: toProtoStatus(status),
+      resolutionNote,
     }),
   );
 
@@ -171,7 +238,7 @@ export async function rateReviewFeedback(
   const response = await reviewClient.rateReviewFeedback(
     create(RateReviewFeedbackRequestSchema, {
       feedbackId: BigInt(feedbackId),
-      reaction,
+      reaction: toProtoReaction(reaction),
     }),
   );
 
@@ -199,17 +266,31 @@ function mapReviewFeedback(feedback: ProtoReviewFeedback): ReviewFeedback {
     id: feedback.id.toString(),
     reviewJobId: feedback.reviewJobId.toString(),
     variantId: feedback.variantId.toString(),
-    feedbackType: feedback.feedbackType,
-    severity: feedback.severity,
+    feedbackType: fromProtoFeedbackType(feedback.feedbackType),
+    severity: fromProtoSeverity(feedback.severity),
     title: feedback.title,
     description: feedback.description,
     suggestion: feedback.suggestion,
-    aiRecommendation: feedback.aiRecommendation,
-    resolution: feedback.resolution,
-    status: feedback.status,
+    aiRecommendation: fromProtoResolution(feedback.aiRecommendation),
+    resolution: fromProtoResolution(feedback.resolution),
+    resolutionNote: feedback.resolutionNote,
+    status: fromProtoStatus(feedback.status),
     displayOrder: feedback.displayOrder,
     createdAt: toDate(feedback.createdAt),
-    userReaction: feedback.userReaction,
+    userReaction: fromProtoReaction(feedback.userReaction),
+  };
+}
+
+function mapReviewApplyJob(job: ProtoReviewApplyJob): ReviewApplyJob {
+  return {
+    id: job.id.toString(),
+    variantId: job.variantId.toString(),
+    reviewJobId: job.reviewJobId.toString(),
+    status: job.status,
+    errorMessage: job.errorMessage,
+    startedAt: job.startedAt ? toDate(job.startedAt) : null,
+    finishedAt: job.finishedAt ? toDate(job.finishedAt) : null,
+    createdAt: toDate(job.createdAt),
   };
 }
 
@@ -217,8 +298,9 @@ function mapReviewFeedbackTarget(target: ProtoReviewFeedbackTarget): ReviewFeedb
   return {
     id: target.id.toString(),
     feedbackId: target.feedbackId.toString(),
-    targetType: target.targetType,
-    targetRef: target.targetRef,
+    nodeId: target.nodeId?.toString(),
+    edgeId: target.edgeId?.toString(),
+    filePath: target.filePath,
   };
 }
 
@@ -226,11 +308,120 @@ function mapReviewFeedbackChat(chat: ProtoReviewFeedbackChat): ReviewFeedbackCha
   return {
     id: chat.id.toString(),
     feedbackId: chat.feedbackId.toString(),
-    role: chat.role,
+    role: fromProtoChatRole(chat.role),
     content: chat.content,
     createdBy: chat.createdBy?.toString(),
     createdAt: toDate(chat.createdAt),
   };
+}
+
+function fromProtoFeedbackType(value: ReviewFeedbackType): string {
+  switch (value) {
+    case ReviewFeedbackType.DESIGN_GUIDE:
+      return "design_guide";
+    case ReviewFeedbackType.CODE:
+      return "code";
+    default:
+      return "";
+  }
+}
+
+function fromProtoSeverity(value: ReviewFeedbackSeverity): string {
+  switch (value) {
+    case ReviewFeedbackSeverity.HIGH:
+      return "high";
+    case ReviewFeedbackSeverity.MEDIUM:
+      return "medium";
+    case ReviewFeedbackSeverity.LOW:
+      return "low";
+    default:
+      return "";
+  }
+}
+
+function fromProtoResolution(value: ReviewFeedbackResolution): string {
+  switch (value) {
+    case ReviewFeedbackResolution.UPDATE_DESIGN_GUIDE:
+      return "update_design_guide";
+    case ReviewFeedbackResolution.FIX_CODE:
+      return "fix_code";
+    case ReviewFeedbackResolution.BOTH:
+      return "both";
+    default:
+      return "";
+  }
+}
+
+function fromProtoStatus(value: ReviewFeedbackStatus): string {
+  switch (value) {
+    case ReviewFeedbackStatus.OPEN:
+      return "open";
+    case ReviewFeedbackStatus.RESOLVED:
+      return "resolved";
+    case ReviewFeedbackStatus.DISMISSED:
+      return "dismissed";
+    default:
+      return "";
+  }
+}
+
+function fromProtoReaction(value: ReviewFeedbackReaction): string {
+  switch (value) {
+    case ReviewFeedbackReaction.GOOD:
+      return "good";
+    case ReviewFeedbackReaction.BAD:
+      return "bad";
+    default:
+      return "";
+  }
+}
+
+function fromProtoChatRole(value: ReviewFeedbackChatRole): string {
+  switch (value) {
+    case ReviewFeedbackChatRole.AI:
+      return "ai";
+    case ReviewFeedbackChatRole.USER:
+      return "user";
+    default:
+      return "user";
+  }
+}
+
+function toProtoResolution(value: string): ReviewFeedbackResolution {
+  switch (value) {
+    case "update_design_guide":
+      return ReviewFeedbackResolution.UPDATE_DESIGN_GUIDE;
+    case "fix_code":
+      return ReviewFeedbackResolution.FIX_CODE;
+    case "both":
+      return ReviewFeedbackResolution.BOTH;
+    default:
+      return ReviewFeedbackResolution.UNSPECIFIED;
+  }
+}
+
+function toProtoStatus(value: string): ReviewFeedbackStatus {
+  switch (value) {
+    case "open":
+      return ReviewFeedbackStatus.OPEN;
+    case "resolved":
+      return ReviewFeedbackStatus.RESOLVED;
+    case "dismissed":
+      return ReviewFeedbackStatus.DISMISSED;
+    default:
+      return ReviewFeedbackStatus.UNSPECIFIED;
+  }
+}
+
+function toProtoReaction(value: string): ReviewFeedbackReaction {
+  switch (value) {
+    case "good":
+      return ReviewFeedbackReaction.GOOD;
+    case "bad":
+      return ReviewFeedbackReaction.BAD;
+    default:
+      return ReviewFeedbackReaction.UNSPECIFIED;
+  }
 }
 
 function toDate(timestamp?: Timestamp): Date {

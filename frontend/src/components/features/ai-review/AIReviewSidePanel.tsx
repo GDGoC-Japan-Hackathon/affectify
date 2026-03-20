@@ -30,10 +30,13 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
     selectCard,
     rateCard,
     overallScore,
+    summary,
     openModal,
     loadReview,
+    applyResolvedFeedbacks,
     isLoading,
     isReviewRunning,
+    isApplyRunning,
     hasLoadedReview,
     error,
   } = useAIReview();
@@ -93,7 +96,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
   }
 
   return (
-    <div className="relative flex w-64 shrink-0 flex-col border-l border-slate-200 bg-white">
+    <div className="relative flex w-72 shrink-0 flex-col border-l border-slate-200 bg-slate-50/80 backdrop-blur-sm">
       {/* 閉じるボタン（左辺中央） */}
       <button
         onClick={() => setCollapsed(true)}
@@ -133,7 +136,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
       {activeTab === "review" && (
         <>
           {/* ヘッダー */}
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
             <span className="text-sm font-semibold text-slate-900">フィードバック</span>
             <button
               onClick={() => openModal()}
@@ -161,20 +164,25 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
                 disabled={isReviewRunning}
                 className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isReviewRunning ? "レビュー中..." : hasLoadedReview ? "再評価する" : "レビューを開始"}
+                {isReviewRunning ? "レビュー中..." : hasLoadedReview ? "再レビュー" : "レビューを開始"}
               </button>
               {error && <p className="text-xs text-red-500">{error}</p>}
             </div>
           ) : (
             <>
               {overallScore !== null && (
-                <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
-                  <div className={`text-xl font-bold ${overallScore >= 80 ? "text-green-600" : overallScore >= 60 ? "text-yellow-600" : "text-red-600"}`}>
-                    {overallScore}点
+                <div className="border-b border-slate-200 bg-white px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`text-xl font-bold ${overallScore >= 80 ? "text-green-600" : overallScore >= 60 ? "text-yellow-600" : "text-red-600"}`}>
+                      {overallScore}点
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {resolvedCount}/{cards.length} 解決済み
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {resolvedCount}/{cards.length} 解決済み
-                  </div>
+                  {summary && (
+                    <p className="mt-2 text-xs leading-5 text-slate-600 line-clamp-3">{summary}</p>
+                  )}
                 </div>
               )}
               <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
@@ -195,7 +203,14 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
                   <p className="py-4 text-center text-xs text-slate-500">すべて解決済み</p>
                 )}
               </div>
-              <div className="border-t border-slate-200 p-3">
+              <div className="border-t border-slate-200 bg-white p-3">
+                <button
+                  onClick={() => void applyResolvedFeedbacks()}
+                  disabled={isApplyRunning || resolvedCount === 0}
+                  className="mb-2 w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isApplyRunning ? "反映中..." : "決定内容を反映"}
+                </button>
                 <button
                   onClick={() => openModal()}
                   className="w-full rounded-lg border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

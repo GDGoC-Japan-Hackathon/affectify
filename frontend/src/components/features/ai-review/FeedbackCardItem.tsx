@@ -40,28 +40,39 @@ const severityConfig = {
 
 export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onViewNodes, onRate, compact }: FeedbackCardItemProps) {
   const { icon: Icon, label, dot, badge, border } = severityConfig[card.severity];
+  const hasRelatedTargets = (card.nodeIds?.length ?? 0) > 0 || (card.edgeIds?.length ?? 0) > 0;
 
   if (compact) {
     return (
       <motion.div
-        layoutId={`card-${card.id}`}
         onClick={onClick}
-        className={`cursor-pointer rounded-lg border p-3 transition-colors ${
+        initial={false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.14, ease: "easeOut" }}
+        className={`cursor-pointer rounded-xl border p-3 transition-all ${
           isSelected
-            ? "border-blue-500 bg-blue-950/40"
-            : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+            ? "border-blue-500 bg-blue-50 shadow-sm"
+            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
         }`}
       >
         <div className="flex items-center gap-2">
           <span className={`size-2 shrink-0 rounded-full ${dot}`} />
-          <span className="truncate text-sm font-medium text-slate-200">{card.title}</span>
+          <span className="truncate text-sm font-medium text-slate-800">{card.title}</span>
         </div>
+        <p className={`mt-2 text-xs leading-5 ${isSelected ? "whitespace-pre-wrap text-slate-700" : "line-clamp-2 text-slate-500"}`}>
+          {card.description}
+        </p>
         {isSelected && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            className="mt-2"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="mt-3 space-y-3 border-t border-slate-200 pt-3"
           >
+            <div className="rounded-lg bg-slate-100 px-3 py-2">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">提案</p>
+              <p className="whitespace-pre-wrap text-xs leading-5 text-slate-700">{card.suggestion}</p>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); onChatOpen(); }}
@@ -74,19 +85,28 @@ export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onView
                 <div className="ml-auto flex items-center gap-1">
                   <button
                     onClick={(e) => { e.stopPropagation(); onRate("good"); }}
-                    className={`rounded-md border px-2 py-1 text-xs ${card.userReaction === "good" ? "border-emerald-500 bg-emerald-500/15 text-emerald-300" : "border-slate-600 text-slate-300 hover:bg-slate-700"}`}
+                    className={`rounded-md border px-2 py-1 text-xs ${card.userReaction === "good" ? "border-emerald-500 bg-emerald-500/10 text-emerald-700" : "border-slate-300 text-slate-600 hover:bg-slate-100"}`}
                   >
                     <ThumbsUp className="size-3" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onRate("bad"); }}
-                    className={`rounded-md border px-2 py-1 text-xs ${card.userReaction === "bad" ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-slate-600 text-slate-300 hover:bg-slate-700"}`}
+                    className={`rounded-md border px-2 py-1 text-xs ${card.userReaction === "bad" ? "border-rose-500 bg-rose-500/10 text-rose-700" : "border-slate-300 text-slate-600 hover:bg-slate-100"}`}
                   >
                     <ThumbsDown className="size-3" />
                   </button>
                 </div>
               )}
             </div>
+            {onViewNodes && hasRelatedTargets && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onViewNodes(); }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+              >
+                <ScanSearch className="size-3.5 text-blue-500" />
+                関連箇所を強調表示
+              </button>
+            )}
           </motion.div>
         )}
       </motion.div>
@@ -95,8 +115,10 @@ export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onView
 
   return (
     <motion.div
-      layoutId={`card-${card.id}`}
       onClick={onClick}
+      initial={false}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.14, ease: "easeOut" }}
       className={`cursor-pointer rounded-xl border-l-4 ${border} bg-[#1a2035] p-4 transition-all hover:bg-[#1e2540] ${
         isSelected ? "ring-1 ring-blue-500" : ""
       }`}
@@ -113,7 +135,7 @@ export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onView
       <h4 className="mb-1.5 font-semibold text-slate-100">{card.title}</h4>
 
       {/* 説明 */}
-      <p className="mb-3 text-sm text-slate-400 line-clamp-2">{card.description}</p>
+      <p className={`mb-3 text-sm text-slate-400 ${isSelected ? "whitespace-pre-wrap" : "line-clamp-2"}`}>{card.description}</p>
 
       {/* ファイルパス */}
       {card.filePaths && card.filePaths.length > 0 && (
@@ -129,11 +151,15 @@ export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onView
       {/* 選択時: ノードを見る */}
       {isSelected && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
           className="mt-3 border-t border-slate-700 pt-3"
         >
-          <p className="mb-3 text-xs text-slate-400">{card.suggestion}</p>
+          <div className="mb-3 rounded-lg bg-slate-900/60 p-3">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">提案</p>
+            <p className="whitespace-pre-wrap text-xs leading-5 text-slate-300">{card.suggestion}</p>
+          </div>
           {onRate && (
             <div className="mb-3 flex items-center gap-2">
               <button
@@ -152,13 +178,13 @@ export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onView
               </button>
             </div>
           )}
-          {onViewNodes && (card.nodeIds?.length ?? 0) > 0 && (
+          {onViewNodes && hasRelatedTargets && (
             <button
               onClick={(e) => { e.stopPropagation(); onViewNodes(); }}
               className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:border-slate-500 hover:bg-slate-700 transition-colors"
             >
               <ScanSearch className="size-3.5 text-blue-400" />
-              ホワイトボードで確認
+              関連箇所を強調表示
             </button>
           )}
         </motion.div>

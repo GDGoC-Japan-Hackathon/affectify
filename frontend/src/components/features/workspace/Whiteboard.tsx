@@ -103,6 +103,38 @@ function toFlowEdges(boardEdges: BoardEdge[], sccEdgeIds?: Set<string>): Edge[] 
   });
 }
 
+function applyReviewHighlights(edges: Edge[], highlightedEdgeIds?: Set<string>): Edge[] {
+  if (!highlightedEdgeIds || highlightedEdgeIds.size === 0) {
+    return edges.map((edge) => ({
+      ...edge,
+      style: {
+        ...edge.style,
+        opacity: 1,
+      },
+    }));
+  }
+
+  return edges.map((edge) => {
+    const isHighlighted = highlightedEdgeIds.has(edge.id);
+    const stroke = isHighlighted ? "#f59e0b" : ((edge.style?.stroke as string | undefined) ?? "#94a3b8");
+    return {
+      ...edge,
+      style: {
+        ...edge.style,
+        stroke,
+        strokeWidth: isHighlighted ? 3.5 : 1.5,
+        opacity: isHighlighted ? 1 : 0.12,
+      },
+      markerEnd: edge.markerEnd
+        ? {
+            type: MarkerType.ArrowClosed,
+            color: stroke,
+          }
+        : edge.markerEnd,
+    };
+  });
+}
+
 function buildSccEdgeIds(boardNodes: BoardNode[], boardEdges: BoardEdge[]) {
   const sccs = computeSCCs(
     boardNodes.map((n) => n.id),
@@ -172,6 +204,10 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
       }))
     );
   }, [highlightedNodeIds, setNodes]);
+
+  useEffect(() => {
+    setEdges(applyReviewHighlights(toFlowEdges(boardEdges, sccEdgeIds), highlightedEdgeIds));
+  }, [boardEdges, highlightedEdgeIds, sccEdgeIds, setEdges]);
   const reactFlow = useReactFlow();
   const { fitView } = reactFlow;
 
