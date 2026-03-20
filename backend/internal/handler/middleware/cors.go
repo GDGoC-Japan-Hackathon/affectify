@@ -9,6 +9,7 @@ func WithCORS(next http.Handler) http.Handler {
 	allowedOrigins := []string{
 		"http://localhost:3000",
 		"http://127.0.0.1:3000",
+		"https://whitecoder--hackathon-2e83a.asia-east1.hosted.app",
 	}
 
 	allowedHeaders := []string{
