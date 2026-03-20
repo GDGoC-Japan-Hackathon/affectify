@@ -711,11 +711,11 @@ const chatSystemInstruction = promptInjectionSafetyInstruction + `
 const resolutionDraftSystemInstruction = promptInjectionSafetyInstruction + `
 
 あなたはレビュー指摘の解決内容を要約する日本語の AI アシスタントです。
-返答は 2-4 文の自然な日本語のみで、箇条書きや見出しは不要です。
+返答は自然な日本語のみで返してください。
 選ばれた resolution に従って、何をどう変更するかを具体的に書いてください。
 設計書更新なら設計上の変更点、コード修正なら対象となる依存や責務の変更点を含めてください。
-必ず対象となる node 名、file path、interface 名、関数名のいずれか1つ以上を文中に含めてください。
-「品質向上を図る」「一貫性を高める」「具体的な指針を追記する」のような抽象表現だけで終わってはいけません。`
+抽象的な一般論ではなく、このカードに対して実際に反映する内容を書いてください。
+対象となる node 名、file path、interface 名、関数名のいずれかが分かる場合は、できるだけ本文に含めてください。`
 
 const applyChangesSystemInstruction = promptInjectionSafetyInstruction + `
 
@@ -745,13 +745,13 @@ func buildChatPrompt(input ChatInput) string {
 func buildResolutionDraftPrompt(input ResolutionDraftInput) string {
 	return fmt.Sprintf(
 		"このレビュー指摘に対して、resolution=%s で対応する前提の最終決定メモを日本語で下書きしてください。\n"+
-			"ユーザーが承認して保存する文章です。抽象的な方針説明ではなく、実際に何をどう変えるかを書いてください。\n"+
+			"ユーザーが承認して保存し、そのまま review apply job の入力にも使う文章です。抽象的な方針説明ではなく、実際に何をどう変えるかを書いてください。\n"+
 			"指摘タイトル: %s\n"+
 			"指摘内容: %s\n"+
 			"改善提案: %s\n"+
 			"AIの現在提案: %s\n"+
 			"対象の要約:\n%s\n"+
-			"少なくとも1つの具体的な対象名（file path / node title / interface / 関数名）を文中に含めてください。",
+			"対象が分かる場合は、file path / node title / interface / 関数名のような具体名を自然に含めてください。文体や文数は自由ですが、apply に使える具体性は保ってください。",
 		input.Resolution,
 		input.Feedback.Title,
 		input.Feedback.Description,
@@ -837,14 +837,17 @@ func validateResolutionDraft(text string, input ResolutionDraftInput) error {
 		}
 	}
 	if len(candidates) == 0 {
-		candidates = append(candidates, strings.ToLower(input.Feedback.Title))
+		return nil
 	}
 	for _, candidate := range candidates {
 		if candidate != "" && strings.Contains(lower, candidate) {
 			return nil
 		}
 	}
-	return errors.New("resolution draft does not mention any concrete target")
+	if len(text) < 20 {
+		return errors.New("resolution draft is too short")
+	}
+	return nil
 }
 
 func uniqueStrings(values []string) []string {
