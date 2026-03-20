@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { AlertCircle, AlertTriangle, Info, MessageSquare, ScanSearch } from "lucide-react";
+import { AlertCircle, AlertTriangle, Info, MessageSquare, ScanSearch, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { FeedbackCard } from "@/types/ai-review";
 
 interface FeedbackCardItemProps {
@@ -10,6 +10,7 @@ interface FeedbackCardItemProps {
   onClick: () => void;
   onChatOpen: () => void;
   onViewNodes?: () => void;
+  onRate?: (reaction: "good" | "bad") => void;
   compact?: boolean;
 }
 
@@ -37,7 +38,7 @@ const severityConfig = {
   },
 };
 
-export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onViewNodes, compact }: FeedbackCardItemProps) {
+export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onViewNodes, onRate, compact }: FeedbackCardItemProps) {
   const { icon: Icon, label, dot, badge, border } = severityConfig[card.severity];
 
   if (compact) {
@@ -61,13 +62,31 @@ export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onView
             animate={{ opacity: 1, height: "auto" }}
             className="mt-2"
           >
-            <button
-              onClick={(e) => { e.stopPropagation(); onChatOpen(); }}
-              className="flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              <MessageSquare className="size-3" />
-              チャットで議論
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onChatOpen(); }}
+                className="flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                <MessageSquare className="size-3" />
+                チャットで議論
+              </button>
+              {onRate && (
+                <div className="ml-auto flex items-center gap-1">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRate("good"); }}
+                    className={`rounded-md border px-2 py-1 text-xs ${card.userReaction === "good" ? "border-emerald-500 bg-emerald-500/15 text-emerald-300" : "border-slate-600 text-slate-300 hover:bg-slate-700"}`}
+                  >
+                    <ThumbsUp className="size-3" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRate("bad"); }}
+                    className={`rounded-md border px-2 py-1 text-xs ${card.userReaction === "bad" ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-slate-600 text-slate-300 hover:bg-slate-700"}`}
+                  >
+                    <ThumbsDown className="size-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
       </motion.div>
@@ -115,6 +134,24 @@ export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onView
           className="mt-3 border-t border-slate-700 pt-3"
         >
           <p className="mb-3 text-xs text-slate-400">{card.suggestion}</p>
+          {onRate && (
+            <div className="mb-3 flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onRate("good"); }}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${card.userReaction === "good" ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+              >
+                <ThumbsUp className="size-3.5" />
+                Good
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRate("bad"); }}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${card.userReaction === "bad" ? "border-rose-500 bg-rose-500/10 text-rose-300" : "border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+              >
+                <ThumbsDown className="size-3.5" />
+                Bad
+              </button>
+            </div>
+          )}
           {onViewNodes && (card.nodeIds?.length ?? 0) > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); onViewNodes(); }}

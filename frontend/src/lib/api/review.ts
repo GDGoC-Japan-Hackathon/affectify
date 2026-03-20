@@ -8,6 +8,7 @@ import {
   ListReviewFeedbackChatsRequestSchema,
   ListReviewFeedbacksRequestSchema,
   ResolveReviewFeedbackRequestSchema,
+  RateReviewFeedbackRequestSchema,
   ReviewService,
   type ReviewFeedback as ProtoReviewFeedback,
   type ReviewFeedbackChat as ProtoReviewFeedbackChat,
@@ -40,6 +41,7 @@ export interface ReviewFeedback {
   status: string;
   displayOrder: number;
   createdAt: Date;
+  userReaction: string;
 }
 
 export interface ReviewFeedbackTarget {
@@ -162,6 +164,24 @@ export async function resolveReviewFeedback(
   return mapReviewFeedback(response.feedback);
 }
 
+export async function rateReviewFeedback(
+  feedbackId: string,
+  reaction: "good" | "bad",
+): Promise<ReviewFeedback> {
+  const response = await reviewClient.rateReviewFeedback(
+    create(RateReviewFeedbackRequestSchema, {
+      feedbackId: BigInt(feedbackId),
+      reaction,
+    }),
+  );
+
+  if (!response.feedback) {
+    throw new Error("フィードバック評価の保存に失敗しました");
+  }
+
+  return mapReviewFeedback(response.feedback);
+}
+
 function mapReviewJob(job: ProtoReviewJob): ReviewJob {
   return {
     id: job.id.toString(),
@@ -189,6 +209,7 @@ function mapReviewFeedback(feedback: ProtoReviewFeedback): ReviewFeedback {
     status: feedback.status,
     displayOrder: feedback.displayOrder,
     createdAt: toDate(feedback.createdAt),
+    userReaction: feedback.userReaction,
   };
 }
 
