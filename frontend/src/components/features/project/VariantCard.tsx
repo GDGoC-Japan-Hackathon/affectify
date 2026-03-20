@@ -25,7 +25,6 @@ import { ja } from 'date-fns/locale';
 
 interface VariantCardProps {
   variant: Variant;
-  projectId: string;
   onCompareToggle: (id: string) => void;
   isComparing: boolean;
 }
@@ -46,7 +45,6 @@ function getScoreBg(score?: number) {
 
 export function VariantCard({
   variant,
-  projectId: _projectId,
   onCompareToggle,
   isComparing,
 }: VariantCardProps) {

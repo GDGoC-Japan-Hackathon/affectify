@@ -38,6 +38,7 @@ func newReviewFeedback(db *gorm.DB, opts ...gen.DOOption) reviewFeedback {
 	_reviewFeedback.Suggestion = field.NewString(tableName, "suggestion")
 	_reviewFeedback.AIRecommendation = field.NewString(tableName, "ai_recommendation")
 	_reviewFeedback.Resolution = field.NewString(tableName, "resolution")
+	_reviewFeedback.ResolutionNote = field.NewString(tableName, "resolution_note")
 	_reviewFeedback.Status = field.NewString(tableName, "status")
 	_reviewFeedback.DisplayOrder = field.NewInt32(tableName, "display_order")
 	_reviewFeedback.CreatedAt = field.NewTime(tableName, "created_at")
@@ -61,6 +62,7 @@ type reviewFeedback struct {
 	Suggestion       field.String
 	AIRecommendation field.String
 	Resolution       field.String
+	ResolutionNote   field.String
 	Status           field.String
 	DisplayOrder     field.Int32
 	CreatedAt        field.Time
@@ -90,6 +92,7 @@ func (r *reviewFeedback) updateTableName(table string) *reviewFeedback {
 	r.Suggestion = field.NewString(table, "suggestion")
 	r.AIRecommendation = field.NewString(table, "ai_recommendation")
 	r.Resolution = field.NewString(table, "resolution")
+	r.ResolutionNote = field.NewString(table, "resolution_note")
 	r.Status = field.NewString(table, "status")
 	r.DisplayOrder = field.NewInt32(table, "display_order")
 	r.CreatedAt = field.NewTime(table, "created_at")
@@ -121,7 +124,7 @@ func (r *reviewFeedback) GetFieldByName(fieldName string) (field.OrderExpr, bool
 }
 
 func (r *reviewFeedback) fillFieldMap() {
-	r.fieldMap = make(map[string]field.Expr, 13)
+	r.fieldMap = make(map[string]field.Expr, 14)
 	r.fieldMap["id"] = r.ID
 	r.fieldMap["review_job_id"] = r.ReviewJobID
 	r.fieldMap["variant_id"] = r.VariantID
@@ -132,6 +135,7 @@ func (r *reviewFeedback) fillFieldMap() {
 	r.fieldMap["suggestion"] = r.Suggestion
 	r.fieldMap["ai_recommendation"] = r.AIRecommendation
 	r.fieldMap["resolution"] = r.Resolution
+	r.fieldMap["resolution_note"] = r.ResolutionNote
 	r.fieldMap["status"] = r.Status
 	r.fieldMap["display_order"] = r.DisplayOrder
 	r.fieldMap["created_at"] = r.CreatedAt

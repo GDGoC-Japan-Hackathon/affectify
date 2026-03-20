@@ -68,6 +68,12 @@ variable "review_job_name" {
   default     = "whitecoder-review"
 }
 
+variable "review_apply_job_name" {
+  description = "Cloud Run Job name for applying resolved review decisions"
+  type        = string
+  default     = "whitecoder-review-apply"
+}
+
 variable "vertex_ai_model" {
   description = "Vertex AI Gemini model name for AI review/chat"
   type        = string

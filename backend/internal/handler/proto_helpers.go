@@ -153,17 +153,17 @@ func toProtoDesignGuideSummary(detail *service.DesignGuideSummaryDetail) *apiv1.
 	}
 
 	return &apiv1.DesignGuideSummary{
-		Id:         detail.Guide.ID,
-		Name:       detail.Guide.Name,
-		Description:stringValue(detail.Guide.Description),
-		CreatedBy:  detail.Guide.CreatedBy,
-		Creator:    toProtoUserSummary(detail.Creator),
-		LikeCount:  detail.LikeCount,
-		CreatedAt:  timestamppb.New(detail.Guide.CreatedAt),
-		UpdatedAt:  timestamppb.New(detail.Guide.UpdatedAt),
-		Visibility: string(detail.Guide.Visibility),
-		IsTemplate: detail.Guide.IsTemplate,
-		LikedByMe:  detail.LikedByMe,
+		Id:          detail.Guide.ID,
+		Name:        detail.Guide.Name,
+		Description: stringValue(detail.Guide.Description),
+		CreatedBy:   detail.Guide.CreatedBy,
+		Creator:     toProtoUserSummary(detail.Creator),
+		LikeCount:   detail.LikeCount,
+		CreatedAt:   timestamppb.New(detail.Guide.CreatedAt),
+		UpdatedAt:   timestamppb.New(detail.Guide.UpdatedAt),
+		Visibility:  string(detail.Guide.Visibility),
+		IsTemplate:  detail.Guide.IsTemplate,
+		LikedByMe:   detail.LikedByMe,
 	}
 }
 
@@ -173,18 +173,18 @@ func toProtoDesignGuide(detail *service.DesignGuideDetail) *apiv1.DesignGuide {
 	}
 
 	return &apiv1.DesignGuide{
-		Id:         detail.Guide.ID,
-		Name:       detail.Guide.Name,
-		Description:stringValue(detail.Guide.Description),
-		Content:    detail.Guide.Content,
-		CreatedBy:  detail.Guide.CreatedBy,
-		Creator:    toProtoUserSummary(detail.Creator),
-		LikeCount:  detail.LikeCount,
-		CreatedAt:  timestamppb.New(detail.Guide.CreatedAt),
-		UpdatedAt:  timestamppb.New(detail.Guide.UpdatedAt),
-		Visibility: string(detail.Guide.Visibility),
-		IsTemplate: detail.Guide.IsTemplate,
-		LikedByMe:  detail.LikedByMe,
+		Id:          detail.Guide.ID,
+		Name:        detail.Guide.Name,
+		Description: stringValue(detail.Guide.Description),
+		Content:     detail.Guide.Content,
+		CreatedBy:   detail.Guide.CreatedBy,
+		Creator:     toProtoUserSummary(detail.Creator),
+		LikeCount:   detail.LikeCount,
+		CreatedAt:   timestamppb.New(detail.Guide.CreatedAt),
+		UpdatedAt:   timestamppb.New(detail.Guide.UpdatedAt),
+		Visibility:  string(detail.Guide.Visibility),
+		IsTemplate:  detail.Guide.IsTemplate,
+		LikedByMe:   detail.LikedByMe,
 	}
 }
 
@@ -324,35 +324,47 @@ func toProtoReviewJob(job *entity.ReviewJob) *apiv1.ReviewJob {
 	}
 }
 
+func toProtoReviewApplyJob(job *entity.ReviewApplyJob) *apiv1.ReviewApplyJob {
+	if job == nil {
+		return nil
+	}
+
+	return &apiv1.ReviewApplyJob{
+		Id:           job.ID,
+		VariantId:    job.VariantID,
+		ReviewJobId:  job.ReviewJobID,
+		RequestedBy:  job.RequestedBy,
+		Status:       string(job.Status),
+		ErrorMessage: stringValue(job.ErrorMessage),
+		StartedAt:    toProtoTimestamp(timePointer(job.StartedAt)),
+		FinishedAt:   toProtoTimestamp(timePointer(job.FinishedAt)),
+		CreatedAt:    timestamppb.New(job.CreatedAt),
+	}
+}
+
 func toProtoReviewFeedback(feedback *entity.ReviewFeedback, userReaction *string) *apiv1.ReviewFeedback {
 	if feedback == nil {
 		return nil
 	}
 
-	// review card は enum 風の内部型を string 化して frontend に渡す。
+	// review card は内部 enum を proto enum に変換して返す。
 	return &apiv1.ReviewFeedback{
 		Id:               feedback.ID,
 		ReviewJobId:      feedback.ReviewJobID,
 		VariantId:        feedback.VariantID,
-		FeedbackType:     string(feedback.FeedbackType),
-		Severity:         string(feedback.Severity),
+		FeedbackType:     toProtoReviewFeedbackType(feedback.FeedbackType),
+		Severity:         toProtoReviewFeedbackSeverity(feedback.Severity),
 		Title:            feedback.Title,
 		Description:      feedback.Description,
 		Suggestion:       feedback.Suggestion,
-		AiRecommendation: resolutionValue(feedback.AIRecommendation),
-		Resolution:       resolutionValue(feedback.Resolution),
-		Status:           string(feedback.Status),
+		AiRecommendation: toProtoReviewFeedbackResolution(feedback.AIRecommendation),
+		Resolution:       toProtoReviewFeedbackResolution(feedback.Resolution),
+		Status:           toProtoReviewFeedbackStatus(feedback.Status),
 		DisplayOrder:     feedback.DisplayOrder,
 		CreatedAt:        timestamppb.New(feedback.CreatedAt),
-		UserReaction:     feedbackActionValue(userReaction),
+		UserReaction:     toProtoReviewFeedbackReaction(userReaction),
+		ResolutionNote:   stringValue(feedback.ResolutionNote),
 	}
-}
-
-func feedbackActionValue(action *string) string {
-	if action == nil {
-		return ""
-	}
-	return *action
 }
 
 func toProtoReviewFeedbackTarget(target *entity.ReviewFeedbackTarget) *apiv1.ReviewFeedbackTarget {
@@ -360,12 +372,12 @@ func toProtoReviewFeedbackTarget(target *entity.ReviewFeedbackTarget) *apiv1.Rev
 		return nil
 	}
 
-	// feedback が指している node / edge / file 参照を API に渡す。
 	return &apiv1.ReviewFeedbackTarget{
 		Id:         target.ID,
 		FeedbackId: target.FeedbackID,
-		TargetType: string(target.TargetType),
-		TargetRef:  target.TargetRef,
+		NodeId:     target.NodeID,
+		EdgeId:     target.EdgeID,
+		FilePath:   target.FilePath,
 	}
 }
 
@@ -378,7 +390,7 @@ func toProtoReviewFeedbackChat(chat *entity.ReviewFeedbackChat) *apiv1.ReviewFee
 	return &apiv1.ReviewFeedbackChat{
 		Id:         chat.ID,
 		FeedbackId: chat.FeedbackID,
-		Role:       string(chat.Role),
+		Role:       toProtoReviewFeedbackChatRole(chat.Role),
 		Content:    chat.Content,
 		CreatedBy:  chat.CreatedBy,
 		CreatedAt:  timestamppb.New(chat.CreatedAt),
@@ -393,17 +405,89 @@ func stringValue(value *string) string {
 	return *value
 }
 
-func resolutionValue(value *entity.FeedbackResolution) string {
-	if value == nil {
-		return ""
-	}
-
-	return string(*value)
-}
-
 func timePointer(value *entity.Time) *time.Time {
 	if value == nil {
 		return nil
 	}
 	return (*time.Time)(value)
+}
+
+func toProtoReviewFeedbackType(value entity.FeedbackType) apiv1.ReviewFeedbackType {
+	switch value {
+	case entity.FeedbackTypeDesignGuide:
+		return apiv1.ReviewFeedbackType_REVIEW_FEEDBACK_TYPE_DESIGN_GUIDE
+	case entity.FeedbackTypeCode:
+		return apiv1.ReviewFeedbackType_REVIEW_FEEDBACK_TYPE_CODE
+	default:
+		return apiv1.ReviewFeedbackType_REVIEW_FEEDBACK_TYPE_UNSPECIFIED
+	}
+}
+
+func toProtoReviewFeedbackSeverity(value entity.FeedbackSeverity) apiv1.ReviewFeedbackSeverity {
+	switch value {
+	case entity.FeedbackSeverityHigh:
+		return apiv1.ReviewFeedbackSeverity_REVIEW_FEEDBACK_SEVERITY_HIGH
+	case entity.FeedbackSeverityMedium:
+		return apiv1.ReviewFeedbackSeverity_REVIEW_FEEDBACK_SEVERITY_MEDIUM
+	case entity.FeedbackSeverityLow:
+		return apiv1.ReviewFeedbackSeverity_REVIEW_FEEDBACK_SEVERITY_LOW
+	default:
+		return apiv1.ReviewFeedbackSeverity_REVIEW_FEEDBACK_SEVERITY_UNSPECIFIED
+	}
+}
+
+func toProtoReviewFeedbackResolution(value *entity.FeedbackResolution) apiv1.ReviewFeedbackResolution {
+	if value == nil {
+		return apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_UNSPECIFIED
+	}
+
+	switch *value {
+	case entity.FeedbackResolutionUpdateDesignGuide:
+		return apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_UPDATE_DESIGN_GUIDE
+	case entity.FeedbackResolutionFixCode:
+		return apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_FIX_CODE
+	case entity.FeedbackResolutionBoth:
+		return apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_BOTH
+	default:
+		return apiv1.ReviewFeedbackResolution_REVIEW_FEEDBACK_RESOLUTION_UNSPECIFIED
+	}
+}
+
+func toProtoReviewFeedbackStatus(value entity.FeedbackStatus) apiv1.ReviewFeedbackStatus {
+	switch value {
+	case entity.FeedbackStatusOpen:
+		return apiv1.ReviewFeedbackStatus_REVIEW_FEEDBACK_STATUS_OPEN
+	case entity.FeedbackStatusResolved:
+		return apiv1.ReviewFeedbackStatus_REVIEW_FEEDBACK_STATUS_RESOLVED
+	case entity.FeedbackStatusDismissed:
+		return apiv1.ReviewFeedbackStatus_REVIEW_FEEDBACK_STATUS_DISMISSED
+	default:
+		return apiv1.ReviewFeedbackStatus_REVIEW_FEEDBACK_STATUS_UNSPECIFIED
+	}
+}
+
+func toProtoReviewFeedbackReaction(value *string) apiv1.ReviewFeedbackReaction {
+	if value == nil {
+		return apiv1.ReviewFeedbackReaction_REVIEW_FEEDBACK_REACTION_UNSPECIFIED
+	}
+
+	switch *value {
+	case "good":
+		return apiv1.ReviewFeedbackReaction_REVIEW_FEEDBACK_REACTION_GOOD
+	case "bad":
+		return apiv1.ReviewFeedbackReaction_REVIEW_FEEDBACK_REACTION_BAD
+	default:
+		return apiv1.ReviewFeedbackReaction_REVIEW_FEEDBACK_REACTION_UNSPECIFIED
+	}
+}
+
+func toProtoReviewFeedbackChatRole(value entity.ChatRole) apiv1.ReviewFeedbackChatRole {
+	switch value {
+	case entity.ChatRoleUser:
+		return apiv1.ReviewFeedbackChatRole_REVIEW_FEEDBACK_CHAT_ROLE_USER
+	case entity.ChatRoleAI:
+		return apiv1.ReviewFeedbackChatRole_REVIEW_FEEDBACK_CHAT_ROLE_AI
+	default:
+		return apiv1.ReviewFeedbackChatRole_REVIEW_FEEDBACK_CHAT_ROLE_UNSPECIFIED
+	}
 }

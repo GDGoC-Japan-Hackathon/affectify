@@ -26,6 +26,7 @@ func main() {
 		&repoentity.GraphBuildJob{},
 		&repoentity.LayoutJob{},
 		&repoentity.ReviewJob{},
+		&repoentity.ReviewApplyJob{},
 		&repoentity.ReviewFeedback{},
 		&repoentity.ReviewFeedbackTarget{},
 		&repoentity.ReviewFeedbackChat{},

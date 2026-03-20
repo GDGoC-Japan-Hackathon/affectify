@@ -24,6 +24,7 @@ export type FeedbackCard = {
   edgeIds: string[];
   status: FeedbackStatus;
   resolution?: Resolution;
+  resolutionNote?: string;
   aiRecommendation?: Resolution;
   userReaction?: FeedbackReaction;
   resolved: boolean;

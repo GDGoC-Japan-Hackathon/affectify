@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"gorm.io/gorm/clause"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/query"
@@ -64,6 +64,24 @@ func (r *ReviewRepository) FindLatestReviewJobByVariantID(ctx context.Context, v
 		return nil, err
 	}
 	return job, nil
+}
+
+func (r *ReviewRepository) CreateReviewApplyJob(ctx context.Context, job *entity.ReviewApplyJob) error {
+	return r.db.WithContext(ctx).Create(job).Error
+}
+
+func (r *ReviewRepository) SaveReviewApplyJob(ctx context.Context, job *entity.ReviewApplyJob) error {
+	return r.db.WithContext(ctx).Save(job).Error
+}
+
+func (r *ReviewRepository) FindReviewApplyJobByID(ctx context.Context, id int64) (*entity.ReviewApplyJob, error) {
+	var job entity.ReviewApplyJob
+	if err := r.db.WithContext(ctx).First(&job, id).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return &job, nil
 }
 
 func (r *ReviewRepository) ListFeedbacksByVariantAndJob(

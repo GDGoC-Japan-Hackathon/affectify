@@ -46,6 +46,65 @@ type Store interface {
 	PrepareVariantUpload(ctx context.Context, variantID int64, files []UploadDescriptor) (*UploadPlan, error)
 }
 
+func ApplyFiles(ctx context.Context, sourceRootURI string, files []UploadedFile) error {
+	if strings.HasPrefix(sourceRootURI, "file://") || filepath.IsAbs(sourceRootURI) {
+		rootDir := strings.TrimPrefix(sourceRootURI, "file://")
+		if !filepath.IsAbs(rootDir) {
+			absPath, err := filepath.Abs(rootDir)
+			if err != nil {
+				return err
+			}
+			rootDir = absPath
+		}
+		for _, file := range files {
+			normalizedPath, err := normalizeRelativePath(file.RelativePath)
+			if err != nil {
+				return err
+			}
+			targetPath := filepath.Join(rootDir, normalizedPath)
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(targetPath, file.Content, 0o644); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if strings.HasPrefix(sourceRootURI, "gs://") {
+		bucketName, prefix, err := parseGCSURI(sourceRootURI)
+		if err != nil {
+			return err
+		}
+		client, err := storage.NewClient(ctx)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+
+		bucket := client.Bucket(bucketName)
+		for _, file := range files {
+			normalizedPath, err := normalizeRelativePath(file.RelativePath)
+			if err != nil {
+				return err
+			}
+			objectPath := fmt.Sprintf("%s/%s", strings.TrimSuffix(prefix, "/"), filepath.ToSlash(normalizedPath))
+			writer := bucket.Object(objectPath).NewWriter(ctx)
+			if _, err := bytes.NewReader(file.Content).WriteTo(writer); err != nil {
+				_ = writer.Close()
+				return err
+			}
+			if err := writer.Close(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unsupported source_root_uri: %s", sourceRootURI)
+}
+
 type LocalStore struct {
 	rootDir string
 }
@@ -176,6 +235,26 @@ func (s *GCSStore) PrepareVariantUpload(ctx context.Context, variantID int64, fi
 
 func buildGCSPrefix(variantID int64) string {
 	return fmt.Sprintf("variants/%d/uploads/%s", variantID, uuid.NewString())
+}
+
+func parseGCSURI(uri string) (string, string, error) {
+	const prefix = "gs://"
+	if !strings.HasPrefix(uri, prefix) {
+		return "", "", fmt.Errorf("unsupported source_root_uri: %s", uri)
+	}
+
+	path := strings.TrimPrefix(uri, prefix)
+	parts := strings.SplitN(path, "/", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return "", "", fmt.Errorf("invalid gs uri: %s", uri)
+	}
+
+	bucket := parts[0]
+	objectPrefix := ""
+	if len(parts) == 2 {
+		objectPrefix = strings.TrimPrefix(parts[1], "/")
+	}
+	return bucket, objectPrefix, nil
 }
 
 func normalizeRelativePath(relativePath string) (string, error) {
