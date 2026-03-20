@@ -284,6 +284,27 @@ func (h *VariantServiceHandler) GetLayoutJob(
 	}), nil
 }
 
+func (h *VariantServiceHandler) BulkUpdateNodePositions(
+	ctx context.Context,
+	req *connect.Request[apiv1.BulkUpdateNodePositionsRequest],
+) (*connect.Response[apiv1.BulkUpdateNodePositionsResponse], error) {
+	identity, err := auth.RequireIdentity(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+
+	positions := make(map[int64][2]float64, len(req.Msg.Positions))
+	for _, p := range req.Msg.Positions {
+		positions[p.NodeId] = [2]float64{p.X, p.Y}
+	}
+
+	if err := h.variantService.BulkUpdateNodePositions(ctx, identity.UID, req.Msg.VariantId, positions); err != nil {
+		return nil, mapVariantError(err)
+	}
+
+	return connect.NewResponse(&apiv1.BulkUpdateNodePositionsResponse{}), nil
+}
+
 func mapVariantError(err error) error {
 	// service の業務エラーを handler で Connect code に正規化する。
 	switch {

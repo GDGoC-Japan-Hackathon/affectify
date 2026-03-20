@@ -21,6 +21,7 @@ service VariantService {
   rpc GetGraphBuildJob(GetGraphBuildJobRequest) returns (GetGraphBuildJobResponse) {}
   rpc CreateLayoutJob(CreateLayoutJobRequest) returns (CreateLayoutJobResponse) {}
   rpc GetLayoutJob(GetLayoutJobRequest) returns (GetLayoutJobResponse) {}
+  rpc BulkUpdateNodePositions(BulkUpdateNodePositionsRequest) returns (BulkUpdateNodePositionsResponse) {}
 }
 
 message Variant {
@@ -193,3 +194,16 @@ message GetLayoutJobRequest {
 message GetLayoutJobResponse {
   LayoutJob job = 1;
 }
+
+message NodePositionInput {
+  int64 node_id = 1;
+  double x = 2;
+  double y = 3;
+}
+
+message BulkUpdateNodePositionsRequest {
+  int64 variant_id = 1;
+  repeated NodePositionInput positions = 2;
+}
+
+message BulkUpdateNodePositionsResponse {}

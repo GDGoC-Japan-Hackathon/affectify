@@ -445,6 +445,13 @@ func (s *VariantService) GetLayoutJob(ctx context.Context, firebaseUID string, i
 	return job, nil
 }
 
+func (s *VariantService) BulkUpdateNodePositions(ctx context.Context, firebaseUID string, variantID int64, positions map[int64][2]float64) error {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, variantID); err != nil {
+		return err
+	}
+	return s.variantRepo.ApplyNodePositions(ctx, variantID, positions)
+}
+
 func (s *VariantService) requireUser(ctx context.Context, firebaseUID string) (*entity.User, error) {
 	user, err := s.userRepository.FindByFirebaseUID(ctx, firebaseUID)
 	if err != nil {

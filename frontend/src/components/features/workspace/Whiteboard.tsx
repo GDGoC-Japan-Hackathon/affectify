@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { computeLayout, computeCircularLayout, computeRandomLayout, computeFileGroupLayout, computeSCCs } from "@/utils/graphLayout";
 import { toast } from "sonner";
 import {
+  bulkUpdateNodePositions,
   createLayoutJob,
   getLayoutJob,
   getVariantWorkspace,
@@ -539,25 +540,54 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
         isLayoutAnimatingRef.current = true;
         pushHistorySnapshot();
 
-        const job = await createLayoutJob(variantId, layoutMode);
-        let latestJob = job;
+        if (layoutMode === "circular" || layoutMode === "random" || layoutMode === "filegroup") {
+          // フロントエンドで計算してバックエンドに保存
+          const currentNodes = nodes;
+          const boardNodes = currentNodes.map((n) => n.data as unknown as BoardNode);
+          const boardEdges = edges.map((e) => ({
+            id: e.id,
+            from_node_id: e.source,
+            to_node_id: e.target,
+            kind: "call" as const,
+            style: "solid" as const,
+          }));
+          const targetPositions =
+            layoutMode === "circular"
+              ? computeCircularLayout(boardNodes, boardEdges, { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor })
+              : layoutMode === "random"
+                ? computeRandomLayout(boardNodes, boardEdges, { spacing: randomSpacingRef.current })
+                : computeFileGroupLayout(boardNodes, boardEdges, { nodeSpacing: fileGroupNodeSpacingRef.current, groupSpacing: fileGroupGroupSpacingRef.current });
 
-        while (latestJob.status === "queued" || latestJob.status === "running") {
-          await new Promise((resolve) => window.setTimeout(resolve, 1000));
-          latestJob = await getLayoutJob(job.id);
+          setNodes((nds) =>
+            nds.map((n) => {
+              const to = targetPositions.get(n.id);
+              return to ? { ...n, position: { x: to.x, y: to.y } } : n;
+            }),
+          );
+          await bulkUpdateNodePositions(variantId, targetPositions);
+        } else {
+          // grid はバックエンドジョブで処理
+          const job = await createLayoutJob(variantId, layoutMode);
+          let latestJob = job;
+
+          while (latestJob.status === "queued" || latestJob.status === "running") {
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            latestJob = await getLayoutJob(job.id);
+          }
+
+          if (latestJob.status !== "succeeded") {
+            throw new Error(latestJob.errorMessage || "layout job failed");
+          }
+
+          const workspace = await getVariantWorkspace(variantId);
+          const refreshedNodes = workspace.nodes;
+          const refreshedEdges = workspace.edges;
+          const refreshedSccIds = buildSccEdgeIds(refreshedNodes, refreshedEdges);
+
+          setNodes(toFlowNodes(refreshedNodes));
+          setEdges(toFlowEdges(refreshedEdges, refreshedSccIds));
         }
 
-        if (latestJob.status !== "succeeded") {
-          throw new Error(latestJob.errorMessage || "layout job failed");
-        }
-
-        const workspace = await getVariantWorkspace(variantId);
-        const refreshedNodes = workspace.nodes;
-        const refreshedEdges = workspace.edges;
-        const refreshedSccIds = buildSccEdgeIds(refreshedNodes, refreshedEdges);
-
-        setNodes(toFlowNodes(refreshedNodes));
-        setEdges(toFlowEdges(refreshedEdges, refreshedSccIds));
         fitView({ padding: 0.2, duration: 420 });
         toast.success("整理が完了しました", { id: toastId });
       } catch (error) {
@@ -570,7 +600,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
         }
       }
     },
-    [fitView, layoutMode, layoutXGap, layoutYGap, pushHistorySnapshot, setEdges, setNodes, variantId],
+    [fitView, layoutMode, layoutXGap, layoutYGap, pushHistorySnapshot, setEdges, setNodes, variantId, nodes, edges, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor],
   );
 
   useEffect(() => {

@@ -2,6 +2,8 @@ import { create } from "@bufbuild/protobuf";
 
 import { createConnectClient } from "@/lib/connect";
 import {
+  BulkUpdateNodePositionsRequestSchema,
+  NodePositionInputSchema,
   CreateGraphBuildJobRequestSchema,
   CreateLayoutJobRequestSchema,
   CreateVariantRequestSchema,
@@ -239,6 +241,24 @@ export async function updateVariantDesignGuide(input: UpdateVariantDesignGuideIn
     description: response.designGuide.description,
     content: response.designGuide.content,
   };
+}
+
+export async function bulkUpdateNodePositions(
+  variantId: string,
+  positions: Map<string, { x: number; y: number }>,
+): Promise<void> {
+  await variantClient.bulkUpdateNodePositions(
+    create(BulkUpdateNodePositionsRequestSchema, {
+      variantId: BigInt(variantId),
+      positions: Array.from(positions.entries()).map(([nodeId, pos]) =>
+        create(NodePositionInputSchema, {
+          nodeId: BigInt(nodeId),
+          x: pos.x,
+          y: pos.y,
+        }),
+      ),
+    }),
+  );
 }
 
 function mapVariant(variant: {
