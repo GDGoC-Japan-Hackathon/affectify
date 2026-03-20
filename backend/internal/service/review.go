@@ -286,6 +286,15 @@ func (s *ReviewService) AppendReviewFeedbackChat(
 		return nil, nil, err
 	}
 
+	if nextRecommendation := inferRecommendationFromChat(feedback, content, replyContent); nextRecommendation != "" {
+		if feedback.AIRecommendation == nil || *feedback.AIRecommendation != nextRecommendation {
+			feedback.AIRecommendation = &nextRecommendation
+			if err := s.reviewRepo.SaveFeedback(ctx, feedback); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
 	chats, err := s.ListReviewFeedbackChats(ctx, firebaseUID, feedbackID)
 	if err != nil {
 		return nil, nil, err
@@ -366,6 +375,38 @@ func buildAIReviewReply(feedback *entity.ReviewFeedback, userMessage string) str
 		return "設計書とコードの両方を見直すのが良さそうです。" + base
 	}
 	return "設計書とコードの両方に改善余地があります。" + base
+}
+
+func inferRecommendationFromChat(
+	feedback *entity.ReviewFeedback,
+	userMessage string,
+	replyContent string,
+) entity.FeedbackResolution {
+	text := strings.ToLower(strings.Join([]string{
+		userMessage,
+		replyContent,
+		feedback.Title,
+		feedback.Description,
+		feedback.Suggestion,
+	}, "\n"))
+
+	hasDesignGuide := strings.Contains(text, "設計書") || strings.Contains(text, "design guide")
+	hasCode := strings.Contains(text, "コード") || strings.Contains(text, "code")
+	hasBoth := strings.Contains(text, "両方") || strings.Contains(text, "両面") || strings.Contains(text, "both")
+
+	switch {
+	case hasBoth || (hasDesignGuide && hasCode):
+		return entity.FeedbackResolutionBoth
+	case hasDesignGuide:
+		return entity.FeedbackResolutionUpdateDesignGuide
+	case hasCode:
+		return entity.FeedbackResolutionFixCode
+	default:
+		if feedback.AIRecommendation != nil {
+			return *feedback.AIRecommendation
+		}
+		return ""
+	}
 }
 
 func buildResolutionDraftFallback(

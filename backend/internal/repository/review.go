@@ -143,6 +143,11 @@ func (r *ReviewRepository) FindFeedbackByID(ctx context.Context, id int64) (*ent
 	return feedback, nil
 }
 
+func (r *ReviewRepository) SaveFeedback(ctx context.Context, feedback *entity.ReviewFeedback) error {
+	q := query.Use(r.db)
+	return q.ReviewFeedback.WithContext(ctx).Save(feedback)
+}
+
 func (r *ReviewRepository) ListFeedbackChatsByFeedbackID(ctx context.Context, feedbackID int64) ([]entity.ReviewFeedbackChat, error) {
 	q := query.Use(r.db)
 	rfc := q.ReviewFeedbackChat

@@ -33,11 +33,8 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
     summary,
     openModal,
     loadReview,
-    applyResolvedFeedbacks,
     isLoading,
     isReviewRunning,
-    isApplyRunning,
-    resolvedCount,
     hasLoadedReview,
     error,
   } = useAIReview();
@@ -205,13 +202,13 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
                 )}
               </div>
               <div className="border-t border-slate-200 bg-white p-3">
-              <button
-                onClick={() => void applyResolvedFeedbacks()}
-                disabled={isApplyRunning || resolvedCount === 0}
-                className="mb-2 w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                  {isApplyRunning ? "AIが反映中..." : "AIに決定内容を反映させる"}
-              </button>
+                <button
+                  onClick={() => void loadReview()}
+                  disabled={isReviewRunning}
+                  className="mb-2 w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isReviewRunning ? "レビュー中..." : "再レビュー"}
+                </button>
                 <button
                   onClick={() => openModal()}
                   className="w-full rounded-lg border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

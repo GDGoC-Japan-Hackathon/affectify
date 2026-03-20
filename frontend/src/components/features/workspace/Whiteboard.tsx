@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { memo, useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -1683,11 +1683,29 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
   );
 }
 
-// useReactFlow を使うために Provider でラップ
-export function Whiteboard(props: WhiteboardProps) {
-  return (
-    <ReactFlowProvider>
-      <WhiteboardInner {...props} />
-    </ReactFlowProvider>
-  );
+function setsEqual(a?: Set<string>, b?: Set<string>) {
+  if (a === b) return true;
+  if (!a || !b) return !a && !b;
+  if (a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) return false;
+  }
+  return true;
 }
+
+// useReactFlow を使うために Provider でラップ
+export const Whiteboard = memo(
+  function Whiteboard(props: WhiteboardProps) {
+    return (
+      <ReactFlowProvider>
+        <WhiteboardInner {...props} />
+      </ReactFlowProvider>
+    );
+  },
+  (prev, next) =>
+    prev.variantId === next.variantId &&
+    prev.boardNodes === next.boardNodes &&
+    prev.boardEdges === next.boardEdges &&
+    setsEqual(prev.highlightedNodeIds, next.highlightedNodeIds) &&
+    setsEqual(prev.highlightedEdgeIds, next.highlightedEdgeIds),
+);
