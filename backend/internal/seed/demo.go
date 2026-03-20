@@ -65,8 +65,8 @@ func (s *Seeder) RunDemo(ctx context.Context) error {
 		}
 
 		members := []entity.ProjectMember{
-			{ProjectID: project.ID, UserID: owner.ID, InvitedBy: owner.ID, JoinedAt: now},
-			{ProjectID: project.ID, UserID: member.ID, InvitedBy: owner.ID, JoinedAt: now},
+			{ProjectID: project.ID, UserID: owner.ID, AddedBy: owner.ID, JoinedAt: now},
+			{ProjectID: project.ID, UserID: member.ID, AddedBy: owner.ID, JoinedAt: now},
 		}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "project_id"}, {Name: "user_id"}},
@@ -91,7 +91,6 @@ func (s *Seeder) RunDemo(ctx context.Context) error {
 			Name:          "Main Variant",
 			Description:   &mainDescription,
 			IsMain:        true,
-			DesignGuideID: &guide.ID,
 			AnalysisScore: &mainScore,
 			CreatedBy:     owner.ID,
 		}
@@ -101,17 +100,42 @@ func (s *Seeder) RunDemo(ctx context.Context) error {
 
 		altScore := int32(78)
 		altVariant := entity.Variant{
-			ProjectID:       project.ID,
-			Name:            "Comparison Variant",
-			Description:     &altDescription,
-			IsMain:          false,
-			ParentVariantID: &mainVariant.ID,
-			DesignGuideID:   &guide.ID,
-			AnalysisScore:   &altScore,
-			CreatedBy:       member.ID,
+			ProjectID:           project.ID,
+			Name:                "Comparison Variant",
+			Description:         &altDescription,
+			IsMain:              false,
+			ForkedFromVariantID: &mainVariant.ID,
+			AnalysisScore:       &altScore,
+			CreatedBy:           member.ID,
 		}
 		if err := tx.Where("project_id = ? AND name = ?", project.ID, altVariant.Name).FirstOrCreate(&altVariant).Error; err != nil {
 			return fmt.Errorf("seed comparison variant: %w", err)
+		}
+
+		variantGuides := []entity.VariantDesignGuide{
+			{
+				VariantID:         mainVariant.ID,
+				BaseDesignGuideID: &guide.ID,
+				Title:             guide.Name,
+				Description:       guide.Description,
+				Content:           guide.Content,
+				Version:           1,
+				CreatedBy:         owner.ID,
+			},
+			{
+				VariantID:         altVariant.ID,
+				BaseDesignGuideID: &guide.ID,
+				Title:             guide.Name,
+				Description:       guide.Description,
+				Content:           guide.Content,
+				Version:           1,
+				CreatedBy:         member.ID,
+			},
+		}
+		for _, variantGuide := range variantGuides {
+			if err := tx.Where("variant_id = ?", variantGuide.VariantID).FirstOrCreate(&variantGuide).Error; err != nil {
+				return fmt.Errorf("seed variant design guide: %w", err)
+			}
 		}
 
 		mainNodes, err := seedVariantGraph(tx, mainVariant.ID, []graphNodeSeed{
@@ -199,14 +223,28 @@ type graphEdgeSeed struct {
 
 func seedVariantGraph(tx *gorm.DB, variantID int64, seeds []graphNodeSeed) (map[string]entity.Node, error) {
 	nodes := make(map[string]entity.Node, len(seeds))
+	files := make(map[string]entity.VariantFile)
 
 	for _, seed := range seeds {
-		filePath := seed.FilePath
+		variantFile, ok := files[seed.FilePath]
+		if !ok {
+			language := "go"
+			variantFile = entity.VariantFile{
+				VariantID: variantID,
+				Path:      seed.FilePath,
+				Language:  &language,
+			}
+			if err := tx.Where("variant_id = ? AND path = ?", variantID, seed.FilePath).FirstOrCreate(&variantFile).Error; err != nil {
+				return nil, err
+			}
+			files[seed.FilePath] = variantFile
+		}
+
 		node := entity.Node{
-			VariantID: variantID,
-			Kind:      seed.Kind,
-			Title:     seed.Title,
-			FilePath:  &filePath,
+			VariantID:     variantID,
+			VariantFileID: &variantFile.ID,
+			Kind:          seed.Kind,
+			Title:         seed.Title,
 		}
 
 		if err := tx.Where("variant_id = ? AND title = ? AND kind = ?", variantID, seed.Title, seed.Kind).FirstOrCreate(&node).Error; err != nil {

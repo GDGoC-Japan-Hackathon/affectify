@@ -21,6 +21,7 @@ jobs:
       GCP_REGION: asia-northeast1
       ARTIFACT_REPOSITORY: whitecoder-backend
       BACKEND_IMAGE_NAME: backend
+      WORKER_IMAGE_NAME: worker
       CLOUD_SQL_INSTANCE_CONNECTION_NAME: hackathon-2e83a:asia-northeast1:whitecoder-postgres-dev
       DB_NAME: affectify
       DB_USER: whitecoder_app
@@ -73,6 +74,16 @@ jobs:
             --push \
             .
 
+      - name: Build and push worker image
+        working-directory: backend
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -f Dockerfile.worker \
+            -t ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${WORKER_IMAGE_NAME}:${GIT_SHA} \
+            --push \
+            .
+
       - name: Run Atlas migration against Cloud SQL
         working-directory: backend
         env:
@@ -93,5 +104,6 @@ jobs:
           TF_VAR_cloud_sql_user_password: ${{ secrets.DEV_CLOUD_SQL_USER_PASSWORD }}
           TF_VAR_firebase_admin_credentials_json: ${{ secrets.DEV_FIREBASE_ADMIN_CREDENTIALS_JSON }}
           TF_VAR_backend_image_tag: ${{ env.GIT_SHA }}
+          TF_VAR_worker_image_tag: ${{ env.GIT_SHA }}
         # image push 後の sha を Cloud Run に反映する。build 自体は Terraform では行わない。
         run: terraform apply -auto-approve

@@ -32,10 +32,40 @@ variable "backend_image_tag" {
   default     = "dev"
 }
 
+variable "worker_image_name" {
+  description = "Artifact Registry 上の worker image 名"
+  type        = string
+  default     = "worker"
+}
+
+variable "worker_image_tag" {
+  description = "Cloud Run Job が参照する worker image tag。git sha を推奨"
+  type        = string
+  default     = "dev"
+}
+
 variable "cloud_run_service_name" {
   description = "Cloud Run service name"
   type        = string
   default     = "whitecoder-backend"
+}
+
+variable "graph_build_job_name" {
+  description = "Cloud Run Job name for graph build worker"
+  type        = string
+  default     = "whitecoder-graph-build"
+}
+
+variable "review_job_name" {
+  description = "Cloud Run Job name for review worker"
+  type        = string
+  default     = "whitecoder-review"
+}
+
+variable "source_bucket_name" {
+  description = "GCS bucket name for variant source files"
+  type        = string
+  default     = "whitecoder-variant-sources-dev"
 }
 
 variable "cloud_sql_instance_name" {

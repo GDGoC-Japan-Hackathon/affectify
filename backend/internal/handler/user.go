@@ -24,11 +24,13 @@ func (h *UserServiceHandler) GetMe(
 	ctx context.Context,
 	req *connect.Request[apiv1.GetMeRequest],
 ) (*connect.Response[apiv1.GetMeResponse], error) {
+	// GetMe は Firebase identity を入口にアプリ内 users を解決する。
 	identity, err := auth.RequireIdentity(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
+	// service の user entity を API message に変換して返す。
 	user, err := h.userService.GetMe(ctx, identity.UID)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
@@ -47,12 +49,12 @@ func (h *UserServiceHandler) SyncMe(
 	ctx context.Context,
 	req *connect.Request[apiv1.SyncMeRequest],
 ) (*connect.Response[apiv1.SyncMeResponse], error) {
+	// SyncMe は Firebase identity をアプリ内 users テーブルへ同期する入口。
 	identity, err := auth.RequireIdentity(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, err)
 	}
 
-	// SyncMe は Firebase Auth とアプリ内 users テーブルをつなぐ入口。
 	user, created, err := h.userService.SyncMe(ctx, service.SyncMeInput{
 		FirebaseUID: identity.UID,
 		Email:       identity.Email,
@@ -74,6 +76,7 @@ func toProtoUser(user *entity.User) *apiv1.User {
 		return nil
 	}
 
+	// User は API で必要な最小項目だけをそのまま返す。
 	var avatarURL string
 	if user.AvatarURL != nil {
 		avatarURL = *user.AvatarURL

@@ -18,6 +18,7 @@ import (
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/postgres"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/service"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/source"
 )
 
 func main() {
@@ -47,18 +48,38 @@ func main() {
 	}
 
 	interceptors := connect.WithInterceptors(auth.NewInterceptor(verifier))
+	jobDispatcher := service.NewJobDispatcher(db, config.LoadJobRuntimeConfig())
+	sourceStore := source.NewStore(config.LoadSourceStorageConfig())
 
 	userRepository := repository.NewUserRepository(db)
 	healthService := service.NewHealthService()
 	userService := service.NewUserService(userRepository)
+	projectService := service.NewProjectService(db, userRepository)
+	designGuideService := service.NewDesignGuideService(db, userRepository)
+	variantService := service.NewVariantService(db, userRepository, jobDispatcher, sourceStore)
+	reviewService := service.NewReviewService(db, userRepository, jobDispatcher)
 	healthHandler := handler.NewHealthServiceHandler(healthService)
 	userHandler := handler.NewUserServiceHandler(userService)
+	projectHandler := handler.NewProjectServiceHandler(projectService)
+	designGuideHandler := handler.NewDesignGuideServiceHandler(designGuideService)
+	variantHandler := handler.NewVariantServiceHandler(variantService)
+	variantSourceUploadHandler := handler.NewVariantSourceUploadHandler(verifier, variantService)
+	reviewHandler := handler.NewReviewServiceHandler(reviewService)
 
 	mux := http.NewServeMux()
 	healthPath, healthHTTPHandler := apiv1connect.NewHealthServiceHandler(healthHandler, interceptors)
 	mux.Handle(healthPath, healthHTTPHandler)
 	userPath, userHTTPHandler := apiv1connect.NewUserServiceHandler(userHandler, interceptors)
 	mux.Handle(userPath, userHTTPHandler)
+	projectPath, projectHTTPHandler := apiv1connect.NewProjectServiceHandler(projectHandler, interceptors)
+	mux.Handle(projectPath, projectHTTPHandler)
+	designGuidePath, designGuideHTTPHandler := apiv1connect.NewDesignGuideServiceHandler(designGuideHandler, interceptors)
+	mux.Handle(designGuidePath, designGuideHTTPHandler)
+	variantPath, variantHTTPHandler := apiv1connect.NewVariantServiceHandler(variantHandler, interceptors)
+	mux.Handle(variantPath, variantHTTPHandler)
+	mux.Handle("/variant-sources/upload", middleware.WithCORS(variantSourceUploadHandler))
+	reviewPath, reviewHTTPHandler := apiv1connect.NewReviewServiceHandler(reviewHandler, interceptors)
+	mux.Handle(reviewPath, reviewHTTPHandler)
 
 	port := config.GetEnv("APP_PORT", "8080")
 	addr := ":" + port

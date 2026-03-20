@@ -1,8 +1,8 @@
 resource "google_sql_database_instance" "this" {
-  name             = var.instance_name
-  project          = var.project_id
-  region           = var.region
-  database_version = "POSTGRES_17"
+  name                = var.instance_name
+  project             = var.project_id
+  region              = var.region
+  database_version    = "POSTGRES_17"
   deletion_protection = true
 
   settings {

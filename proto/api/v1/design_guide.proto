@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "api/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+service DesignGuideService {
+  rpc ListDesignGuides(ListDesignGuidesRequest) returns (ListDesignGuidesResponse) {}
+  rpc GetDesignGuide(GetDesignGuideRequest) returns (GetDesignGuideResponse) {}
+  rpc CreateDesignGuide(CreateDesignGuideRequest) returns (CreateDesignGuideResponse) {}
+  rpc UpdateDesignGuide(UpdateDesignGuideRequest) returns (UpdateDesignGuideResponse) {}
+  rpc DeleteDesignGuide(DeleteDesignGuideRequest) returns (DeleteDesignGuideResponse) {}
+  rpc LikeDesignGuide(LikeDesignGuideRequest) returns (LikeDesignGuideResponse) {}
+  rpc UnlikeDesignGuide(UnlikeDesignGuideRequest) returns (UnlikeDesignGuideResponse) {}
+}
+
+message DesignGuideSummary {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  int64 created_by = 4;
+  UserSummary creator = 5;
+  int32 like_count = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  string visibility = 9; // "private" | "project" | "public"
+  bool is_template = 10;
+  bool liked_by_me = 11;
+}
+
+message DesignGuide {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  string content = 4;
+  int64 created_by = 5;
+  UserSummary creator = 6;
+  int32 like_count = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  string visibility = 10; // "private" | "project" | "public"
+  bool is_template = 11;
+  bool liked_by_me = 12;
+}
+
+message ListDesignGuidesRequest {
+  string query = 1;
+  bool created_by_me = 2;
+  bool liked_by_me = 3;
+  string visibility = 4; // "" = all visible, "public", "private"
+  bool only_templates = 5;
+}
+
+message ListDesignGuidesResponse {
+  repeated DesignGuideSummary design_guides = 1;
+}
+
+message GetDesignGuideRequest {
+  int64 id = 1;
+}
+
+message GetDesignGuideResponse {
+  DesignGuide design_guide = 1;
+}
+
+message CreateDesignGuideRequest {
+  string name = 1;
+  string description = 2;
+  string content = 3;
+  string visibility = 4; // "private" | "project" | "public"
+  bool is_template = 5;
+}
+
+message CreateDesignGuideResponse {
+  DesignGuide design_guide = 1;
+}
+
+message UpdateDesignGuideRequest {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  string content = 4;
+  string visibility = 5; // "private" | "project" | "public"
+  bool is_template = 6;
+}
+
+message UpdateDesignGuideResponse {
+  DesignGuide design_guide = 1;
+}
+
+message DeleteDesignGuideRequest {
+  int64 id = 1;
+}
+
+message DeleteDesignGuideResponse {}
+
+message LikeDesignGuideRequest {
+  int64 design_guide_id = 1;
+}
+
+message LikeDesignGuideResponse {}
+
+message UnlikeDesignGuideRequest {
+  int64 design_guide_id = 1;
+}
+
+message UnlikeDesignGuideResponse {}

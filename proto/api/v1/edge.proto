@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/v1;apiv1";
+
+service EdgeService {
+  rpc ListEdges(ListEdgesRequest) returns (ListEdgesResponse) {}
+  rpc CreateEdge(CreateEdgeRequest) returns (CreateEdgeResponse) {}
+  rpc UpdateEdge(UpdateEdgeRequest) returns (UpdateEdgeResponse) {}
+  rpc DeleteEdge(DeleteEdgeRequest) returns (DeleteEdgeResponse) {}
+}
+
+message Edge {
+  int64 id = 1;
+  int64 variant_id = 2;
+  int64 from_node_id = 3;
+  int64 to_node_id = 4;
+  string kind = 5; // "call", "import", "implement"
+  string style = 6; // "solid", "dashed"
+  string label = 7;
+  google.protobuf.Struct metadata = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ListEdgesRequest {
+  int64 variant_id = 1;
+}
+
+message ListEdgesResponse {
+  repeated Edge edges = 1;
+}
+
+message CreateEdgeRequest {
+  int64 variant_id = 1;
+  int64 from_node_id = 2;
+  int64 to_node_id = 3;
+  string kind = 4;
+  string style = 5;
+  string label = 6;
+  google.protobuf.Struct metadata = 7;
+}
+
+message CreateEdgeResponse {
+  Edge edge = 1;
+}
+
+message UpdateEdgeRequest {
+  int64 id = 1;
+  string kind = 2;
+  string style = 3;
+  string label = 4;
+  google.protobuf.Struct metadata = 5;
+}
+
+message UpdateEdgeResponse {
+  Edge edge = 1;
+}
+
+message DeleteEdgeRequest {
+  int64 id = 1;
+}
+
+message DeleteEdgeResponse {}

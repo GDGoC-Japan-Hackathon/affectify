@@ -24,6 +24,15 @@ func main() {
 		repoentity.DesignGuideLike{},
 		repoentity.AnalysisReport{},
 		repoentity.ActivityLog{},
+		repoentity.VariantFile{},
+		repoentity.VariantDesignGuide{},
+		repoentity.GraphBuildJob{},
+		repoentity.LayoutJob{},
+		repoentity.ReviewJob{},
+		repoentity.ReviewFeedback{},
+		repoentity.ReviewFeedbackTarget{},
+		repoentity.ReviewFeedbackChat{},
+		repoentity.ReviewFeedbackAction{},
 	)
 
 	g.Execute()

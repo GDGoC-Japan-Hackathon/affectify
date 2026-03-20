@@ -31,7 +31,8 @@ func newProjectMember(db *gorm.DB, opts ...gen.DOOption) projectMember {
 	_projectMember.ID = field.NewInt64(tableName, "id")
 	_projectMember.ProjectID = field.NewInt64(tableName, "project_id")
 	_projectMember.UserID = field.NewInt64(tableName, "user_id")
-	_projectMember.InvitedBy = field.NewInt64(tableName, "invited_by")
+	_projectMember.AddedBy = field.NewInt64(tableName, "added_by")
+	_projectMember.Role = field.NewString(tableName, "role")
 	_projectMember.JoinedAt = field.NewTime(tableName, "joined_at")
 
 	_projectMember.fillFieldMap()
@@ -46,7 +47,8 @@ type projectMember struct {
 	ID        field.Int64
 	ProjectID field.Int64
 	UserID    field.Int64
-	InvitedBy field.Int64
+	AddedBy   field.Int64
+	Role      field.String
 	JoinedAt  field.Time
 
 	fieldMap map[string]field.Expr
@@ -67,7 +69,8 @@ func (p *projectMember) updateTableName(table string) *projectMember {
 	p.ID = field.NewInt64(table, "id")
 	p.ProjectID = field.NewInt64(table, "project_id")
 	p.UserID = field.NewInt64(table, "user_id")
-	p.InvitedBy = field.NewInt64(table, "invited_by")
+	p.AddedBy = field.NewInt64(table, "added_by")
+	p.Role = field.NewString(table, "role")
 	p.JoinedAt = field.NewTime(table, "joined_at")
 
 	p.fillFieldMap()
@@ -97,11 +100,12 @@ func (p *projectMember) GetFieldByName(fieldName string) (field.OrderExpr, bool)
 }
 
 func (p *projectMember) fillFieldMap() {
-	p.fieldMap = make(map[string]field.Expr, 5)
+	p.fieldMap = make(map[string]field.Expr, 6)
 	p.fieldMap["id"] = p.ID
 	p.fieldMap["project_id"] = p.ProjectID
 	p.fieldMap["user_id"] = p.UserID
-	p.fieldMap["invited_by"] = p.InvitedBy
+	p.fieldMap["added_by"] = p.AddedBy
+	p.fieldMap["role"] = p.Role
 	p.fieldMap["joined_at"] = p.JoinedAt
 }
 
