@@ -179,6 +179,13 @@ func (s *ReviewService) ListReviewFeedbacks(
 		if latest == nil {
 			return &ReviewFeedbackBundle{}, nil
 		}
+		latestApply, err := s.reviewRepo.FindLatestSucceededReviewApplyJobByReviewJobID(ctx, latest.ID)
+		if err != nil {
+			return nil, err
+		}
+		if latestApply != nil {
+			return &ReviewFeedbackBundle{}, nil
+		}
 		reviewJobID = &latest.ID
 	}
 

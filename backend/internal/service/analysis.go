@@ -40,6 +40,15 @@ func (s *AnalysisService) GetAnalysisReport(ctx context.Context, firebaseUID str
 	if report == nil {
 		return nil, ErrAnalysisReportNotFound
 	}
+	if report.ReviewJobID != nil {
+		latestApply, err := s.reviewRepo.FindLatestSucceededReviewApplyJobByReviewJobID(ctx, *report.ReviewJobID)
+		if err != nil {
+			return nil, err
+		}
+		if latestApply != nil {
+			return nil, ErrAnalysisReportNotFound
+		}
+	}
 
 	return report, nil
 }

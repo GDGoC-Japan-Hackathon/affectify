@@ -84,6 +84,21 @@ func (r *ReviewRepository) FindReviewApplyJobByID(ctx context.Context, id int64)
 	return &job, nil
 }
 
+func (r *ReviewRepository) FindLatestSucceededReviewApplyJobByReviewJobID(ctx context.Context, reviewJobID int64) (*entity.ReviewApplyJob, error) {
+	var job entity.ReviewApplyJob
+	err := r.db.WithContext(ctx).
+		Where("review_job_id = ? AND status = ?", reviewJobID, entity.JobStatusSucceeded).
+		Order("finished_at DESC, id DESC").
+		First(&job).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &job, nil
+}
+
 func (r *ReviewRepository) ListFeedbacksByVariantAndJob(
 	ctx context.Context,
 	variantID int64,
