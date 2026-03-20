@@ -19,6 +19,7 @@
 
 ## problem
 - GCP環境がないと確認がしずらいところが多くある
+- workspaceが重たい
 
 
 ## TODO
