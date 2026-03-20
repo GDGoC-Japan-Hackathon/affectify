@@ -30,7 +30,7 @@ export function FeedbackCardList({ onChatOpen, onViewNodes }: FeedbackCardListPr
             <div className="text-xs text-slate-500">/ 100</div>
             <div className="text-xs text-slate-400">総合スコア</div>
           </div>
-          <p className="text-xs text-slate-500 line-clamp-2">{summary}</p>
+          <p className="whitespace-pre-wrap text-xs leading-5 text-slate-500">{summary}</p>
         </div>
       )}
 
