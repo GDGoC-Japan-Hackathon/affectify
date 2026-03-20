@@ -32,6 +32,11 @@ interface FileTreeNode {
   language?: string;
 }
 
+const JOB_POLL_INTERVAL_MS = 1500;
+const GRAPH_BUILD_TIMEOUT_MS = 8 * 60 * 1000;
+const LAYOUT_TIMEOUT_MS = 2 * 60 * 1000;
+const REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
+
 const DEFAULT_EXCLUDE_DIRS = [
   "node_modules",
   ".git",
@@ -198,6 +203,28 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+async function waitForJob<T extends { status: string; errorMessage?: string }>(
+  fetchJob: () => Promise<T>,
+  timeoutMs: number,
+  defaultErrorMessage: string,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (true) {
+    const current = await fetchJob();
+    if (current.status === "succeeded") {
+      return current;
+    }
+    if (current.status === "failed") {
+      throw new Error(current.errorMessage || defaultErrorMessage);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`${defaultErrorMessage}（タイムアウト）`);
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, JOB_POLL_INTERVAL_MS));
+  }
+}
+
 export default function ImportPage() {
   const params = useParams<{ variantId: string }>();
   const variantId = Array.isArray(params?.variantId) ? params.variantId[0] : params?.variantId;
@@ -277,45 +304,15 @@ export default function ImportPage() {
 
       setBuildStageLabel("コードグラフを生成しています。");
       const job = await createGraphBuildJob(variantId);
-
-      while (true) {
-        const current = await getGraphBuildJob(job.id);
-        if (current.status === "succeeded") {
-          break;
-        }
-        if (current.status === "failed") {
-          throw new Error(current.errorMessage || "グラフビルドに失敗しました");
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
-      }
+      await waitForJob(() => getGraphBuildJob(job.id), GRAPH_BUILD_TIMEOUT_MS, "グラフビルドに失敗しました");
 
       setBuildStageLabel("ノードを自動整列しています。");
       const layoutJob = await createLayoutJob(variantId, "grid");
-
-      while (true) {
-        const current = await getLayoutJob(layoutJob.id);
-        if (current.status === "succeeded") {
-          break;
-        }
-        if (current.status === "failed") {
-          throw new Error(current.errorMessage || "レイアウトに失敗しました");
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
-      }
+      await waitForJob(() => getLayoutJob(layoutJob.id), LAYOUT_TIMEOUT_MS, "レイアウトに失敗しました");
 
       setBuildStageLabel("AIレビューを実行しています。");
       const reviewJob = await createReviewJob(variantId);
-
-      while (true) {
-        const current = await getReviewJob(reviewJob.id);
-        if (current.status === "succeeded") {
-          break;
-        }
-        if (current.status === "failed") {
-          throw new Error(current.errorMessage || "AIレビューに失敗しました");
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
-      }
+      await waitForJob(() => getReviewJob(reviewJob.id), REVIEW_TIMEOUT_MS, "AIレビューに失敗しました");
 
       setBuildStageLabel("準備が完了しました。workspace に移動します。");
       setBuildStatus("done");
