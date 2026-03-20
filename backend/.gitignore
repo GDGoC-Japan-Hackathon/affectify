@@ -1,2 +1,6 @@
 # generated code (buf generate)
 /gen
+.env
+/genorm
+/*firebase-adminsdk*.json
+server

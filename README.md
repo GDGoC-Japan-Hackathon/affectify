@@ -1,39 +1,100 @@
-# affectify
+# WhiteCoder
 
-ハッカソンチーム: affectify
+WhiteCoder のモノレポ。  
+ルート README は全体像だけを示し、詳細は `docs/` に集約する。
 
-## セットアップ
+## Repository Structure
 
-### 前提ツール
+- `proto`
+  API 契約と生成コードの元
+- `frontend`
+  Bun + Next.js のフロントエンド
+- `backend`
+  Connect/Go の API サーバ
+- `infra`
+  Terraform と GitHub Actions を含むデプロイ設定
+- `docs`
+  設計・運用・開発手順の集約先
 
-- [Go](https://go.dev/)
-- [Bun](https://bun.sh/)
-- [Buf CLI](https://buf.build/docs/installation)
+## Reading Order
 
-### コード生成
+最初に読むと分かりやすい順番:
 
-proto を変更したら、必ず生成コードを更新する：
+1. [docs/proto.md](./docs/proto.md)
+2. [docs/frontend.md](./docs/frontend.md)
+3. [docs/backend.md](./docs/backend.md)
+4. [docs/database.md](./docs/database.md)
+5. [docs/migration.md](./docs/migration.md)
+6. [docs/infra.md](./docs/infra.md)
+
+## Common Setup
+
+必要なもの:
+
+- Go
+- Bun
+- Buf CLI
+- Atlas CLI
+- Docker
+
+Go 用 protobuf plugin:
 
 ```bash
-cd proto && buf generate
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 ```
 
-これで `backend/gen/` と `frontend/src/gen/` にコードが生成される。
-生成コードは gitignore されているため、各自のローカルで実行が必要。
+TypeScript 用 protobuf plugin:
 
-### バックエンド
+```bash
+cd frontend
+bun add -D @bufbuild/protoc-gen-es @connectrpc/protoc-gen-connect-es
+```
+
+## Main Commands
+
+生成コード更新:
+
+```bash
+cd proto
+buf generate
+```
+
+ローカル DB 起動:
 
 ```bash
 cd backend
-go mod tidy
-go build ./...
-go test ./...
+docker compose up --build
 ```
 
-### フロントエンド
+backend 起動:
+
+```bash
+cd backend
+go run ./cmd/server
+```
+
+frontend 起動:
 
 ```bash
 cd frontend
 bun install
 bun run dev
 ```
+
+デモ用 seed 投入:
+
+```bash
+cd backend
+go run ./cmd/seed --preset demo
+```
+
+## More Docs
+
+- [docs/proto.md](./docs/proto.md)
+- [docs/frontend.md](./docs/frontend.md)
+- [docs/backend.md](./docs/backend.md)
+- [docs/database.md](./docs/database.md)
+- [docs/migration.md](./docs/migration.md)
+- [docs/infra.md](./docs/infra.md)
+- [docs/TABLES.md](./docs/TABLES.md)

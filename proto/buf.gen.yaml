@@ -1,18 +1,18 @@
 version: v2
 plugins:
   # Go: protobuf messages
-  - remote: buf.build/protocolbuffers/go
+  - local: protoc-gen-go
     out: ../backend/gen
     opt: paths=source_relative
   # Go: Connect service stubs
-  - remote: buf.build/connectrpc/go
+  - local: protoc-gen-connect-go
     out: ../backend/gen
     opt: paths=source_relative
   # TypeScript: protobuf messages
-  - remote: buf.build/bufbuild/es
+  - local: ../frontend/node_modules/.bin/protoc-gen-es
     out: ../frontend/src/gen
     opt: target=ts
   # TypeScript: Connect service stubs
-  - remote: buf.build/connectrpc/es
+  - local: ../frontend/node_modules/.bin/protoc-gen-connect-es
     out: ../frontend/src/gen
     opt: target=ts

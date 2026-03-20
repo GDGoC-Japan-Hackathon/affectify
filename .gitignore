@@ -1,0 +1,12 @@
+.idea/
+AI-Enhanced Code Design Tool (1)/
+
+google-hackathon-feat-import
+
+# Terraform local state / local-only inputs
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
