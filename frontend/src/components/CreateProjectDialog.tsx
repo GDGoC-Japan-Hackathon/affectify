@@ -78,7 +78,17 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
               placeholder="無題のプロジェクト"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') {
+                  return;
+                }
+
+                if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                  return;
+                }
+
+                void handleCreate();
+              }}
             />
           </div>
 
