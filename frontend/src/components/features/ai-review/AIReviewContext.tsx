@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 
 import { getAnalysisReport } from "@/lib/api/analysis";
 import {
@@ -240,6 +241,7 @@ export function AIReviewProvider({
     if (!variantId) return;
     setError("");
     setIsReviewRunning(true);
+    const toastId = toast.loading("AIがレビューを実行中...");
 
     try {
       const job = await createReviewJob(variantId);
@@ -259,8 +261,11 @@ export function AIReviewProvider({
       }
 
       await refreshReview();
+      toast.success("AIレビューが完了しました", { id: toastId });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "AIレビューの再評価に失敗しました");
+      const message = err instanceof Error ? err.message : "AIレビューの再評価に失敗しました";
+      setError(message);
+      toast.error(message, { id: toastId });
     } finally {
       setIsReviewRunning(false);
     }
@@ -280,6 +285,7 @@ export function AIReviewProvider({
 
     setError("");
     setIsApplyRunning(true);
+    const toastId = toast.loading("AIが決定内容を反映中...");
     try {
       const job = await createReviewApplyJob(latestReviewJobId);
       const deadline = Date.now() + REVIEW_POLL_TIMEOUT_MS;
@@ -303,8 +309,11 @@ export function AIReviewProvider({
       setOverallScore(null);
       setSummary("");
       setHasLoadedReview(false);
+      toast.success("AIが決定内容を反映しました", { id: toastId });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "決定内容の適用に失敗しました");
+      const message = err instanceof Error ? err.message : "決定内容の適用に失敗しました";
+      setError(message);
+      toast.error(message, { id: toastId });
     } finally {
       setIsApplyRunning(false);
     }
