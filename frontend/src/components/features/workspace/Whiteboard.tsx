@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { useRouter } from "next/navigation";
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -103,6 +102,38 @@ function toFlowEdges(boardEdges: BoardEdge[], sccEdgeIds?: Set<string>): Edge[] 
   });
 }
 
+function applyReviewHighlights(edges: Edge[], highlightedEdgeIds?: Set<string>): Edge[] {
+  if (!highlightedEdgeIds || highlightedEdgeIds.size === 0) {
+    return edges.map((edge) => ({
+      ...edge,
+      style: {
+        ...edge.style,
+        opacity: 1,
+      },
+    }));
+  }
+
+  return edges.map((edge) => {
+    const isHighlighted = highlightedEdgeIds.has(edge.id);
+    const stroke = isHighlighted ? "#f59e0b" : ((edge.style?.stroke as string | undefined) ?? "#94a3b8");
+    return {
+      ...edge,
+      style: {
+        ...edge.style,
+        stroke,
+        strokeWidth: isHighlighted ? 3.5 : 1.5,
+        opacity: isHighlighted ? 1 : 0.12,
+      },
+      markerEnd: edge.markerEnd
+        ? {
+            type: MarkerType.ArrowClosed,
+            color: stroke,
+          }
+        : edge.markerEnd,
+    };
+  });
+}
+
 function buildSccEdgeIds(boardNodes: BoardNode[], boardEdges: BoardEdge[]) {
   const sccs = computeSCCs(
     boardNodes.map((n) => n.id),
@@ -149,7 +180,6 @@ function getPolygonBounds(points: Array<{ x: number; y: number }>) {
 }
 
 function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds, highlightedEdgeIds }: WhiteboardProps) {
-  const router = useRouter();
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
 
   const sccEdgeIds = useMemo(() => buildSccEdgeIds(boardNodes, boardEdges), [boardNodes, boardEdges]);
@@ -172,6 +202,10 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
       }))
     );
   }, [highlightedNodeIds, setNodes]);
+
+  useEffect(() => {
+    setEdges(applyReviewHighlights(toFlowEdges(boardEdges, sccEdgeIds), highlightedEdgeIds));
+  }, [boardEdges, highlightedEdgeIds, sccEdgeIds, setEdges]);
   const reactFlow = useReactFlow();
   const { fitView } = reactFlow;
 
@@ -480,7 +514,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
 
   // 自動レイアウト
   const handleAutoLayout = useCallback(
-    async (_xGap = layoutXGap, _yGap = layoutYGap) => {
+    async () => {
       if (isLayoutAnimatingRef.current) return;
 
       const toastId = toast.loading("整理中...");
@@ -519,7 +553,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
         }
       }
     },
-    [fitView, layoutMode, layoutXGap, layoutYGap, pushHistorySnapshot, setEdges, setNodes, variantId],
+    [fitView, layoutMode, pushHistorySnapshot, setEdges, setNodes, variantId],
   );
 
   useEffect(() => {
@@ -1351,7 +1385,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
 
               layoutClickTimeoutRef.current = window.setTimeout(() => {
                 setIsLayoutPanelOpen(false);
-                void handleAutoLayout(layoutXGap, layoutYGap);
+                void handleAutoLayout();
                 layoutClickTimeoutRef.current = null;
               }, 220);
             }}

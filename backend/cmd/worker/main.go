@@ -17,7 +17,7 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		log.Fatal("worker mode is required: graph-build | layout | review")
+		log.Fatal("worker mode is required: graph-build | layout | review | review-apply")
 	}
 
 	jobIDText := os.Getenv("JOB_ID")
@@ -45,6 +45,8 @@ func main() {
 		err = workerService.RunLayoutJob(ctx, jobID)
 	case "review":
 		err = workerService.RunReviewJob(ctx, jobID)
+	case "review-apply":
+		err = workerService.RunReviewApplyJob(ctx, jobID)
 	default:
 		log.Fatalf("unsupported worker mode: %s", os.Args[1])
 	}

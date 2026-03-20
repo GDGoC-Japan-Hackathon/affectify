@@ -12,7 +12,7 @@ interface FeedbackCardListProps {
 }
 
 export function FeedbackCardList({ onChatOpen, onViewNodes }: FeedbackCardListProps) {
-  const { cards, selectedCardId, selectCard, overallScore, summary } = useAIReview();
+  const { cards, selectedCardId, selectCard, overallScore, summary, rateCard } = useAIReview();
 
   const unresolvedCards = cards
     .filter((c) => !c.resolved)
@@ -51,6 +51,7 @@ export function FeedbackCardList({ onChatOpen, onViewNodes }: FeedbackCardListPr
               isSelected={selectedCardId === card.id}
               onClick={() => selectCard(selectedCardId === card.id ? null : card.id)}
               onChatOpen={() => onChatOpen(card.id)}
+              onRate={(reaction) => void rateCard(card.id, reaction)}
               onViewNodes={onViewNodes ? () => onViewNodes(card.nodeIds ?? [], card.edgeIds ?? []) : undefined}
             />
           ))}

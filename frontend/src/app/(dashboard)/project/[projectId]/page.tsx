@@ -219,7 +219,6 @@ export default function ProjectDetail() {
             </div>
             <VariantCard
               variant={mainVariant}
-              projectId={project.id}
               onCompareToggle={handleToggleCompare}
               isComparing={compareVariants.includes(mainVariant.id)}
             />
@@ -238,7 +237,6 @@ export default function ProjectDetail() {
                 <VariantCard
                   key={variant.id}
                   variant={variant}
-                  projectId={project.id}
                   onCompareToggle={handleToggleCompare}
                   isComparing={compareVariants.includes(variant.id)}
                 />

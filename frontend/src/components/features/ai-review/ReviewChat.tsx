@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type KeyboardEvent } from "react";
-import { Send, MessageSquare, BookOpen, Code, Layers, ArrowRight } from "lucide-react";
+import { Send, MessageSquare, BookOpen, Code, Layers, ArrowRight, Loader2, Check } from "lucide-react";
 import { useAIReview } from "./AIReviewContext";
 import type { Resolution } from "@/types/ai-review";
 
@@ -27,8 +27,11 @@ const actionConfig: Record<Resolution, { label: string; icon: typeof BookOpen; p
 };
 
 export function ReviewChat() {
-  const { cards, selectedCardId, sendMessage, resolveCard } = useAIReview();
+  const { cards, selectedCardId, sendMessage, resolveCard, generateResolutionDraft } = useAIReview();
   const [input, setInput] = useState("");
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [pendingResolution, setPendingResolution] = useState<Resolution | null>(null);
+  const [isDraftLoading, setIsDraftLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const selectedCard = cards.find((c) => c.id === selectedCardId);
@@ -36,6 +39,11 @@ export function ReviewChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedCard?.chatHistory.length]);
+
+  useEffect(() => {
+    setResolutionNote(selectedCard?.resolutionNote ?? "");
+    setPendingResolution(selectedCard?.resolved ? null : selectedCard?.resolution ?? null);
+  }, [selectedCard?.id, selectedCard?.resolution, selectedCard?.resolutionNote, selectedCard?.resolved]);
 
   const handleSend = () => {
     if (!input.trim() || !selectedCardId) return;
@@ -45,6 +53,24 @@ export function ReviewChat() {
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSend();
+  };
+
+  const handleDraftGeneration = async (resolution: Resolution) => {
+    if (!selectedCard) return;
+    try {
+      setPendingResolution(resolution);
+      setIsDraftLoading(true);
+      const draft = await generateResolutionDraft(selectedCard.id, resolution);
+      setResolutionNote(draft);
+    } finally {
+      setIsDraftLoading(false);
+    }
+  };
+
+  const handleApproveResolution = async () => {
+    if (!selectedCard || !pendingResolution) return;
+    await resolveCard(selectedCard.id, pendingResolution, resolutionNote);
+    setPendingResolution(null);
   };
 
   if (!selectedCard) {
@@ -103,41 +129,112 @@ export function ReviewChat() {
 
       {/* 推奨アクション: AIが推薦を提示した時のみ表示 */}
       {!selectedCard.resolved && selectedCard.aiRecommendation && (() => {
-        const rec = selectedCard.aiRecommendation;
+        const rec = pendingResolution ?? selectedCard.aiRecommendation;
         const { label, icon: Icon, primary, desc } = actionConfig[rec];
         const alternatives = (Object.keys(actionConfig) as Resolution[]).filter((r) => r !== rec);
         return (
           <div className="border-t border-slate-700 px-5 py-4">
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Recommended Action</p>
-            {/* メインアクション */}
-            <button
-              onClick={() => resolveCard(selectedCard.id, rec)}
-              className={`w-full flex items-center justify-between rounded-xl border p-4 transition-all ${primary} group`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-blue-600 p-2.5 text-white">
-                  <Icon className="size-5" />
-                </div>
-                <div className="text-left">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Recommended</p>
-                  <p className="text-base font-bold text-white">{label}</p>
-                  <p className="text-xs text-slate-400">{desc}</p>
-                </div>
-              </div>
-              <ArrowRight className="size-4 text-blue-400 transition-transform group-hover:translate-x-1" />
-            </button>
-            {/* サブアクション */}
-            <div className="mt-3 flex items-center justify-between px-1">
-              {alternatives.map((alt) => (
+            {!pendingResolution ? (
+              <>
                 <button
-                  key={alt}
-                  onClick={() => resolveCard(selectedCard.id, alt)}
-                  className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 underline underline-offset-2 hover:text-slate-300 transition-colors"
+                  onClick={() => void handleDraftGeneration(rec)}
+                  className={`w-full flex items-center justify-between rounded-xl border p-4 transition-all ${primary} group`}
                 >
-                  {actionConfig[alt].label}
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-blue-600 p-2.5 text-white">
+                      <Icon className="size-5" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Recommended</p>
+                      <p className="text-base font-bold text-white">{label}</p>
+                      <p className="text-xs text-slate-400">{desc}</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="size-4 text-blue-400 transition-transform group-hover:translate-x-1" />
                 </button>
-              ))}
-            </div>
+                <div className="mt-3 flex items-center justify-between px-1">
+                  {alternatives.map((alt) => (
+                    <button
+                      key={alt}
+                      onClick={() => void handleDraftGeneration(alt)}
+                      className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 underline underline-offset-2 hover:text-slate-300 transition-colors"
+                    >
+                      {actionConfig[alt].label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={`rounded-xl border p-4 ${primary}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-blue-600 p-2.5 text-white">
+                      <Icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Selected</p>
+                      <p className="text-base font-bold text-white">{label}</p>
+                      <p className="text-xs text-slate-400">{desc}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-slate-500">AI が生成した変更内容</label>
+                  <textarea
+                    value={resolutionNote}
+                    onChange={(e) => setResolutionNote(e.target.value)}
+                    rows={4}
+                    placeholder="変更内容を生成中..."
+                    className="w-full resize-none rounded-xl border border-slate-700 bg-[#1a2035] px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    onClick={() => void handleApproveResolution()}
+                    disabled={isDraftLoading || !resolutionNote.trim()}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Check className="size-4" />
+                    承認して決定
+                  </button>
+                  <button
+                    onClick={() => void handleDraftGeneration(pendingResolution)}
+                    disabled={isDraftLoading}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    {isDraftLoading ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                    再生成
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPendingResolution(null);
+                      setResolutionNote(selectedCard.resolutionNote ?? "");
+                    }}
+                    className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-400 hover:bg-slate-800"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+                <div className="mt-3 flex items-center justify-between px-1">
+                  {alternatives.map((alt) => (
+                    <button
+                      key={alt}
+                      onClick={() => void handleDraftGeneration(alt)}
+                      className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 underline underline-offset-2 hover:text-slate-300 transition-colors"
+                    >
+                      {actionConfig[alt].label}に切替
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {isDraftLoading && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+                <Loader2 className="size-3.5 animate-spin" />
+                AI が変更内容を生成しています...
+              </div>
+            )}
           </div>
         );
       })()}

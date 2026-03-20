@@ -26,10 +26,12 @@ func main() {
 		&repoentity.GraphBuildJob{},
 		&repoentity.LayoutJob{},
 		&repoentity.ReviewJob{},
+		&repoentity.ReviewApplyJob{},
 		&repoentity.ReviewFeedback{},
 		&repoentity.ReviewFeedbackTarget{},
 		&repoentity.ReviewFeedbackChat{},
 		&repoentity.ReviewFeedbackAction{},
+		&repoentity.ReviewFeedbackReaction{},
 	)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "load gorm schema: %v\n", err)

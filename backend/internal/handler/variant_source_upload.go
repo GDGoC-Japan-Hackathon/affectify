@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/auth"
@@ -93,7 +94,11 @@ func (h *VariantSourceUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 	sourceRootURI, err := h.variantService.UploadVariantSource(r.Context(), identity.UID, variantID, files)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		statusCode := http.StatusBadRequest
+		if errors.Is(err, service.ErrForbidden) {
+			statusCode = http.StatusForbidden
+		}
+		http.Error(w, err.Error(), statusCode)
 		return
 	}
 

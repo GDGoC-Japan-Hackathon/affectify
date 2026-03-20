@@ -29,6 +29,13 @@ resource "google_cloud_run_v2_job" "this" {
         command = var.command
         args    = var.args
 
+        resources {
+          limits = {
+            cpu    = var.cpu
+            memory = var.memory
+          }
+        }
+
         dynamic "volume_mounts" {
           for_each = length(var.cloud_sql_instances) > 0 ? [1] : []
           content {
