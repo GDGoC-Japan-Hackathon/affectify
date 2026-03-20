@@ -575,13 +575,14 @@ func (s *JobWorkerService) runReviewApply(ctx context.Context, job *entity.Revie
 		return s.failReviewApply(ctx, job, err)
 	}
 
-	localDir, _, err := s.materializeVariantSource(ctx, derefString(variant.SourceRootURI))
+	localDir, materializedFiles, err := s.materializeVariantSource(ctx, derefString(variant.SourceRootURI))
 	if err != nil && needsCodeUpdate(resolvedFeedbacks) {
 		return s.failReviewApply(ctx, job, err)
 	}
+	moduleRoot := findGoModuleRoot(localDir, materializedFiles)
 
 	targetsByFeedbackID := groupTargetsByFeedbackID(targets)
-	editableFiles, err := buildEditableFiles(localDir, resolvedFeedbacks, targetsByFeedbackID, nodes, files)
+	editableFiles, err := buildEditableFiles(moduleRoot, resolvedFeedbacks, targetsByFeedbackID, nodes, files)
 	if err != nil {
 		return s.failReviewApply(ctx, job, err)
 	}
