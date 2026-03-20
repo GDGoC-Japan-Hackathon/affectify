@@ -47,6 +47,7 @@ type AIReviewContextType = {
   isLoading: boolean;
   isReviewRunning: boolean;
   isApplyRunning: boolean;
+  resolvedCount: number;
   openModal: (cardId?: string) => void;
   closeModal: () => void;
   selectCard: (id: string | null) => void;
@@ -161,6 +162,7 @@ export function AIReviewProvider({
   const [isLoading, setIsLoading] = useState(false);
   const [isReviewRunning, setIsReviewRunning] = useState(false);
   const [isApplyRunning, setIsApplyRunning] = useState(false);
+  const resolvedCount = useMemo(() => cards.filter((card) => card.resolved && card.resolutionNote).length, [cards]);
 
   const openModal = useCallback((cardId?: string) => {
     setIsModalOpen(true);
@@ -271,8 +273,7 @@ export function AIReviewProvider({
       return;
     }
 
-    const hasResolvedCards = cards.some((card) => card.status === "resolved" && card.resolutionNote);
-    if (!hasResolvedCards) {
+    if (resolvedCount === 0) {
       setError("適用できる解決済みカードがありません");
       return;
     }
@@ -297,12 +298,17 @@ export function AIReviewProvider({
       }
 
       await onApplied?.();
+      setCards([]);
+      setSelectedCardId(null);
+      setOverallScore(null);
+      setSummary("");
+      setHasLoadedReview(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "決定内容の適用に失敗しました");
     } finally {
       setIsApplyRunning(false);
     }
-  }, [cards, onApplied]);
+  }, [cards, onApplied, resolvedCount]);
 
   const resolveCard = useCallback(async (id: string, resolution: Resolution, resolutionNote?: string) => {
     try {
@@ -419,6 +425,7 @@ export function AIReviewProvider({
       isLoading,
       isReviewRunning,
       isApplyRunning,
+      resolvedCount,
       openModal,
       closeModal,
       selectCard,
@@ -440,6 +447,7 @@ export function AIReviewProvider({
       isModalOpen,
       isReviewRunning,
       isApplyRunning,
+      resolvedCount,
       loadReview,
       applyResolvedFeedbacks,
       openModal,

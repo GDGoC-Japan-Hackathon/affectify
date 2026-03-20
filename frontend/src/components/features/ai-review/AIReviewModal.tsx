@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { X, RotateCcw, FileText, FolderCode, CheckCircle, Loader2 } from "lucide-react";
+import { X, RotateCcw, FileText, FolderCode, CheckCircle, Loader2, Wand2 } from "lucide-react";
 import { useAIReview } from "./AIReviewContext";
 import { ResolutionBuckets } from "./ResolutionBuckets";
 import { FeedbackCardList } from "./FeedbackCardList";
@@ -118,7 +118,10 @@ export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
     selectedCardId,
     selectCard,
     loadReview,
+    applyResolvedFeedbacks,
     isReviewRunning,
+    isApplyRunning,
+    resolvedCount,
     error,
     cards,
   } = useAIReview();
@@ -151,11 +154,19 @@ export function AIReviewModal({ onViewNodes }: AIReviewModalProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => void applyResolvedFeedbacks()}
+                    disabled={isApplyRunning || resolvedCount === 0}
+                    className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Wand2 className="size-3.5" />
+                    {isApplyRunning ? "AIが反映中" : "AIに決定内容を反映"}
+                  </button>
+                  <button
                     onClick={() => void loadReview()}
                     className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                   >
                     <RotateCcw className="size-3.5" />
-                    Re-evaluate
+                    再レビュー
                   </button>
                   <button
                     onClick={closeModal}

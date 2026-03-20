@@ -7,22 +7,22 @@ import type { Resolution } from "@/types/ai-review";
 
 const actionConfig: Record<Resolution, { label: string; icon: typeof BookOpen; primary: string; desc: string }> = {
   update_design_guide: {
-    label: "設計書を更新",
+    label: "AIで設計書を更新",
     icon: BookOpen,
     primary: "border-indigo-500/50 bg-indigo-500/10 hover:bg-indigo-500/20",
-    desc: "AIの提案を設計書に反映します",
+    desc: "この決定内容をもとに、後でAIが設計書へ反映します",
   },
   fix_code: {
-    label: "コードを修正",
+    label: "AIでコードを修正",
     icon: Code,
     primary: "border-blue-500/50 bg-blue-500/10 hover:bg-blue-500/20",
-    desc: "AIのアーキテクチャ修正を適用します",
+    desc: "この決定内容をもとに、後でAIがコードを修正します",
   },
   both: {
-    label: "両方対応",
+    label: "AIで両方反映",
     icon: Layers,
     primary: "border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20",
-    desc: "コード修正と設計書更新を同時に行います",
+    desc: "この決定内容をもとに、後でAIが設計書とコードの両方を更新します",
   },
 };
 
@@ -35,6 +35,7 @@ export function ReviewChat() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const selectedCard = cards.find((c) => c.id === selectedCardId);
+  const availableResolutions = (Object.keys(actionConfig) as Resolution[]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -127,14 +128,16 @@ export function ReviewChat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* 推奨アクション: AIが推薦を提示した時のみ表示 */}
-      {!selectedCard.resolved && selectedCard.aiRecommendation && (() => {
-        const rec = pendingResolution ?? selectedCard.aiRecommendation;
+      {/* 解決アクション */}
+      {!selectedCard.resolved && (() => {
+        const rec = pendingResolution ?? selectedCard.aiRecommendation ?? availableResolutions[0];
         const { label, icon: Icon, primary, desc } = actionConfig[rec];
         const alternatives = (Object.keys(actionConfig) as Resolution[]).filter((r) => r !== rec);
         return (
           <div className="border-t border-slate-700 px-5 py-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Recommended Action</p>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              {selectedCard.aiRecommendation ? "AI Recommended Apply Path" : "Choose AI Apply Path"}
+            </p>
             {!pendingResolution ? (
               <>
                 <button
@@ -146,7 +149,9 @@ export function ReviewChat() {
                       <Icon className="size-5" />
                     </div>
                     <div className="text-left">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Recommended</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
+                        {selectedCard.aiRecommendation ? "Recommended" : "Selected"}
+                      </p>
                       <p className="text-base font-bold text-white">{label}</p>
                       <p className="text-xs text-slate-400">{desc}</p>
                     </div>
@@ -180,12 +185,12 @@ export function ReviewChat() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-slate-500">AI が生成した変更内容</label>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-slate-500">AI が反映時に使う変更内容</label>
                   <textarea
                     value={resolutionNote}
                     onChange={(e) => setResolutionNote(e.target.value)}
                     rows={4}
-                    placeholder="変更内容を生成中..."
+                    placeholder="AI が反映用の変更内容を生成中..."
                     className="w-full resize-none rounded-xl border border-slate-700 bg-[#1a2035] px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -196,7 +201,7 @@ export function ReviewChat() {
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     <Check className="size-4" />
-                    承認して決定
+                    承認してAI反映内容を確定
                   </button>
                   <button
                     onClick={() => void handleDraftGeneration(pendingResolution)}
@@ -232,7 +237,7 @@ export function ReviewChat() {
             {isDraftLoading && (
               <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
                 <Loader2 className="size-3.5 animate-spin" />
-                AI が変更内容を生成しています...
+                AI が反映用の変更内容を生成しています...
               </div>
             )}
           </div>

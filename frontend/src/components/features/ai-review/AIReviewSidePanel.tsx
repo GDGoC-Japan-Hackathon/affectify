@@ -37,6 +37,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
     isLoading,
     isReviewRunning,
     isApplyRunning,
+    resolvedCount,
     hasLoadedReview,
     error,
   } = useAIReview();
@@ -68,7 +69,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
   };
 
   const unresolvedCards = cards.filter((c) => !c.resolved);
-  const resolvedCount = cards.filter((c) => c.resolved).length;
+  const resolvedTotal = cards.filter((c) => c.resolved).length;
 
   const handleCardClick = (cardId: string) => {
     const isDeselect = selectedCardId === cardId;
@@ -177,7 +178,7 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
                       {overallScore}点
                     </div>
                     <div className="text-xs text-slate-500">
-                      {resolvedCount}/{cards.length} 解決済み
+                      {resolvedTotal}/{cards.length} 解決済み
                     </div>
                   </div>
                   {summary && (
@@ -204,13 +205,13 @@ export function AIReviewSidePanel({ designGuide, onDesignGuideSaved, onHighlight
                 )}
               </div>
               <div className="border-t border-slate-200 bg-white p-3">
-                <button
-                  onClick={() => void applyResolvedFeedbacks()}
-                  disabled={isApplyRunning || resolvedCount === 0}
-                  className="mb-2 w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isApplyRunning ? "反映中..." : "決定内容を反映"}
-                </button>
+              <button
+                onClick={() => void applyResolvedFeedbacks()}
+                disabled={isApplyRunning || resolvedCount === 0}
+                className="mb-2 w-full rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                  {isApplyRunning ? "AIが反映中..." : "AIに決定内容を反映させる"}
+              </button>
                 <button
                   onClick={() => openModal()}
                   className="w-full rounded-lg border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
