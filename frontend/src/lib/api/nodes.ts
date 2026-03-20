@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { createConnectClient } from "@/lib/connect";
 import { NodeService, UpdateNodeRequestSchema, CreateNodeRequestSchema } from "@/gen/api/v1/node_pb";
-import type { BoardNode } from "@/types/type";
+import type { BoardNode, NodeKind } from "@/types/type";
 
 const nodeClient = createConnectClient(NodeService);
 
@@ -27,7 +27,7 @@ export async function createNode(variantId: string, params: {
   const n = response.node;
   return {
     id: n.id.toString(),
-    kind: n.kind,
+    kind: n.kind as NodeKind,
     title: n.title,
     file_path: "",
     signature: n.signature,
