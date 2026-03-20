@@ -13,11 +13,15 @@ import {
 import { getAnalysisReport } from "@/lib/api/analysis";
 import {
   appendReviewFeedbackChat,
+  createReviewApplyJob,
   createReviewJob,
+  generateReviewResolutionDraft,
+  getReviewApplyJob,
   getReviewJob,
   listReviewFeedbackChats,
   listReviewFeedbacks,
   resolveReviewFeedback,
+  rateReviewFeedback,
   type ReviewFeedback,
   type ReviewFeedbackChat,
   type ReviewFeedbackTarget,
@@ -25,6 +29,7 @@ import {
 import type {
   ChatMessage,
   FeedbackCard,
+  FeedbackReaction,
   FeedbackSeverity,
   FeedbackStatus,
   FeedbackType,
@@ -41,13 +46,17 @@ type AIReviewContextType = {
   hasLoadedReview: boolean;
   isLoading: boolean;
   isReviewRunning: boolean;
+  isApplyRunning: boolean;
   openModal: (cardId?: string) => void;
   closeModal: () => void;
   selectCard: (id: string | null) => void;
-  resolveCard: (id: string, resolution: Resolution) => Promise<void>;
+  resolveCard: (id: string, resolution: Resolution, resolutionNote?: string) => Promise<void>;
+  generateResolutionDraft: (id: string, resolution: Resolution) => Promise<string>;
   unresolveCard: (id: string) => Promise<void>;
+  rateCard: (id: string, reaction: FeedbackReaction) => Promise<void>;
   sendMessage: (cardId: string, content: string) => Promise<void>;
   loadReview: () => Promise<void>;
+  applyResolvedFeedbacks: () => Promise<void>;
   refreshReview: () => Promise<void>;
 };
 
@@ -107,19 +116,21 @@ function mapFeedbackCards(
       description: feedback.description,
       suggestion: feedback.suggestion,
       filePaths: cardTargets
-        .filter((target) => target.targetType === "file")
-        .map((target) => target.targetRef),
+        .map((target) => target.filePath)
+        .filter((path): path is string => Boolean(path)),
       nodeIds: cardTargets
-        .filter((target) => target.targetType === "node")
-        .map((target) => target.targetRef),
+        .map((target) => target.nodeId)
+        .filter((id): id is string => Boolean(id)),
       edgeIds: cardTargets
-        .filter((target) => target.targetType === "edge")
-        .map((target) => target.targetRef),
+        .map((target) => target.edgeId)
+        .filter((id): id is string => Boolean(id)),
       status: isFeedbackStatus(feedback.status) ? feedback.status : "open",
       resolution: isResolution(feedback.resolution) ? feedback.resolution : undefined,
+      resolutionNote: feedback.resolutionNote || undefined,
       aiRecommendation: isResolution(feedback.aiRecommendation)
         ? feedback.aiRecommendation
         : undefined,
+      userReaction: feedback.userReaction === "good" || feedback.userReaction === "bad" ? feedback.userReaction : undefined,
       resolved: feedback.status !== "open",
       chatHistory: previousCard?.chatHistory ?? [],
       chatsLoaded: previousCard?.chatsLoaded ?? false,
@@ -133,9 +144,11 @@ async function delay(ms: number) {
 
 export function AIReviewProvider({
   variantId,
+  onApplied,
   children,
 }: {
   variantId: string;
+  onApplied?: () => Promise<void> | void;
   children: ReactNode;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -147,6 +160,7 @@ export function AIReviewProvider({
   const [hasLoadedReview, setHasLoadedReview] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isReviewRunning, setIsReviewRunning] = useState(false);
+  const [isApplyRunning, setIsApplyRunning] = useState(false);
 
   const openModal = useCallback((cardId?: string) => {
     setIsModalOpen(true);
@@ -250,9 +264,49 @@ export function AIReviewProvider({
     }
   }, [refreshReview, variantId]);
 
-  const resolveCard = useCallback(async (id: string, resolution: Resolution) => {
+  const applyResolvedFeedbacks = useCallback(async () => {
+    const latestReviewJobId = cards[0]?.reviewJobId;
+    if (!latestReviewJobId) {
+      setError("適用対象のレビュー結果がありません");
+      return;
+    }
+
+    const hasResolvedCards = cards.some((card) => card.status === "resolved" && card.resolutionNote);
+    if (!hasResolvedCards) {
+      setError("適用できる解決済みカードがありません");
+      return;
+    }
+
+    setError("");
+    setIsApplyRunning(true);
     try {
-      const feedback = await resolveReviewFeedback(id, resolution, "resolved");
+      const job = await createReviewApplyJob(latestReviewJobId);
+      const deadline = Date.now() + REVIEW_POLL_TIMEOUT_MS * 2;
+      let currentStatus = job.status;
+
+      while (currentStatus === "queued" || currentStatus === "running") {
+        if (Date.now() > deadline) {
+          throw new Error("決定内容の適用待機がタイムアウトしました");
+        }
+        await delay(REVIEW_POLL_INTERVAL_MS);
+        const latestJob = await getReviewApplyJob(job.id);
+        currentStatus = latestJob.status;
+        if (currentStatus === "failed") {
+          throw new Error(latestJob.errorMessage || "決定内容の適用に失敗しました");
+        }
+      }
+
+      await onApplied?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "決定内容の適用に失敗しました");
+    } finally {
+      setIsApplyRunning(false);
+    }
+  }, [cards, onApplied]);
+
+  const resolveCard = useCallback(async (id: string, resolution: Resolution, resolutionNote?: string) => {
+    try {
+      const feedback = await resolveReviewFeedback(id, resolution, resolutionNote ?? "", "resolved");
       setCards((previousCards) =>
         previousCards.map((card) =>
           card.id === id
@@ -261,6 +315,7 @@ export function AIReviewProvider({
                 status: "resolved",
                 resolved: true,
                 resolution: isResolution(feedback.resolution) ? feedback.resolution : resolution,
+                resolutionNote: feedback.resolutionNote || resolutionNote,
               }
             : card,
         ),
@@ -270,6 +325,10 @@ export function AIReviewProvider({
     }
   }, []);
 
+  const generateResolutionDraftForCard = useCallback(async (id: string, resolution: Resolution) => {
+    return generateReviewResolutionDraft(id, resolution);
+  }, []);
+
   const unresolveCard = useCallback(async (id: string) => {
     const currentCard = cards.find((card) => card.id === id);
     if (!currentCard) {
@@ -277,7 +336,7 @@ export function AIReviewProvider({
     }
 
     try {
-      await resolveReviewFeedback(id, currentCard.resolution ?? "", "open");
+      await resolveReviewFeedback(id, currentCard.resolution ?? "", currentCard.resolutionNote ?? "", "open");
       setCards((previousCards) =>
         previousCards.map((card) =>
           card.id === id
@@ -285,6 +344,7 @@ export function AIReviewProvider({
                 ...card,
                 status: "open",
                 resolved: false,
+                resolutionNote: currentCard.resolutionNote,
               }
             : card,
         ),
@@ -293,6 +353,27 @@ export function AIReviewProvider({
       setError(err instanceof Error ? err.message : "フィードバックの更新に失敗しました");
     }
   }, [cards]);
+
+  const rateCard = useCallback(async (id: string, reaction: FeedbackReaction) => {
+    try {
+      const feedback = await rateReviewFeedback(id, reaction);
+      setCards((previousCards) =>
+        previousCards.map((card) =>
+          card.id === id
+            ? {
+                ...card,
+                userReaction:
+                  feedback.userReaction === "good" || feedback.userReaction === "bad"
+                    ? feedback.userReaction
+                    : reaction,
+              }
+            : card,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "フィードバック評価の保存に失敗しました");
+    }
+  }, []);
 
   const sendMessage = useCallback(async (cardId: string, content: string) => {
     try {
@@ -337,13 +418,17 @@ export function AIReviewProvider({
       hasLoadedReview,
       isLoading,
       isReviewRunning,
+      isApplyRunning,
       openModal,
       closeModal,
       selectCard,
       resolveCard,
+      generateResolutionDraft: generateResolutionDraftForCard,
       unresolveCard,
+      rateCard,
       sendMessage,
       loadReview,
+      applyResolvedFeedbacks,
       refreshReview,
     }),
     [
@@ -354,11 +439,15 @@ export function AIReviewProvider({
       isLoading,
       isModalOpen,
       isReviewRunning,
+      isApplyRunning,
       loadReview,
+      applyResolvedFeedbacks,
       openModal,
       overallScore,
       refreshReview,
       resolveCard,
+      generateResolutionDraftForCard,
+      rateCard,
       selectCard,
       selectedCardId,
       sendMessage,

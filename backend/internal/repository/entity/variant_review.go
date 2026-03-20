@@ -77,6 +77,22 @@ func (ReviewJob) TableName() string {
 	return "review_jobs"
 }
 
+type ReviewApplyJob struct {
+	ID           int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	VariantID    int64     `gorm:"column:variant_id;not null;index"`
+	ReviewJobID  int64     `gorm:"column:review_job_id;not null;index"`
+	RequestedBy  int64     `gorm:"column:requested_by;not null;index"`
+	Status       JobStatus `gorm:"column:status;type:varchar(30);not null;index"`
+	ErrorMessage *string   `gorm:"column:error_message;type:text"`
+	StartedAt    *Time     `gorm:"column:started_at"`
+	FinishedAt   *Time     `gorm:"column:finished_at"`
+	CreatedOnly
+}
+
+func (ReviewApplyJob) TableName() string {
+	return "review_apply_jobs"
+}
+
 type ReviewFeedback struct {
 	ID               int64               `gorm:"column:id;primaryKey;autoIncrement"`
 	ReviewJobID      int64               `gorm:"column:review_job_id;not null;index"`
@@ -88,6 +104,7 @@ type ReviewFeedback struct {
 	Suggestion       string              `gorm:"column:suggestion;type:text;not null"`
 	AIRecommendation *FeedbackResolution `gorm:"column:ai_recommendation;type:varchar(30)"`
 	Resolution       *FeedbackResolution `gorm:"column:resolution;type:varchar(30)"`
+	ResolutionNote   *string             `gorm:"column:resolution_note;type:text"`
 	Status           FeedbackStatus      `gorm:"column:status;type:varchar(30);not null;default:open;index"`
 	DisplayOrder     int32               `gorm:"column:display_order;not null;default:0"`
 	CreatedOnly
@@ -98,10 +115,11 @@ func (ReviewFeedback) TableName() string {
 }
 
 type ReviewFeedbackTarget struct {
-	ID         int64              `gorm:"column:id;primaryKey;autoIncrement"`
-	FeedbackID int64              `gorm:"column:feedback_id;not null;index"`
-	TargetType FeedbackTargetType `gorm:"column:target_type;type:varchar(20);not null;index"`
-	TargetRef  string             `gorm:"column:target_ref;type:text;not null"`
+	ID         int64   `gorm:"column:id;primaryKey;autoIncrement"`
+	FeedbackID int64   `gorm:"column:feedback_id;not null;index"`
+	NodeID     *int64  `gorm:"column:node_id;index"`
+	EdgeID     *int64  `gorm:"column:edge_id;index"`
+	FilePath   *string `gorm:"column:file_path;type:text"`
 }
 
 func (ReviewFeedbackTarget) TableName() string {
@@ -132,4 +150,16 @@ type ReviewFeedbackAction struct {
 
 func (ReviewFeedbackAction) TableName() string {
 	return "review_feedback_actions"
+}
+
+type ReviewFeedbackReaction struct {
+	ID         int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	FeedbackID int64  `gorm:"column:feedback_id;not null;uniqueIndex:idx_review_feedback_reactions_feedback_user;index"`
+	UserID     int64  `gorm:"column:user_id;not null;uniqueIndex:idx_review_feedback_reactions_feedback_user;index"`
+	Reaction   string `gorm:"column:reaction;type:varchar(20);not null"`
+	Timestamped
+}
+
+func (ReviewFeedbackReaction) TableName() string {
+	return "review_feedback_reactions"
 }

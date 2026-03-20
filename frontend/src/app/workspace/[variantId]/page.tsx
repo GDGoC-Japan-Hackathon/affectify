@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
@@ -31,6 +31,21 @@ function WorkspaceInner() {
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set());
   const [highlightedEdgeIds, setHighlightedEdgeIds] = useState<Set<string>>(new Set());
 
+  const loadWorkspace = useCallback(async () => {
+    if (!variantId) return;
+    try {
+      setIsLoading(true);
+      setError(null);
+      const workspace = await getVariantWorkspace(variantId);
+      setProjectId(workspace.projectId || null);
+      setDesignGuide(workspace.designGuide);
+      setBoardNodes(workspace.nodes);
+      setBoardEdges(workspace.edges);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [variantId]);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
@@ -44,25 +59,17 @@ function WorkspaceInner() {
 
     async function load() {
       try {
-        setIsLoading(true);
-        setError(null);
-        const workspace = await getVariantWorkspace(variantId);
+        await loadWorkspace();
         if (cancelled) return;
-        setProjectId(workspace.projectId || null);
-        setDesignGuide(workspace.designGuide);
-        setBoardNodes(workspace.nodes);
-        setBoardEdges(workspace.edges);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "workspaceの取得に失敗しました");
-      } finally {
-        if (!cancelled) setIsLoading(false);
       }
     }
 
     void load();
     return () => { cancelled = true; };
-  }, [authLoading, user, variantId]);
+  }, [authLoading, loadWorkspace, user, variantId]);
 
   if (!variantId) {
     return <div className="grid h-screen place-items-center text-sm text-gray-500">variantId が不正です</div>;
@@ -81,7 +88,7 @@ function WorkspaceInner() {
   }
 
   return (
-    <AIReviewProvider variantId={variantId}>
+    <AIReviewProvider variantId={variantId} onApplied={loadWorkspace}>
       <div className="flex h-screen w-screen">
         {/* キャンバス */}
         <div className="relative flex-1 overflow-hidden">

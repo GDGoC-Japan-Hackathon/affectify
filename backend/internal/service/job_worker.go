@@ -17,21 +17,27 @@ import (
 	"google.golang.org/api/iterator"
 	"gorm.io/gorm"
 
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/config"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/graphbuild"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/layout"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository"
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/repository/entity"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/reviewai"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/reviewgen"
+	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/source"
 )
 
 type JobWorkerService struct {
 	variantRepo *repository.VariantRepository
 	reviewRepo  *repository.ReviewRepository
+	reviewAI    *reviewai.Client
 }
 
 func NewJobWorkerService(db *gorm.DB) *JobWorkerService {
 	return &JobWorkerService{
 		variantRepo: repository.NewVariantRepository(db),
 		reviewRepo:  repository.NewReviewRepository(db),
+		reviewAI:    reviewai.NewClient(config.LoadVertexAIConfig()),
 	}
 }
 
@@ -66,6 +72,17 @@ func (s *JobWorkerService) RunReviewJob(ctx context.Context, jobID int64) error 
 		return ErrReviewJobNotFound
 	}
 	return s.runReview(ctx, job)
+}
+
+func (s *JobWorkerService) RunReviewApplyJob(ctx context.Context, jobID int64) error {
+	job, err := s.reviewRepo.FindReviewApplyJobByID(ctx, jobID)
+	if err != nil {
+		return err
+	}
+	if job == nil {
+		return ErrReviewApplyJobNotFound
+	}
+	return s.runReviewApply(ctx, job)
 }
 
 func (s *JobWorkerService) runGraphBuild(ctx context.Context, job *entity.GraphBuildJob) error {
@@ -363,18 +380,7 @@ func (s *JobWorkerService) runLayout(ctx context.Context, job *entity.LayoutJob)
 	if len(nodes) == 0 {
 		return s.failLayout(ctx, job, errors.New("layout requires at least one node"))
 	}
-
-	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, job.VariantID)
-	if err != nil {
-		return s.failLayout(ctx, job, err)
-	}
-
-	computed := layout.Compute(nodes, edges, job.LayoutType)
-	positions := make(map[int64][2]float64, len(computed))
-	for nodeID, position := range computed {
-		positions[nodeID] = [2]float64{position.X, position.Y}
-	}
-	if err := s.variantRepo.ApplyNodePositions(ctx, job.VariantID, positions); err != nil {
+	if err := s.applyLayout(ctx, job.VariantID, job.LayoutType); err != nil {
 		return s.failLayout(ctx, job, err)
 	}
 
@@ -382,6 +388,24 @@ func (s *JobWorkerService) runLayout(ctx context.Context, job *entity.LayoutJob)
 	job.Status = entity.JobStatusSucceeded
 	job.FinishedAt = (*entity.Time)(&finished)
 	return s.variantRepo.SaveLayoutJob(ctx, job)
+}
+
+func (s *JobWorkerService) applyLayout(ctx context.Context, variantID int64, layoutType entity.LayoutType) error {
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, variantID)
+	if err != nil {
+		return err
+	}
+	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, variantID)
+	if err != nil {
+		return err
+	}
+
+	computed := layout.Compute(nodes, edges, layoutType)
+	positions := make(map[int64][2]float64, len(computed))
+	for nodeID, position := range computed {
+		positions[nodeID] = [2]float64{position.X, position.Y}
+	}
+	return s.variantRepo.ApplyNodePositions(ctx, variantID, positions)
 }
 
 func (s *JobWorkerService) runReview(ctx context.Context, job *entity.ReviewJob) error {
@@ -400,10 +424,97 @@ func (s *JobWorkerService) runReview(ctx context.Context, job *entity.ReviewJob)
 	if variant == nil {
 		return s.failReview(ctx, job, ErrVariantNotFound)
 	}
-	if err := s.variantRepo.UpdateLastReviewedAt(ctx, job.VariantID, now); err != nil {
+
+	files, err := s.variantRepo.ListFilesByVariantID(ctx, job.VariantID)
+	if err != nil {
 		return s.failReview(ctx, job, err)
 	}
-	if err := s.reviewRepo.CreatePlaceholderAnalysisReport(ctx, job.VariantID, job.ID, now); err != nil {
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReview(ctx, job, err)
+	}
+	edges, err := s.variantRepo.ListEdgesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReview(ctx, job, err)
+	}
+	designGuide, err := s.variantRepo.FindDesignGuideByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReview(ctx, job, err)
+	}
+
+	result := reviewgen.Generate(designGuide, files, nodes, edges)
+	if s.reviewAI != nil && s.reviewAI.Enabled() {
+		aiResult, err := s.reviewAI.GenerateReview(ctx, reviewai.ReviewInput{
+			Guide: designGuide,
+			Files: files,
+			Nodes: nodes,
+			Edges: edges,
+		})
+		if err != nil {
+			return s.failReview(ctx, job, fmt.Errorf("vertex ai review generation failed: %w", err))
+		}
+		result = aiResult
+	}
+	writes := make([]repository.FeedbackWrite, 0, len(result.Feedbacks))
+	for index, feedback := range result.Feedbacks {
+		aiRecommendation := feedback.AIRecommendation
+		model := entity.ReviewFeedback{
+			ReviewJobID:      job.ID,
+			VariantID:        job.VariantID,
+			FeedbackType:     feedback.Type,
+			Severity:         feedback.Severity,
+			Title:            feedback.Title,
+			Description:      feedback.Description,
+			Suggestion:       feedback.Suggestion,
+			AIRecommendation: &aiRecommendation,
+			Status:           entity.FeedbackStatusOpen,
+			DisplayOrder:     int32(index + 1),
+		}
+
+		targets := make([]entity.ReviewFeedbackTarget, 0, len(feedback.TargetNodeIDs)+len(feedback.TargetEdgeIDs)+len(feedback.TargetFilePaths))
+		for _, nodeID := range feedback.TargetNodeIDs {
+			targets = append(targets, entity.ReviewFeedbackTarget{
+				NodeID: &nodeID,
+			})
+		}
+		for _, edgeID := range feedback.TargetEdgeIDs {
+			targets = append(targets, entity.ReviewFeedbackTarget{
+				EdgeID: &edgeID,
+			})
+		}
+		for _, path := range feedback.TargetFilePaths {
+			targets = append(targets, entity.ReviewFeedbackTarget{
+				FilePath: &path,
+			})
+		}
+
+		chats := []entity.ReviewFeedbackChat{
+			{
+				Role:    entity.ChatRoleAI,
+				Content: buildInitialAIReviewChat(feedback),
+			},
+		}
+		writes = append(writes, repository.FeedbackWrite{
+			Feedback: model,
+			Targets:  targets,
+			Chats:    chats,
+		})
+	}
+
+	if err := s.reviewRepo.ReplaceGeneratedReview(
+		ctx,
+		job.VariantID,
+		job.ID,
+		result.OverallScore,
+		result.Summary,
+		result.ReportData,
+		now,
+		writes,
+	); err != nil {
+		return s.failReview(ctx, job, err)
+	}
+
+	if err := s.variantRepo.UpdateLastReviewedAt(ctx, job.VariantID, now); err != nil {
 		return s.failReview(ctx, job, err)
 	}
 
@@ -411,6 +522,147 @@ func (s *JobWorkerService) runReview(ctx context.Context, job *entity.ReviewJob)
 	job.Status = entity.JobStatusSucceeded
 	job.FinishedAt = (*entity.Time)(&finished)
 	return s.reviewRepo.SaveReviewJob(ctx, job)
+}
+
+func (s *JobWorkerService) runReviewApply(ctx context.Context, job *entity.ReviewApplyJob) error {
+	now := time.Now()
+	job.Status = entity.JobStatusRunning
+	job.StartedAt = (*entity.Time)(&now)
+	job.ErrorMessage = nil
+	if err := s.reviewRepo.SaveReviewApplyJob(ctx, job); err != nil {
+		return err
+	}
+
+	reviewJob, err := s.reviewRepo.FindReviewJobByID(ctx, job.ReviewJobID)
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+	if reviewJob == nil {
+		return s.failReviewApply(ctx, job, ErrReviewJobNotFound)
+	}
+
+	variant, err := s.variantRepo.FindByID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+	if variant == nil {
+		return s.failReviewApply(ctx, job, ErrVariantNotFound)
+	}
+
+	feedbacks, err := s.reviewRepo.ListFeedbacksByVariantAndJob(ctx, job.VariantID, job.ReviewJobID, false)
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+	targets, err := s.reviewRepo.ListFeedbackTargetsByFeedbackIDs(ctx, feedbackIDs(feedbacks))
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+	resolvedFeedbacks := filterResolvedFeedbacks(feedbacks)
+	if len(resolvedFeedbacks) == 0 {
+		return s.failReviewApply(ctx, job, errors.New("no resolved feedbacks to apply"))
+	}
+
+	designGuide, err := s.variantRepo.FindDesignGuideByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+	nodes, err := s.variantRepo.ListNodesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+	files, err := s.variantRepo.ListFilesByVariantID(ctx, job.VariantID)
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+
+	localDir, _, err := s.materializeVariantSource(ctx, derefString(variant.SourceRootURI))
+	if err != nil && needsCodeUpdate(resolvedFeedbacks) {
+		return s.failReviewApply(ctx, job, err)
+	}
+
+	targetsByFeedbackID := groupTargetsByFeedbackID(targets)
+	editableFiles, err := buildEditableFiles(localDir, resolvedFeedbacks, targetsByFeedbackID, nodes, files)
+	if err != nil {
+		return s.failReviewApply(ctx, job, err)
+	}
+
+	applyInput := reviewai.ApplyInput{
+		Guide:             designGuide,
+		Files:             editableFiles,
+		ResolvedFeedbacks: toApplyFeedbacks(resolvedFeedbacks, targetsByFeedbackID),
+		UpdateDesignGuide: needsDesignGuideUpdate(resolvedFeedbacks),
+		UpdateCode:        len(editableFiles) > 0,
+	}
+	if !applyInput.UpdateDesignGuide && !applyInput.UpdateCode {
+		return s.failReviewApply(ctx, job, errors.New("resolved feedbacks do not contain applicable updates"))
+	}
+
+	if s.reviewAI == nil || !s.reviewAI.Enabled() {
+		return s.failReviewApply(ctx, job, errors.New("vertex ai is required for applying review decisions"))
+	}
+
+	applyOutput, err := s.reviewAI.GenerateApplyChanges(ctx, applyInput)
+	if err != nil {
+		return s.failReviewApply(ctx, job, fmt.Errorf("vertex ai apply generation failed: %w", err))
+	}
+
+	if applyInput.UpdateDesignGuide && designGuide != nil {
+		nextContent := strings.TrimSpace(applyOutput.DesignGuideContent)
+		if nextContent != "" {
+			designGuide.Content = nextContent
+			designGuide.Version++
+			designGuide.CreatedBy = job.RequestedBy
+			if err := s.variantRepo.SaveDesignGuide(ctx, designGuide); err != nil {
+				return s.failReviewApply(ctx, job, err)
+			}
+		}
+	}
+
+	if applyInput.UpdateCode {
+		updatedFiles, err := toUpdatedFiles(applyOutput.FileUpdates, editableFiles)
+		if err != nil {
+			return s.failReviewApply(ctx, job, err)
+		}
+		if len(updatedFiles) > 0 {
+			if variant.SourceRootURI == nil || *variant.SourceRootURI == "" {
+				return s.failReviewApply(ctx, job, errors.New("variant source_root_uri is empty"))
+			}
+			if err := source.ApplyFiles(ctx, *variant.SourceRootURI, updatedFiles); err != nil {
+				return s.failReviewApply(ctx, job, err)
+			}
+			if err := s.syncGraph(ctx, job.VariantID, now); err != nil {
+				return s.failReviewApply(ctx, job, err)
+			}
+			if err := s.applyLayout(ctx, job.VariantID, entity.LayoutTypeGrid); err != nil {
+				return s.failReviewApply(ctx, job, err)
+			}
+		}
+	}
+
+	finished := time.Now()
+	job.Status = entity.JobStatusSucceeded
+	job.FinishedAt = (*entity.Time)(&finished)
+	return s.reviewRepo.SaveReviewApplyJob(ctx, job)
+}
+
+func buildInitialAIReviewChat(feedback reviewgen.Feedback) string {
+	return fmt.Sprintf(
+		"%s。提案は「%s」です。まずは %s を確認するのがよいです。",
+		feedback.Description,
+		feedback.Suggestion,
+		initialResolutionFocus(feedback.AIRecommendation),
+	)
+}
+
+func initialResolutionFocus(resolution entity.FeedbackResolution) string {
+	switch resolution {
+	case entity.FeedbackResolutionUpdateDesignGuide:
+		return "設計書の前提と責務分割"
+	case entity.FeedbackResolutionFixCode:
+		return "コード上の依存と責務境界"
+	default:
+		return "設計書とコードの両方"
+	}
 }
 
 func (s *JobWorkerService) failGraphBuild(ctx context.Context, job *entity.GraphBuildJob, cause error) error {
@@ -447,4 +699,180 @@ func (s *JobWorkerService) failReview(ctx context.Context, job *entity.ReviewJob
 		return fmt.Errorf("review failed: %w (additionally failed to persist job error: %v)", cause, err)
 	}
 	return cause
+}
+
+func (s *JobWorkerService) failReviewApply(ctx context.Context, job *entity.ReviewApplyJob, cause error) error {
+	now := time.Now()
+	message := cause.Error()
+	job.Status = entity.JobStatusFailed
+	job.ErrorMessage = &message
+	job.FinishedAt = (*entity.Time)(&now)
+	if err := s.reviewRepo.SaveReviewApplyJob(ctx, job); err != nil {
+		return fmt.Errorf("review apply failed: %w (additionally failed to persist job error: %v)", cause, err)
+	}
+	return cause
+}
+
+func feedbackIDs(feedbacks []entity.ReviewFeedback) []int64 {
+	ids := make([]int64, 0, len(feedbacks))
+	for _, feedback := range feedbacks {
+		ids = append(ids, feedback.ID)
+	}
+	return ids
+}
+
+func filterResolvedFeedbacks(feedbacks []entity.ReviewFeedback) []entity.ReviewFeedback {
+	resolved := make([]entity.ReviewFeedback, 0, len(feedbacks))
+	for _, feedback := range feedbacks {
+		if feedback.Status == entity.FeedbackStatusResolved && feedback.Resolution != nil && strings.TrimSpace(derefString(feedback.ResolutionNote)) != "" {
+			resolved = append(resolved, feedback)
+		}
+	}
+	return resolved
+}
+
+func needsDesignGuideUpdate(feedbacks []entity.ReviewFeedback) bool {
+	for _, feedback := range feedbacks {
+		if feedback.Resolution == nil {
+			continue
+		}
+		if *feedback.Resolution == entity.FeedbackResolutionUpdateDesignGuide || *feedback.Resolution == entity.FeedbackResolutionBoth {
+			return true
+		}
+	}
+	return false
+}
+
+func needsCodeUpdate(feedbacks []entity.ReviewFeedback) bool {
+	for _, feedback := range feedbacks {
+		if feedback.Resolution == nil {
+			continue
+		}
+		if *feedback.Resolution == entity.FeedbackResolutionFixCode || *feedback.Resolution == entity.FeedbackResolutionBoth {
+			return true
+		}
+	}
+	return false
+}
+
+func groupTargetsByFeedbackID(targets []entity.ReviewFeedbackTarget) map[int64][]entity.ReviewFeedbackTarget {
+	result := make(map[int64][]entity.ReviewFeedbackTarget)
+	for _, target := range targets {
+		result[target.FeedbackID] = append(result[target.FeedbackID], target)
+	}
+	return result
+}
+
+func buildEditableFiles(
+	localDir string,
+	feedbacks []entity.ReviewFeedback,
+	targetsByFeedbackID map[int64][]entity.ReviewFeedbackTarget,
+	nodes []entity.Node,
+	files []entity.VariantFile,
+) (map[string]string, error) {
+	if localDir == "" {
+		return map[string]string{}, nil
+	}
+	filePaths := map[string]struct{}{}
+	filePathByNodeID := nodeFilePaths(nodes, files)
+	for _, feedback := range feedbacks {
+		if feedback.Resolution == nil {
+			continue
+		}
+		if *feedback.Resolution != entity.FeedbackResolutionFixCode && *feedback.Resolution != entity.FeedbackResolutionBoth {
+			continue
+		}
+		for _, target := range targetsByFeedbackID[feedback.ID] {
+			if target.FilePath != nil && *target.FilePath != "" {
+				filePaths[*target.FilePath] = struct{}{}
+			}
+			if target.NodeID != nil {
+				if path, ok := filePathByNodeID[*target.NodeID]; ok && path != "" {
+					filePaths[path] = struct{}{}
+				}
+			}
+		}
+	}
+
+	result := make(map[string]string, len(filePaths))
+	for path := range filePaths {
+		content, err := os.ReadFile(filepath.Join(localDir, filepath.FromSlash(path)))
+		if err != nil {
+			return nil, err
+		}
+		result[path] = string(content)
+	}
+	return result, nil
+}
+
+func nodeFilePaths(nodes []entity.Node, files []entity.VariantFile) map[int64]string {
+	filePathByID := make(map[int64]string, len(files))
+	for _, file := range files {
+		filePathByID[file.ID] = file.Path
+	}
+	result := make(map[int64]string, len(nodes))
+	for _, node := range nodes {
+		if node.VariantFileID != nil {
+			result[node.ID] = filePathByID[*node.VariantFileID]
+		}
+	}
+	return result
+}
+
+func toApplyFeedbacks(feedbacks []entity.ReviewFeedback, targetsByFeedbackID map[int64][]entity.ReviewFeedbackTarget) []reviewai.ApplyFeedback {
+	result := make([]reviewai.ApplyFeedback, 0, len(feedbacks))
+	for _, feedback := range feedbacks {
+		targets := targetsByFeedbackID[feedback.ID]
+		item := reviewai.ApplyFeedback{
+			Title:          feedback.Title,
+			Description:    feedback.Description,
+			Resolution:     derefResolutionValue(feedback.Resolution),
+			ResolutionNote: derefString(feedback.ResolutionNote),
+		}
+		for _, target := range targets {
+			if target.NodeID != nil {
+				item.NodeIDs = append(item.NodeIDs, *target.NodeID)
+			}
+			if target.EdgeID != nil {
+				item.EdgeIDs = append(item.EdgeIDs, *target.EdgeID)
+			}
+			if target.FilePath != nil {
+				item.FilePaths = append(item.FilePaths, *target.FilePath)
+			}
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func toUpdatedFiles(updates []reviewai.ApplyFileUpdate, editableFiles map[string]string) ([]source.UploadedFile, error) {
+	result := make([]source.UploadedFile, 0, len(updates))
+	for _, update := range updates {
+		path := filepath.ToSlash(strings.TrimSpace(update.Path))
+		if path == "" {
+			continue
+		}
+		if _, ok := editableFiles[path]; !ok {
+			return nil, fmt.Errorf("apply output contains unexpected file path: %s", path)
+		}
+		result = append(result, source.UploadedFile{
+			RelativePath: path,
+			Content:      []byte(update.Content),
+		})
+	}
+	return result, nil
+}
+
+func derefResolutionValue(value *entity.FeedbackResolution) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

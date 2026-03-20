@@ -55,8 +55,7 @@ func (p *Parser) Parse() (*Board, error) {
 			packages.NeedSyntax |
 			packages.NeedTypes |
 			packages.NeedTypesInfo |
-			packages.NeedImports |
-			packages.NeedDeps,
+			packages.NeedImports,
 		Dir: p.baseDir,
 	}
 
@@ -103,6 +102,9 @@ func (p *Parser) extractNodes(pkg *packages.Package) {
 	beforeNodes := len(p.nodes)
 	for i, file := range pkg.Syntax {
 		relPath := p.relativeFilePath(pkg, i, file)
+		if shouldSkipGraphFile(relPath) {
+			continue
+		}
 
 		ast.Inspect(file, func(n ast.Node) bool {
 			if ts, ok := n.(*ast.TypeSpec); ok {
@@ -258,6 +260,22 @@ func (p *Parser) buildSignature(pkg *packages.Package, decl *ast.FuncDecl) strin
 	})
 }
 
+func shouldSkipGraphFile(filePath string) bool {
+	lower := strings.ToLower(filepath.ToSlash(filePath))
+	switch {
+	case strings.HasSuffix(lower, ".gen.go"):
+		return true
+	case strings.HasSuffix(lower, ".pb.go"):
+		return true
+	case strings.HasSuffix(lower, "_connect.go"):
+		return true
+	case strings.Contains(lower, "/vendor/"):
+		return true
+	default:
+		return false
+	}
+}
+
 func inferLayer(filePath string) string {
 	lower := strings.ToLower(filePath)
 	switch {
@@ -279,6 +297,9 @@ func inferLayer(filePath string) string {
 func (p *Parser) extractEdges(pkg *packages.Package) {
 	beforeEdges := len(p.edges)
 	for _, file := range pkg.Syntax {
+		if fileInfo := p.fset.File(file.Pos()); fileInfo != nil && shouldSkipGraphFile(p.relToBase(fileInfo.Name())) {
+			continue
+		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
 			if !ok {

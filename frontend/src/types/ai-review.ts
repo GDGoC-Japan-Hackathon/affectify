@@ -8,6 +8,7 @@ export type Resolution = "update_design_guide" | "fix_code" | "both";
 export type FeedbackStatus = "open" | "resolved" | "dismissed";
 export type FeedbackType = "design_guide" | "code";
 export type FeedbackSeverity = "high" | "medium" | "low";
+export type FeedbackReaction = "good" | "bad";
 
 export type FeedbackCard = {
   id: string;
@@ -23,7 +24,9 @@ export type FeedbackCard = {
   edgeIds: string[];
   status: FeedbackStatus;
   resolution?: Resolution;
+  resolutionNote?: string;
   aiRecommendation?: Resolution;
+  userReaction?: FeedbackReaction;
   resolved: boolean;
   chatHistory: ChatMessage[];
   chatsLoaded: boolean;

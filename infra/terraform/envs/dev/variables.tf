@@ -56,10 +56,28 @@ variable "graph_build_job_name" {
   default     = "whitecoder-graph-build"
 }
 
+variable "layout_job_name" {
+  description = "Cloud Run Job name for layout worker"
+  type        = string
+  default     = "whitecoder-layout"
+}
+
 variable "review_job_name" {
   description = "Cloud Run Job name for review worker"
   type        = string
   default     = "whitecoder-review"
+}
+
+variable "review_apply_job_name" {
+  description = "Cloud Run Job name for applying resolved review decisions"
+  type        = string
+  default     = "whitecoder-review-apply"
+}
+
+variable "vertex_ai_model" {
+  description = "Vertex AI Gemini model name for AI review/chat"
+  type        = string
+  default     = "gemini-2.5-flash"
 }
 
 variable "source_bucket_name" {

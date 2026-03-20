@@ -9,10 +9,53 @@ option go_package = "github.com/GDGoC-Japan-Hackathon/affectify/backend/gen/api/
 service ReviewService {
   rpc CreateReviewJob(CreateReviewJobRequest) returns (CreateReviewJobResponse) {}
   rpc GetReviewJob(GetReviewJobRequest) returns (GetReviewJobResponse) {}
+  rpc CreateReviewApplyJob(CreateReviewApplyJobRequest) returns (CreateReviewApplyJobResponse) {}
+  rpc GetReviewApplyJob(GetReviewApplyJobRequest) returns (GetReviewApplyJobResponse) {}
   rpc ListReviewFeedbacks(ListReviewFeedbacksRequest) returns (ListReviewFeedbacksResponse) {}
   rpc ListReviewFeedbackChats(ListReviewFeedbackChatsRequest) returns (ListReviewFeedbackChatsResponse) {}
   rpc AppendReviewFeedbackChat(AppendReviewFeedbackChatRequest) returns (AppendReviewFeedbackChatResponse) {}
+  rpc GenerateReviewResolutionDraft(GenerateReviewResolutionDraftRequest) returns (GenerateReviewResolutionDraftResponse) {}
   rpc ResolveReviewFeedback(ResolveReviewFeedbackRequest) returns (ResolveReviewFeedbackResponse) {}
+  rpc RateReviewFeedback(RateReviewFeedbackRequest) returns (RateReviewFeedbackResponse) {}
+}
+
+enum ReviewFeedbackType {
+  REVIEW_FEEDBACK_TYPE_UNSPECIFIED = 0;
+  REVIEW_FEEDBACK_TYPE_DESIGN_GUIDE = 1;
+  REVIEW_FEEDBACK_TYPE_CODE = 2;
+}
+
+enum ReviewFeedbackSeverity {
+  REVIEW_FEEDBACK_SEVERITY_UNSPECIFIED = 0;
+  REVIEW_FEEDBACK_SEVERITY_HIGH = 1;
+  REVIEW_FEEDBACK_SEVERITY_MEDIUM = 2;
+  REVIEW_FEEDBACK_SEVERITY_LOW = 3;
+}
+
+enum ReviewFeedbackResolution {
+  REVIEW_FEEDBACK_RESOLUTION_UNSPECIFIED = 0;
+  REVIEW_FEEDBACK_RESOLUTION_UPDATE_DESIGN_GUIDE = 1;
+  REVIEW_FEEDBACK_RESOLUTION_FIX_CODE = 2;
+  REVIEW_FEEDBACK_RESOLUTION_BOTH = 3;
+}
+
+enum ReviewFeedbackStatus {
+  REVIEW_FEEDBACK_STATUS_UNSPECIFIED = 0;
+  REVIEW_FEEDBACK_STATUS_OPEN = 1;
+  REVIEW_FEEDBACK_STATUS_RESOLVED = 2;
+  REVIEW_FEEDBACK_STATUS_DISMISSED = 3;
+}
+
+enum ReviewFeedbackReaction {
+  REVIEW_FEEDBACK_REACTION_UNSPECIFIED = 0;
+  REVIEW_FEEDBACK_REACTION_GOOD = 1;
+  REVIEW_FEEDBACK_REACTION_BAD = 2;
+}
+
+enum ReviewFeedbackChatRole {
+  REVIEW_FEEDBACK_CHAT_ROLE_UNSPECIFIED = 0;
+  REVIEW_FEEDBACK_CHAT_ROLE_USER = 1;
+  REVIEW_FEEDBACK_CHAT_ROLE_AI = 2;
 }
 
 message ReviewJob {
@@ -26,33 +69,48 @@ message ReviewJob {
   google.protobuf.Timestamp created_at = 8;
 }
 
+message ReviewApplyJob {
+  int64 id = 1;
+  int64 variant_id = 2;
+  int64 review_job_id = 3;
+  int64 requested_by = 4;
+  string status = 5;
+  string error_message = 6;
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp finished_at = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
 message ReviewFeedback {
   int64 id = 1;
   int64 review_job_id = 2;
   int64 variant_id = 3;
-  string feedback_type = 4;
-  string severity = 5;
+  ReviewFeedbackType feedback_type = 4;
+  ReviewFeedbackSeverity severity = 5;
   string title = 6;
   string description = 7;
   string suggestion = 8;
-  string ai_recommendation = 9;
-  string resolution = 10;
-  string status = 11;
+  ReviewFeedbackResolution ai_recommendation = 9;
+  ReviewFeedbackResolution resolution = 10;
+  ReviewFeedbackStatus status = 11;
   int32 display_order = 12;
   google.protobuf.Timestamp created_at = 13;
+  ReviewFeedbackReaction user_reaction = 14;
+  string resolution_note = 15;
 }
 
 message ReviewFeedbackTarget {
   int64 id = 1;
   int64 feedback_id = 2;
-  string target_type = 3;
-  string target_ref = 4;
+  optional int64 node_id = 3;
+  optional int64 edge_id = 4;
+  optional string file_path = 5;
 }
 
 message ReviewFeedbackChat {
   int64 id = 1;
   int64 feedback_id = 2;
-  string role = 3;
+  ReviewFeedbackChatRole role = 3;
   string content = 4;
   optional int64 created_by = 5;
   google.protobuf.Timestamp created_at = 6;
@@ -72,6 +130,22 @@ message GetReviewJobRequest {
 
 message GetReviewJobResponse {
   ReviewJob job = 1;
+}
+
+message CreateReviewApplyJobRequest {
+  int64 review_job_id = 1;
+}
+
+message CreateReviewApplyJobResponse {
+  ReviewApplyJob job = 1;
+}
+
+message GetReviewApplyJobRequest {
+  int64 id = 1;
+}
+
+message GetReviewApplyJobResponse {
+  ReviewApplyJob job = 1;
 }
 
 message ListReviewFeedbacksRequest {
@@ -103,12 +177,31 @@ message AppendReviewFeedbackChatResponse {
   ReviewFeedback feedback = 2;
 }
 
+message GenerateReviewResolutionDraftRequest {
+  int64 feedback_id = 1;
+  ReviewFeedbackResolution resolution = 2;
+}
+
+message GenerateReviewResolutionDraftResponse {
+  string resolution_note = 1;
+}
+
 message ResolveReviewFeedbackRequest {
   int64 feedback_id = 1;
-  string resolution = 2;
-  string status = 3;
+  ReviewFeedbackResolution resolution = 2;
+  ReviewFeedbackStatus status = 3;
+  string resolution_note = 4;
 }
 
 message ResolveReviewFeedbackResponse {
+  ReviewFeedback feedback = 1;
+}
+
+message RateReviewFeedbackRequest {
+  int64 feedback_id = 1;
+  ReviewFeedbackReaction reaction = 2;
+}
+
+message RateReviewFeedbackResponse {
   ReviewFeedback feedback = 1;
 }

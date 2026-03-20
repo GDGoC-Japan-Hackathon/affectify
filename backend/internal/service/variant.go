@@ -64,6 +64,11 @@ type CreateLayoutJobInput struct {
 	LayoutType string
 }
 
+type PrepareVariantSourceUploadInput struct {
+	VariantID int64
+	Files     []source.UploadDescriptor
+}
+
 type VariantService struct {
 	db             *gorm.DB
 	userRepository *repository.UserRepository
@@ -278,6 +283,18 @@ func (s *VariantService) UploadVariantSource(ctx context.Context, firebaseUID st
 	}
 
 	return sourceRootURI, nil
+}
+
+func (s *VariantService) PrepareVariantSourceUpload(
+	ctx context.Context,
+	firebaseUID string,
+	input PrepareVariantSourceUploadInput,
+) (*source.UploadPlan, error) {
+	if _, _, err := s.requireVariantAccess(ctx, firebaseUID, input.VariantID); err != nil {
+		return nil, err
+	}
+
+	return s.sourceStore.PrepareVariantUpload(ctx, input.VariantID, input.Files)
 }
 
 func (s *VariantService) GetVariantWorkspace(ctx context.Context, firebaseUID string, variantID int64) (*VariantWorkspace, error) {

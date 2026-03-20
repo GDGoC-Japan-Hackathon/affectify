@@ -16,7 +16,8 @@ import {
   Square,
 } from "lucide-react";
 
-import { createGraphBuildJob, getGraphBuildJob, updateVariant } from "@/lib/api/variants";
+import { createGraphBuildJob, createLayoutJob, getGraphBuildJob, getLayoutJob, updateVariant } from "@/lib/api/variants";
+import { createReviewJob, getReviewJob } from "@/lib/api/review";
 import { uploadVariantSource } from "@/lib/api/variant-sources";
 import { useAuth } from "@/lib/auth";
 
@@ -30,6 +31,11 @@ interface FileTreeNode {
   file?: File;
   language?: string;
 }
+
+const JOB_POLL_INTERVAL_MS = 1500;
+const GRAPH_BUILD_TIMEOUT_MS = 8 * 60 * 1000;
+const LAYOUT_TIMEOUT_MS = 2 * 60 * 1000;
+const REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 
 const DEFAULT_EXCLUDE_DIRS = [
   "node_modules",
@@ -197,6 +203,28 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+async function waitForJob<T extends { status: string; errorMessage?: string }>(
+  fetchJob: () => Promise<T>,
+  timeoutMs: number,
+  defaultErrorMessage: string,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (true) {
+    const current = await fetchJob();
+    if (current.status === "succeeded") {
+      return current;
+    }
+    if (current.status === "failed") {
+      throw new Error(current.errorMessage || defaultErrorMessage);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`${defaultErrorMessage}（タイムアウト）`);
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, JOB_POLL_INTERVAL_MS));
+  }
+}
+
 export default function ImportPage() {
   const params = useParams<{ variantId: string }>();
   const variantId = Array.isArray(params?.variantId) ? params.variantId[0] : params?.variantId;
@@ -209,6 +237,7 @@ export default function ImportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [buildStatus, setBuildStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [buildError, setBuildError] = useState("");
+  const [buildStageLabel, setBuildStageLabel] = useState("コードグラフを生成しています。");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -273,20 +302,21 @@ export default function ImportPage() {
         sourceRootUri: upload.sourceRootUri,
       });
 
+      setBuildStageLabel("コードグラフを生成しています。");
       const job = await createGraphBuildJob(variantId);
+      await waitForJob(() => getGraphBuildJob(job.id), GRAPH_BUILD_TIMEOUT_MS, "グラフビルドに失敗しました");
 
-      while (true) {
-        const current = await getGraphBuildJob(job.id);
-        if (current.status === "succeeded") {
-          setBuildStatus("done");
-          window.setTimeout(() => router.push(`/workspace/${variantId}`), 1200);
-          return;
-        }
-        if (current.status === "failed") {
-          throw new Error(current.errorMessage || "グラフビルドに失敗しました");
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
-      }
+      setBuildStageLabel("ノードを自動整列しています。");
+      const layoutJob = await createLayoutJob(variantId, "grid");
+      await waitForJob(() => getLayoutJob(layoutJob.id), LAYOUT_TIMEOUT_MS, "レイアウトに失敗しました");
+
+      setBuildStageLabel("AIレビューを実行しています。");
+      const reviewJob = await createReviewJob(variantId);
+      await waitForJob(() => getReviewJob(reviewJob.id), REVIEW_TIMEOUT_MS, "AIレビューに失敗しました");
+
+      setBuildStageLabel("準備が完了しました。workspace に移動します。");
+      setBuildStatus("done");
+      window.setTimeout(() => router.push(`/workspace/${variantId}`), 1200);
     } catch (error) {
       setBuildStatus("error");
       setBuildError(error instanceof Error ? error.message : "インポートに失敗しました");
@@ -467,9 +497,7 @@ export default function ImportPage() {
               <>
                 <Loader2 className="mx-auto mb-4 size-12 animate-spin text-indigo-600" />
                 <h2 className="mb-2 text-xl font-semibold text-slate-900">解析中...</h2>
-                <p className="text-sm text-slate-500">
-                  選択したファイルを backend に保存し、コードグラフを生成しています。
-                </p>
+                <p className="text-sm text-slate-500">{buildStageLabel}</p>
               </>
             )}
             {buildStatus === "done" && (
