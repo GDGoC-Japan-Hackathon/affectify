@@ -33,6 +33,56 @@ function jitterFromId(id: string, axisSalt: string, amount: number): number {
 }
 
 // =========================================================
+// ヘルパー関数：コード重複削減
+// =========================================================
+
+/**
+ * SCC分解とレベル割り当てを実行し、レベル別のSCC一覧を返す
+ */
+function prepareLeveledSCCs(nodeIds: string[], edges: BoardEdge[]) {
+  const sccs = computeSCCs(nodeIds, edges);
+  const levels = assignLevels(sccs, edges);
+  const levelToSccs = new Map<number, number[]>();
+  sccs.forEach((_, i) => {
+    const lv = levels.get(i) ?? 0;
+    if (!levelToSccs.has(lv)) levelToSccs.set(lv, []);
+    levelToSccs.get(lv)!.push(i);
+  });
+  const sortedLevels = [...levelToSccs.keys()].sort((a, b) => a - b);
+  return { sccs, levels, levelToSccs, sortedLevels };
+}
+
+/**
+ * SCC の矩形幅・高さを計算
+ */
+function calcSccBoundingBox(scc: string[]): { w: number; h: number } {
+  if (scc.length === 1) return { w: NODE_W, h: NODE_H };
+  const radius = Math.max(180, scc.length * 70);
+  const d = radius * 2 + NODE_W;
+  return { w: d, h: d };
+}
+
+/**
+ * ノード座標にジッターを適用
+ */
+function applyJitterToPositions(
+  positions: Map<string, { x: number; y: number }>,
+  xGap: number,
+  yGap: number
+): void {
+  const jitterLimitX = Math.max(0, Math.min(DEFAULT_JITTER_X, xGap * 0.18));
+  const jitterLimitY = Math.max(0, Math.min(DEFAULT_JITTER_Y, yGap * 0.35));
+  if (jitterLimitX <= 0 && jitterLimitY <= 0) return;
+
+  for (const [id, pos] of positions) {
+    positions.set(id, {
+      x: pos.x + jitterFromId(id, "x", jitterLimitX),
+      y: pos.y + jitterFromId(id, "y", jitterLimitY),
+    });
+  }
+}
+
+// =========================================================
 // 1. Tarjan法による強連結成分（SCC）分解
 // =========================================================
 export function computeSCCs(nodeIds: string[], edges: BoardEdge[]): string[][] {
@@ -172,26 +222,7 @@ export function computeLayout(nodes: BoardNode[], edges: BoardEdge[], options: L
   const yGap = Number.isFinite(yGapRaw) ? Math.max(0, yGapRaw as number) : DEFAULT_Y_GAP;
 
   const nodeIds = nodes.map((n) => n.id);
-  const sccs = computeSCCs(nodeIds, edges);
-  const levels = assignLevels(sccs, edges);
-
-  // レベルごとにSCCを集める
-  const levelToSccs = new Map<number, number[]>();
-  sccs.forEach((_, i) => {
-    const lv = levels.get(i) ?? 0;
-    if (!levelToSccs.has(lv)) levelToSccs.set(lv, []);
-    levelToSccs.get(lv)!.push(i);
-  });
-
-  const sortedLevels = [...levelToSccs.keys()].sort((a, b) => a - b);
-
-  // 各SCCの矩形幅・高さ（配置ユニットとして使う）
-  function sccBoundingBox(scc: string[]): { w: number; h: number } {
-    if (scc.length === 1) return { w: NODE_W, h: NODE_H };
-    const radius = Math.max(180, scc.length * 70);
-    const d = radius * 2 + NODE_W;
-    return { w: d, h: d };
-  }
+  const { sccs, levelToSccs, sortedLevels } = prepareLeveledSCCs(nodeIds, edges);
 
   // SCC中心座標を決定（レベル内は縦長回避のためグリッド配置、レベルは左→右）
   const sccCenters = new Map<number, { x: number; y: number }>();
@@ -199,7 +230,7 @@ export function computeLayout(nodes: BoardNode[], edges: BoardEdge[], options: L
 
   for (const lv of sortedLevels) {
     const sccIdxs = levelToSccs.get(lv)!;
-    const boxes = sccIdxs.map((i) => sccBoundingBox(sccs[i]));
+    const boxes = sccIdxs.map((i) => calcSccBoundingBox(sccs[i]));
     const maxW = Math.max(...boxes.map((b) => b.w));
     const maxH = Math.max(...boxes.map((b) => b.h));
     const { cols, rows } = chooseGridShape(sccIdxs.length, maxW, maxH, xGap, yGap);
@@ -242,18 +273,7 @@ export function computeLayout(nodes: BoardNode[], edges: BoardEdge[], options: L
     }
   });
 
-  // 見た目が硬すぎないよう、ノードIDに基づく安定ジッターを加える。
-  const jitterLimitX = Math.max(0, Math.min(DEFAULT_JITTER_X, xGap * 0.18));
-  const jitterLimitY = Math.max(0, Math.min(DEFAULT_JITTER_Y, yGap * 0.35));
-  if (jitterLimitX > 0 || jitterLimitY > 0) {
-    for (const [id, pos] of positions) {
-      positions.set(id, {
-        x: pos.x + jitterFromId(id, "x", jitterLimitX),
-        y: pos.y + jitterFromId(id, "y", jitterLimitY),
-      });
-    }
-  }
-
+  applyJitterToPositions(positions, xGap, yGap);
   return positions;
 }
 
@@ -272,18 +292,7 @@ export function computeCircularLayout(nodes: BoardNode[], edges: BoardEdge[], op
   const yGap = Number.isFinite(yGapRaw) ? Math.max(0, yGapRaw as number) : DEFAULT_Y_GAP;
 
   const nodeIds = nodes.map((n) => n.id);
-  const sccs = computeSCCs(nodeIds, edges);
-  const levels = assignLevels(sccs, edges);
-
-  // レベルごとにSCCを集める
-  const levelToSccs = new Map<number, number[]>();
-  sccs.forEach((_, i) => {
-    const lv = levels.get(i) ?? 0;
-    if (!levelToSccs.has(lv)) levelToSccs.set(lv, []);
-    levelToSccs.get(lv)!.push(i);
-  });
-
-  const sortedLevels = [...levelToSccs.keys()].sort((a, b) => a - b);
+  const { sccs, levelToSccs, sortedLevels } = prepareLeveledSCCs(nodeIds, edges);
   const maxLevel = Math.max(...sortedLevels);
 
   // デバッグ用ログ
@@ -380,18 +389,7 @@ export function computeCircularLayout(nodes: BoardNode[], edges: BoardEdge[], op
     }
   });
 
-  // 見た目が硬すぎないよう、ノードIDに基づく安定ジッターを加える。
-  const jitterLimitX = Math.max(0, Math.min(DEFAULT_JITTER_X, xGap * 0.18));
-  const jitterLimitY = Math.max(0, Math.min(DEFAULT_JITTER_Y, yGap * 0.35));
-  if (jitterLimitX > 0 || jitterLimitY > 0) {
-    for (const [id, pos] of positions) {
-      positions.set(id, {
-        x: pos.x + jitterFromId(id, "x", jitterLimitX),
-        y: pos.y + jitterFromId(id, "y", jitterLimitY),
-      });
-    }
-  }
-
+  applyJitterToPositions(positions, xGap, yGap);
   return positions;
 }
 
@@ -421,64 +419,19 @@ export function computeFileGroupLayout(nodes: BoardNode[], _edges: BoardEdge[], 
     fileGroups.set(node.file_path, arr);
   }
 
-  // 2. ファイル内ノードをランダム配置（相対座標）
-  function placeRandom(fileNodes: BoardNode[]): { positions: Map<string, { x: number; y: number }>; w: number; h: number } {
+  // 2. ファイル内ノードをグリッド配置（相対座標）
+  function placeInGrid(fileNodes: BoardNode[]): { positions: Map<string, { x: number; y: number }>; w: number; h: number } {
     const cols = Math.max(1, Math.ceil(Math.sqrt(fileNodes.length)));
-    const rows = Math.ceil(fileNodes.length / cols);
-    const areaW = cols * (NODE_W + nodeSpacing);
-    const areaH = rows * (NODE_H + nodeSpacing);
     const positions = new Map<string, { x: number; y: number }>();
-    const placed: Array<{ x: number; y: number }> = [];
-
-    for (const node of fileNodes) {
-      let pos: { x: number; y: number } | null = null;
-      for (let attempt = 0; attempt < 300; attempt++) {
-        const x = Math.random() * Math.max(0, areaW - NODE_W);
-        const y = Math.random() * Math.max(0, areaH - NODE_H);
-        let overlaps = false;
-        for (const p of placed) {
-          if (x < p.x + NODE_W + nodeSpacing && x + NODE_W > p.x && y < p.y + NODE_H + nodeSpacing && y + NODE_H > p.y) {
-            overlaps = true;
-            break;
-          }
-        }
-        if (!overlaps) {
-          pos = { x, y };
-          break;
-        }
-      }
-      if (!pos) {
-        // 配置失敗時の戻し方：より多くのスペースを増やしてリトライ
-        const expandedW = areaW * 2;
-        const expandedH = areaH * 2;
-        for (let attempt = 0; attempt < 100; attempt++) {
-          const x = Math.random() * Math.max(0, expandedW - NODE_W);
-          const y = Math.random() * Math.max(0, expandedH - NODE_H);
-          let overlaps = false;
-          for (const p of placed) {
-            if (x < p.x + NODE_W + nodeSpacing && x + NODE_W > p.x && y < p.y + NODE_H + nodeSpacing && y + NODE_H > p.y) {
-              overlaps = true;
-              break;
-            }
-          }
-          if (!overlaps) {
-            pos = { x, y };
-            break;
-          }
-        }
-      }
-      if (!pos) pos = { x: Math.random() * areaW * 3, y: Math.random() * areaH * 3 };
-      positions.set(node.id, pos);
-      placed.push(pos);
-    }
-
-    let maxX = NODE_W,
-      maxY = NODE_H;
-    for (const p of placed) {
-      maxX = Math.max(maxX, p.x + NODE_W);
-      maxY = Math.max(maxY, p.y + NODE_H);
-    }
-    return { positions, w: maxX + nodeSpacing, h: maxY + nodeSpacing };
+    fileNodes.forEach((node, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      positions.set(node.id, { x: col * (NODE_W + nodeSpacing), y: row * (NODE_H + nodeSpacing) });
+    });
+    const rows = Math.ceil(fileNodes.length / cols);
+    const w = cols * (NODE_W + nodeSpacing);
+    const h = rows * (NODE_H + nodeSpacing);
+    return { positions, w, h };
   }
 
   // 3. Sized インターフェース：サイズ情報 + 絶対座標コミット
@@ -535,7 +488,7 @@ export function computeFileGroupLayout(nodes: BoardNode[], _edges: BoardEdge[], 
   function processDir(dir: DirEntry): Sized {
     const children: Sized[] = [];
     for (const fileNodes of dir.files.values()) {
-      const { positions, w, h } = placeRandom(fileNodes);
+      const { positions, w, h } = placeInGrid(fileNodes);
       children.push({
         w,
         h,
@@ -553,7 +506,7 @@ export function computeFileGroupLayout(nodes: BoardNode[], _edges: BoardEdge[], 
 
   // file_path なしのノードは右端に配置
   if (noFile.length > 0) {
-    const { positions } = placeRandom(noFile);
+    const { positions } = placeInGrid(noFile);
     const ox = sized.w + groupSpacing;
     for (const [id, p] of positions) result.set(id, { x: ox + p.x, y: p.y });
   }
