@@ -39,7 +39,7 @@ const severityConfig = {
 };
 
 export function FeedbackCardItem({ card, isSelected, onClick, onChatOpen, onViewNodes, onRate, compact }: FeedbackCardItemProps) {
-  const { icon: Icon, label, dot, badge, border } = severityConfig[card.severity];
+  const { label, dot, badge, border } = severityConfig[card.severity];
   const hasRelatedTargets = (card.nodeIds?.length ?? 0) > 0 || (card.edgeIds?.length ?? 0) > 0;
 
   if (compact) {

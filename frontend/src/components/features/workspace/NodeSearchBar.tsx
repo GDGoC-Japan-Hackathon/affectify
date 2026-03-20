@@ -51,10 +51,6 @@ export function NodeSearchBar({ nodes, onSelect, onClose }: NodeSearchBarProps) 
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       onClose();
@@ -89,7 +85,10 @@ export function NodeSearchBar({ nodes, onSelect, onClose }: NodeSearchBarProps) 
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActiveIndex(0);
+            }}
             onKeyDown={handleKeyDown}
             placeholder="ノードを検索... (title / ファイルパス / シグネチャ)"
             className="flex-1 text-sm text-slate-800 placeholder-slate-400 outline-none bg-transparent"

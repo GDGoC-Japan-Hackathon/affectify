@@ -43,7 +43,7 @@ export function ReviewChat() {
   useEffect(() => {
     setResolutionNote(selectedCard?.resolutionNote ?? "");
     setPendingResolution(selectedCard?.resolved ? null : selectedCard?.resolution ?? null);
-  }, [selectedCard?.id, selectedCard?.resolutionNote]);
+  }, [selectedCard?.id, selectedCard?.resolution, selectedCard?.resolutionNote, selectedCard?.resolved]);
 
   const handleSend = () => {
     if (!input.trim() || !selectedCardId) return;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { useRouter } from "next/navigation";
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -181,7 +180,6 @@ function getPolygonBounds(points: Array<{ x: number; y: number }>) {
 }
 
 function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds, highlightedEdgeIds }: WhiteboardProps) {
-  const router = useRouter();
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
 
   const sccEdgeIds = useMemo(() => buildSccEdgeIds(boardNodes, boardEdges), [boardNodes, boardEdges]);
@@ -516,7 +514,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
 
   // 自動レイアウト
   const handleAutoLayout = useCallback(
-    async (_xGap = layoutXGap, _yGap = layoutYGap) => {
+    async () => {
       if (isLayoutAnimatingRef.current) return;
 
       const toastId = toast.loading("整理中...");
@@ -555,7 +553,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
         }
       }
     },
-    [fitView, layoutMode, layoutXGap, layoutYGap, pushHistorySnapshot, setEdges, setNodes, variantId],
+    [fitView, layoutMode, pushHistorySnapshot, setEdges, setNodes, variantId],
   );
 
   useEffect(() => {
@@ -1387,7 +1385,7 @@ function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds
 
               layoutClickTimeoutRef.current = window.setTimeout(() => {
                 setIsLayoutPanelOpen(false);
-                void handleAutoLayout(layoutXGap, layoutYGap);
+                void handleAutoLayout();
                 layoutClickTimeoutRef.current = null;
               }, 220);
             }}

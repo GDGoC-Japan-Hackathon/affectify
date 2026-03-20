@@ -8,10 +8,7 @@ CREATE TABLE "review_apply_jobs" (
   "started_at" timestamptz NULL,
   "finished_at" timestamptz NULL,
   "created_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "fk_review_apply_jobs_variant" FOREIGN KEY ("variant_id") REFERENCES "variants" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_review_apply_jobs_review_job" FOREIGN KEY ("review_job_id") REFERENCES "review_jobs" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_review_apply_jobs_requested_by" FOREIGN KEY ("requested_by") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT
+  PRIMARY KEY ("id")
 );
 
 CREATE INDEX "idx_review_apply_jobs_variant_id" ON "review_apply_jobs" ("variant_id");
