@@ -17,6 +17,7 @@ func toProtoTimestamp(t *time.Time) *timestamppb.Timestamp {
 		return nil
 	}
 
+	// DB / service 層の time.Time を protobuf Timestamp に寄せる。
 	return timestamppb.New(*t)
 }
 
@@ -25,6 +26,7 @@ func toProtoStruct(metadata datatypes.JSON) *structpb.Struct {
 		return nil
 	}
 
+	// JSONB は API では protobuf Struct として返す。
 	var payload map[string]any
 	if err := json.Unmarshal(metadata, &payload); err != nil {
 		return nil
@@ -43,6 +45,7 @@ func toProtoVariant(detail *service.VariantDetail) *apiv1.Variant {
 		return nil
 	}
 
+	// service が返す集約結果を API 返却用の Variant message に詰め替える。
 	var forkedFromVariantID *int64
 	if detail.Variant.ForkedFromVariantID != nil {
 		forkedFromVariantID = detail.Variant.ForkedFromVariantID
@@ -74,6 +77,7 @@ func toProtoUserSummary(user *entity.User) *apiv1.UserSummary {
 		return nil
 	}
 
+	// 軽量な一覧系レスポンスでは UserSummary に絞って返す。
 	return &apiv1.UserSummary{
 		Id:        user.ID,
 		Email:     user.Email,
@@ -82,11 +86,99 @@ func toProtoUserSummary(user *entity.User) *apiv1.UserSummary {
 	}
 }
 
+func toProtoProject(detail *service.ProjectDetail) *apiv1.Project {
+	if detail == nil || detail.Project == nil {
+		return nil
+	}
+
+	variants := make([]*apiv1.Variant, 0, len(detail.Variants))
+	for i := range detail.Variants {
+		variants = append(variants, toProtoVariant(&detail.Variants[i]))
+	}
+
+	members := make([]*apiv1.ProjectMember, 0, len(detail.Members))
+	for i := range detail.Members {
+		members = append(members, toProtoProjectMember(&detail.Members[i]))
+	}
+
+	return &apiv1.Project{
+		Id:            detail.Project.ID,
+		Name:          detail.Project.Name,
+		Description:   stringValue(detail.Project.Description),
+		OwnerId:       detail.Project.OwnerID,
+		Owner:         toProtoUserSummary(detail.Owner),
+		NodeCount:     detail.NodeCount,
+		AnalysisScore: detail.AnalysisScore,
+		Variants:      variants,
+		Members:       members,
+		CreatedAt:     timestamppb.New(detail.Project.CreatedAt),
+		UpdatedAt:     timestamppb.New(detail.Project.UpdatedAt),
+	}
+}
+
+func toProtoProjectMember(detail *service.ProjectMemberDetail) *apiv1.ProjectMember {
+	if detail == nil {
+		return nil
+	}
+
+	return &apiv1.ProjectMember{
+		ProjectId:   detail.Member.ProjectID,
+		UserId:      detail.Member.UserID,
+		AddedBy:     detail.Member.AddedBy,
+		Role:        string(detail.Member.Role),
+		JoinedAt:    timestamppb.New(time.Time(detail.Member.JoinedAt)),
+		User:        toProtoUserSummary(detail.User),
+		AddedByUser: toProtoUserSummary(detail.AddedByUser),
+	}
+}
+
+func toProtoDesignGuideSummary(detail *service.DesignGuideSummaryDetail) *apiv1.DesignGuideSummary {
+	if detail == nil || detail.Guide == nil {
+		return nil
+	}
+
+	return &apiv1.DesignGuideSummary{
+		Id:         detail.Guide.ID,
+		Name:       detail.Guide.Name,
+		Description:stringValue(detail.Guide.Description),
+		CreatedBy:  detail.Guide.CreatedBy,
+		Creator:    toProtoUserSummary(detail.Creator),
+		LikeCount:  detail.LikeCount,
+		CreatedAt:  timestamppb.New(detail.Guide.CreatedAt),
+		UpdatedAt:  timestamppb.New(detail.Guide.UpdatedAt),
+		Visibility: string(detail.Guide.Visibility),
+		IsTemplate: detail.Guide.IsTemplate,
+		LikedByMe:  detail.LikedByMe,
+	}
+}
+
+func toProtoDesignGuide(detail *service.DesignGuideDetail) *apiv1.DesignGuide {
+	if detail == nil || detail.Guide == nil {
+		return nil
+	}
+
+	return &apiv1.DesignGuide{
+		Id:         detail.Guide.ID,
+		Name:       detail.Guide.Name,
+		Description:stringValue(detail.Guide.Description),
+		Content:    detail.Guide.Content,
+		CreatedBy:  detail.Guide.CreatedBy,
+		Creator:    toProtoUserSummary(detail.Creator),
+		LikeCount:  detail.LikeCount,
+		CreatedAt:  timestamppb.New(detail.Guide.CreatedAt),
+		UpdatedAt:  timestamppb.New(detail.Guide.UpdatedAt),
+		Visibility: string(detail.Guide.Visibility),
+		IsTemplate: detail.Guide.IsTemplate,
+		LikedByMe:  detail.LikedByMe,
+	}
+}
+
 func toProtoVariantFile(file *entity.VariantFile) *apiv1.VariantFile {
 	if file == nil {
 		return nil
 	}
 
+	// variant 配下のファイル inventory をそのまま API へ出す。
 	return &apiv1.VariantFile{
 		Id:           file.ID,
 		VariantId:    file.VariantID,
@@ -105,6 +197,7 @@ func toProtoVariantDesignGuide(guide *entity.VariantDesignGuide) *apiv1.VariantD
 		return nil
 	}
 
+	// variant に適用中の設計書作業コピーを API 形式に変換する。
 	return &apiv1.VariantDesignGuide{
 		Id:                guide.ID,
 		VariantId:         guide.VariantID,
@@ -124,6 +217,7 @@ func toProtoNode(node *entity.Node) *apiv1.Node {
 		return nil
 	}
 
+	// node は metadata など DB 固有表現を含むので handler で変換する。
 	return &apiv1.Node{
 		Id:            node.ID,
 		VariantId:     node.VariantID,
@@ -146,6 +240,7 @@ func toProtoEdge(edge *entity.Edge) *apiv1.Edge {
 		return nil
 	}
 
+	// edge も DB entity をそのまま返さず API message に詰め替える。
 	return &apiv1.Edge{
 		Id:         edge.ID,
 		VariantId:  edge.VariantID,
@@ -164,6 +259,7 @@ func toProtoGraphBuildJob(job *entity.GraphBuildJob) *apiv1.GraphBuildJob {
 		return nil
 	}
 
+	// 非同期 job の状態は handler で string / timestamp を API 向けに整える。
 	return &apiv1.GraphBuildJob{
 		Id:           job.ID,
 		VariantId:    job.VariantID,
@@ -181,6 +277,7 @@ func toProtoLayoutJob(job *entity.LayoutJob) *apiv1.LayoutJob {
 		return nil
 	}
 
+	// layout job も graph build job と同じ考え方で変換する。
 	return &apiv1.LayoutJob{
 		Id:           job.ID,
 		VariantId:    job.VariantID,
@@ -199,6 +296,7 @@ func toProtoReviewJob(job *entity.ReviewJob) *apiv1.ReviewJob {
 		return nil
 	}
 
+	// review job の状態表示に必要な最小項目だけを API へ出す。
 	return &apiv1.ReviewJob{
 		Id:           job.ID,
 		VariantId:    job.VariantID,
@@ -216,6 +314,7 @@ func toProtoReviewFeedback(feedback *entity.ReviewFeedback) *apiv1.ReviewFeedbac
 		return nil
 	}
 
+	// review card は enum 風の内部型を string 化して frontend に渡す。
 	return &apiv1.ReviewFeedback{
 		Id:               feedback.ID,
 		ReviewJobId:      feedback.ReviewJobID,
@@ -238,6 +337,7 @@ func toProtoReviewFeedbackTarget(target *entity.ReviewFeedbackTarget) *apiv1.Rev
 		return nil
 	}
 
+	// feedback が指している node / edge / file 参照を API に渡す。
 	return &apiv1.ReviewFeedbackTarget{
 		Id:         target.ID,
 		FeedbackId: target.FeedbackID,
@@ -251,6 +351,7 @@ func toProtoReviewFeedbackChat(chat *entity.ReviewFeedbackChat) *apiv1.ReviewFee
 		return nil
 	}
 
+	// chat 履歴は created_by と timestamp を含めて UI がそのまま描画できる形にする。
 	return &apiv1.ReviewFeedbackChat{
 		Id:         chat.ID,
 		FeedbackId: chat.FeedbackID,

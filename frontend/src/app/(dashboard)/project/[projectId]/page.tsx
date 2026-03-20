@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { mockProjects, mockUser, mockUsers } from '@/data/mockData';
-import { Variant } from '@/types/type';
+import { Project, Variant } from '@/types/type';
 import { CreateVariantDialog } from '@/components/features/project/CreateVariantDialog';
 import { VariantCard, getScoreColor } from '@/components/features/project/VariantCard';
 import { ManageMembersDialog } from '@/components/features/project/ManageMembersDialog';
@@ -23,20 +22,67 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { getProject } from '@/lib/api/projects';
+import { createVariant } from '@/lib/api/variants';
+import { getMe } from '@/lib/api/users';
 
 export default function ProjectDetail() {
-  const { projectId } = useParams();
-  const project = mockProjects.find(p => p.id === projectId);
-
-  const [variants, setVariants] = useState<Variant[]>(project?.variants || []);
+  const params = useParams<{ projectId: string }>();
+  const projectId = Array.isArray(params?.projectId) ? params.projectId[0] : params?.projectId;
+  const router = useRouter();
+  const [project, setProject] = useState<Project | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [variants, setVariants] = useState<Variant[]>([]);
   const [compareVariants, setCompareVariants] = useState<string[]>([]);
-  const [members, setMembers] = useState<string[]>(project?.members || []);
+  const [memberSummaries, setMemberSummaries] = useState<Project['memberSummaries']>([]);
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId || Array.isArray(projectId)) return;
+
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setIsLoading(true);
+        const [result, meResponse] = await Promise.all([
+          getProject(projectId),
+          getMe(),
+        ]);
+        if (cancelled) return;
+        setProject(result);
+        setVariants(result.variants);
+        setMemberSummaries(result.memberSummaries ?? []);
+        setCurrentUserId(meResponse.user?.id?.toString() ?? null);
+      } catch (error) {
+        if (cancelled) return;
+        toast.error(error instanceof Error ? error.message : 'プロジェクトの取得に失敗しました');
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const comparedVariants = useMemo(
     () => variants.filter(b => compareVariants.includes(b.id)),
     [variants, compareVariants]
   );
+
+  if (isLoading) {
+    return (
+        <div className="p-6">
+          <p>プロジェクトを読み込み中...</p>
+        </div>
+    );
+  }
 
   if (!project) {
     return (
@@ -48,23 +94,23 @@ export default function ProjectDetail() {
 
   const mainVariant = variants.find(b => b.isMain);
   const otherVariants = variants.filter(b => !b.isMain);
+  const isOwner = currentUserId !== null && project.ownerId === currentUserId;
 
-  const handleCreateVariant = (name: string, description: string, baseVariantName: string) => {
-    const base = variants.find(b => b.name === baseVariantName);
-    const newVariant: Variant = {
-      id: `variant-${Date.now()}`,
-      name,
-      description,
-      createdBy: mockUser.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      nodeCount: base?.nodeCount || 0,
-      analysisScore: undefined,
-      isMain: false,
-      parentVariantId: base?.id,
-    };
-    setVariants([...variants, newVariant]);
-    toast.success(`設計案「${name}」を作成しました`);
+  const handleCreateVariant = async (name: string, description: string, baseVariantId: string, designGuideId?: string) => {
+    try {
+      const created = await createVariant({
+        projectId: project.id,
+        name,
+        description,
+        forkedFromVariantId: baseVariantId || undefined,
+        baseDesignGuideId: designGuideId,
+      });
+      setVariants((prev) => [...prev, created]);
+      toast.success(`設計案「${name}」を作成しました`);
+      router.push(`/workspace/${created.id}/import`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '設計案の作成に失敗しました');
+    }
   };
 
   const handleToggleCompare = (variantId: string) => {
@@ -99,7 +145,7 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-6 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  <span>{members.length}人のメンバー</span>
+                  <span>{(memberSummaries ?? []).length}人のメンバー</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
@@ -122,24 +168,21 @@ export default function ProjectDetail() {
               {/* Member Avatars */}
               <div className="flex items-center">
                 <div className="flex -space-x-2">
-                  {members.slice(0, 3).map((memberId, i) => {
-                    const user = mockUsers.find((u) => u.id === memberId);
-                    return (
-                      <Avatar key={memberId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
-                        <AvatarImage src={user?.avatar} />
-                        <AvatarFallback className="text-xs bg-gray-200">{user?.name?.[0] ?? '?'}</AvatarFallback>
-                      </Avatar>
-                    );
-                  })}
+                  {(memberSummaries ?? []).slice(0, 3).map((member, i) => (
+                    <Avatar key={member.userId} className="w-8 h-8 border-2 border-white bg-gray-100" style={{ zIndex: 3 - i }}>
+                      <AvatarImage src={member.user?.avatar} />
+                      <AvatarFallback className="text-xs bg-gray-200">{member.user?.name?.[0] ?? '?'}</AvatarFallback>
+                    </Avatar>
+                  ))}
                 </div>
-                {members.length > 3 && (
+                {(memberSummaries ?? []).length > 3 && (
                   <span className="ml-2 text-sm text-gray-500">
-                    +他{members.length - 3}名
+                    +他{(memberSummaries ?? []).length - 3}名
                   </span>
                 )}
               </div>
 
-              {project.ownerId === mockUser.id ? (
+              {isOwner ? (
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsManageOpen(true)}>
                   <Settings className="w-4 h-4" />
                   管理
@@ -150,6 +193,8 @@ export default function ProjectDetail() {
                   メンバー
                 </Button>
               )}
+
+              <CreateVariantDialog variants={variants} onCreateVariant={handleCreateVariant} />
 
               {compareVariants.length > 1 && (
                 <Link href={`/compare/${project.id}?variants=${compareVariants.join(',')}`}>
@@ -166,12 +211,11 @@ export default function ProjectDetail() {
         {/* Main Variant */}
         {mainVariant && (
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-600" />
                 メイン設計案
               </h2>
-              <CreateVariantDialog variants={variants} onCreateVariant={handleCreateVariant} />
             </div>
             <VariantCard
               variant={mainVariant}
@@ -245,9 +289,11 @@ export default function ProjectDetail() {
         <ManageMembersDialog
           open={isManageOpen}
           onOpenChange={setIsManageOpen}
-          memberIds={members}
-          onMembersChange={setMembers}
-          isOwner={project.ownerId === mockUser.id}
+          projectId={project.id}
+          memberSummaries={memberSummaries ?? []}
+          currentUserId={currentUserId ?? ''}
+          isOwner={isOwner}
+          onMembersChange={setMemberSummaries}
         />
       </div>
   );

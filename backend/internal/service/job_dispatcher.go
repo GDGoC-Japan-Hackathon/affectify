@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 
 	run "google.golang.org/api/run/v2"
+	"gorm.io/gorm"
 
 	"github.com/GDGoC-Japan-Hackathon/affectify/backend/internal/config"
 )
@@ -21,6 +23,43 @@ func (NoopJobDispatcher) DispatchGraphBuildJob(context.Context, int64) error { r
 func (NoopJobDispatcher) DispatchLayoutJob(context.Context, int64) error     { return nil }
 func (NoopJobDispatcher) DispatchReviewJob(context.Context, int64) error     { return nil }
 
+type LocalJobDispatcher struct {
+	workerService *JobWorkerService
+}
+
+func NewLocalJobDispatcher(db *gorm.DB) JobDispatcher {
+	return &LocalJobDispatcher{
+		workerService: NewJobWorkerService(db),
+	}
+}
+
+func (d *LocalJobDispatcher) DispatchGraphBuildJob(ctx context.Context, jobID int64) error {
+	go func() {
+		if err := d.workerService.RunGraphBuildJob(context.Background(), jobID); err != nil {
+			log.Printf("local graph-build job %d failed: %v", jobID, err)
+		}
+	}()
+	return nil
+}
+
+func (d *LocalJobDispatcher) DispatchLayoutJob(ctx context.Context, jobID int64) error {
+	go func() {
+		if err := d.workerService.RunLayoutJob(context.Background(), jobID); err != nil {
+			log.Printf("local layout job %d failed: %v", jobID, err)
+		}
+	}()
+	return nil
+}
+
+func (d *LocalJobDispatcher) DispatchReviewJob(ctx context.Context, jobID int64) error {
+	go func() {
+		if err := d.workerService.RunReviewJob(context.Background(), jobID); err != nil {
+			log.Printf("local review job %d failed: %v", jobID, err)
+		}
+	}()
+	return nil
+}
+
 type CloudRunJobDispatcher struct {
 	projectID         string
 	region            string
@@ -29,9 +68,9 @@ type CloudRunJobDispatcher struct {
 	reviewJobName     string
 }
 
-func NewJobDispatcher(cfg config.JobRuntimeConfig) JobDispatcher {
+func NewJobDispatcher(db *gorm.DB, cfg config.JobRuntimeConfig) JobDispatcher {
 	if cfg.ProjectID == "" || cfg.Region == "" {
-		return NoopJobDispatcher{}
+		return NewLocalJobDispatcher(db)
 	}
 
 	return &CloudRunJobDispatcher{

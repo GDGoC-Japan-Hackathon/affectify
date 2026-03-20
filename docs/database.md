@@ -20,6 +20,8 @@ cd /Users/siraiyuto/Projects/affectify/backend
 docker compose up --build
 ```
 
+frontend / backend を含むローカル起動全体は [local-development.md](/Users/siraiyuto/Projects/affectify/docs/local-development.md) を参照。
+
 ホスト側の公開ポート:
 
 - PostgreSQL: `5433`

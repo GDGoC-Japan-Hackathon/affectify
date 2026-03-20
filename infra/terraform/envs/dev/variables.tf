@@ -32,6 +32,18 @@ variable "backend_image_tag" {
   default     = "dev"
 }
 
+variable "worker_image_name" {
+  description = "Artifact Registry 上の worker image 名"
+  type        = string
+  default     = "worker"
+}
+
+variable "worker_image_tag" {
+  description = "Cloud Run Job が参照する worker image tag。git sha を推奨"
+  type        = string
+  default     = "dev"
+}
+
 variable "cloud_run_service_name" {
   description = "Cloud Run service name"
   type        = string

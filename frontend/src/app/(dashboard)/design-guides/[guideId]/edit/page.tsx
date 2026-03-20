@@ -1,36 +1,81 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Editor from '@monaco-editor/react';
-import {
-  Save,
-  Eye,
-  Code,
-  ArrowLeft
-} from 'lucide-react';
-import { mockDesignGuides } from '@/data/mockDesignGuides';
+import { ArrowLeft, Code, Eye, Save } from 'lucide-react';
+import { getDesignGuide, updateDesignGuide } from '@/lib/api/design-guides';
+import type { DesignGuideVisibility } from '@/types/type';
+import { toast } from 'sonner';
 
 type ViewMode = 'edit' | 'preview' | 'split';
 
 export default function DesignGuideEditor() {
-  const { guideId } = useParams();
+  const { guideId } = useParams<{ guideId: string }>();
   const router = useRouter();
-  const isNewGuide = guideId === 'new';
-  const existingGuide = isNewGuide
-    ? null
-    : mockDesignGuides.find(g => g.id === guideId);
 
-  const [name, setName] = useState(existingGuide?.name || '');
-  const [description, setDescription] = useState(existingGuide?.description || '');
-  const [content, setContent] = useState(existingGuide?.content || getDefaultTemplate());
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [content, setContent] = useState('');
+  const [visibility, setVisibility] = useState<DesignGuideVisibility>('private');
   const [viewMode, setViewMode] = useState<ViewMode>('split');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    console.log('設計書を保存:', { name, description, content });
-    // 保存処理
-    router.push('/design-guides');
+  useEffect(() => {
+    if (!guideId) return;
+    let cancelled = false;
+
+    getDesignGuide(guideId)
+      .then((guide) => {
+        if (cancelled) return;
+        setName(guide.name);
+        setDescription(guide.description);
+        setContent(guide.content);
+        setVisibility(guide.visibility);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(error instanceof Error ? error.message : '設計書の取得に失敗しました');
+        router.push('/design-guides');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [guideId, router]);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      toast.error('設計書名を入力してください');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await updateDesignGuide({
+        id: guideId,
+        name: name.trim(),
+        description: description.trim(),
+        content,
+        visibility,
+      });
+      toast.success('保存しました');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '保存に失敗しました');
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
@@ -84,45 +129,52 @@ export default function DesignGuideEditor() {
           </div>
 
           <button
-            onClick={() => router.back()}
-            className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700"
+            onClick={() => void handleSave()}
+            disabled={isSaving}
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
           >
             <Save className="size-4" />
-            保存
+            {isSaving ? '保存中...' : '保存'}
           </button>
         </div>
       </header>
 
       {/* メタ情報バー */}
       <div className="border-b border-slate-200 bg-white px-6 py-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">説明</label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="この設計書の説明を入力"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-          />
+        <div className="flex items-end gap-4">
+          <div className="flex-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700">説明</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="この設計書の説明を入力"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">公開設定</label>
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as DesignGuideVisibility)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            >
+              <option value="private">非公開</option>
+              <option value="public">公開</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* エディタエリア */}
       <div className="flex flex-1 overflow-hidden">
-        {/* マークダウンエディタ */}
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={viewMode === 'split' ? 'w-1/2 border-r border-slate-200' : 'w-full'}>
             <Editor
               height="100%"
               defaultLanguage="markdown"
               value={content}
-              onChange={(value) => setContent(value || '')}
+              onChange={(value) => setContent(value ?? '')}
               theme="vs-light"
               options={{
                 minimap: { enabled: false },
@@ -134,8 +186,6 @@ export default function DesignGuideEditor() {
             />
           </div>
         )}
-
-        {/* プレビュー */}
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div className={`overflow-auto bg-white ${viewMode === 'split' ? 'w-1/2' : 'w-full'}`}>
             <div className="prose prose-slate max-w-none p-8">
@@ -153,10 +203,10 @@ function MarkdownPreview({ content }: { content: string }) {
   const elements: React.ReactElement[] = [];
   let inCodeBlock = false;
   let codeBlockContent: string[] = [];
+
   lines.forEach((line, index) => {
     if (line.startsWith('```')) {
       if (inCodeBlock) {
-        // コードブロック終了
         elements.push(
           <pre key={index} className="my-4 overflow-x-auto rounded-lg bg-slate-900 p-4">
             <code className="text-sm text-slate-100">{codeBlockContent.join('\n')}</code>
@@ -165,7 +215,6 @@ function MarkdownPreview({ content }: { content: string }) {
         codeBlockContent = [];
         inCodeBlock = false;
       } else {
-        // コードブロック開始
         inCodeBlock = true;
       }
     } else if (inCodeBlock) {
@@ -182,67 +231,16 @@ function MarkdownPreview({ content }: { content: string }) {
       elements.push(<li key={index} className="ml-4">{line.substring(2)}</li>);
     } else if (line.match(/^\d+\. /)) {
       const match = line.match(/^\d+\. (.+)$/);
-      if (match) {
-        elements.push(<li key={index} className="ml-4">{match[1]}</li>);
-      }
+      if (match) elements.push(<li key={index} className="ml-4">{match[1]}</li>);
     } else if (line.trim() === '') {
       elements.push(<br key={index} />);
     } else {
-      // 太字とコードのインライン処理
-      const processedLine = line
+      const processed = line
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/`(.+?)`/g, '<code class="rounded bg-slate-100 px-1.5 py-0.5 text-sm">$1</code>');
-      elements.push(<p key={index} className="mb-2" dangerouslySetInnerHTML={{ __html: processedLine }} />);
+      elements.push(<p key={index} className="mb-2" dangerouslySetInnerHTML={{ __html: processed }} />);
     }
   });
 
   return <>{elements}</>;
-}
-
-function getDefaultTemplate(): string {
-  return `# 設計ガイドライン
-
-## 概要
-このセクションに設計の基本方針を記述します。
-
-## アーキテクチャ原則
-
-### 原則1: レイヤード アーキテクチャ
-- プレゼンテーション層
-- ビジネスロジック層
-- データアクセス層
-
-### 原則2: 依存関係の管理
-- 上位層から下位層への単方向依存
-- 循環依存の禁止
-
-## コーディング規約
-
-### 命名規則
-- クラス: PascalCase
-- 関数: camelCase
-- 定数: UPPER_SNAKE_CASE
-
-### 品質基準
-- テストカバレッジ: 80%以上
-- 関数の行数: 50行以内
-- 循環的複雑度: 10以下
-
-## 禁止事項
-- グローバル変数の使用
-- マジックナンバーの使用
-- 過度なネストの使用
-
-## 推奨パターン
-\`\`\`typescript
-// 推奨される書き方の例
-const example = () => {
-  // コード例
-};
-\`\`\`
-
-## 参考資料
-- [リンク1](https://example.com)
-- [リンク2](https://example.com)
-`;
 }

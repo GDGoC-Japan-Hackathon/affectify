@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useRouter } from "next/navigation";
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, useReactFlow, ReactFlowProvider, type Node, type Edge, type NodeTypes, type EdgeTypes, type NodeChange, MarkerType } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -12,13 +13,22 @@ import { DrawingCard } from "./DrawingCard";
 import { AnimatedEdge } from "./AnimatedEdge";
 import { FileTreePanel } from "./FileTreePanel";
 import { CodeViewerWindow } from "./CodeViewerWindow";
-import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, Wand2, SaveAll, Eraser } from "lucide-react";
+import { FolderTree, Focus, FoldVertical, LayoutDashboard, MousePointer2, RotateCcw, RotateCw, StickyNote, Image as ImageIcon, Pencil, PenTool, SaveAll, Eraser } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { computeLayout, computeCircularLayout, computeRandomLayout, computeSCCs } from "@/utils/graphLayout";
+import { toast } from "sonner";
+import {
+  createLayoutJob,
+  getLayoutJob,
+  getVariantWorkspace,
+} from "@/lib/api/variants";
 
 interface WhiteboardProps {
+  variantId: string;
   boardNodes: BoardNode[];
   boardEdges: BoardEdge[];
+  highlightedNodeIds?: Set<string>;
+  highlightedEdgeIds?: Set<string>;
 }
 
 interface ViewerWindow {
@@ -38,29 +48,6 @@ interface HistorySnapshot {
   checkpoints: NamedCheckpoint[];
   selectedCheckpointId: string;
   boardDrawPaths: BoardDrawPath[];
-}
-
-interface ImportApiResponse {
-  nodes?: BoardNode[];
-  edges?: BoardEdge[];
-  warnings?: string;
-  error?: string;
-  details?: string;
-}
-
-interface ImportDirectoryEntry {
-  name: string;
-  fullPath: string;
-  relativePath: string;
-}
-
-interface ImportDirectoryApiResponse {
-  root?: string;
-  currentPath?: string;
-  currentRelativePath?: string;
-  parentPath?: string | null;
-  directories?: ImportDirectoryEntry[];
-  error?: string;
 }
 
 interface BoardDrawPath {
@@ -161,7 +148,8 @@ function getPolygonBounds(points: Array<{ x: number; y: number }>) {
   return { minX, minY, maxX, maxY };
 }
 
-function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
+function WhiteboardInner({ variantId, boardNodes, boardEdges, highlightedNodeIds, highlightedEdgeIds }: WhiteboardProps) {
+  const router = useRouter();
   const initialNodes = useMemo(() => toFlowNodes(boardNodes), [boardNodes]);
 
   const sccEdgeIds = useMemo(() => buildSccEdgeIds(boardNodes, boardEdges), [boardNodes, boardEdges]);
@@ -170,6 +158,20 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // AIレビューハイライト
+  useEffect(() => {
+    if (!highlightedNodeIds || highlightedNodeIds.size === 0) {
+      setNodes((nds) => nds.map((n) => ({ ...n, style: { ...n.style, opacity: 1 } })));
+      return;
+    }
+    setNodes((nds) =>
+      nds.map((n) => ({
+        ...n,
+        style: { ...n.style, opacity: highlightedNodeIds.has(n.id) ? 1 : 0.2 },
+      }))
+    );
+  }, [highlightedNodeIds, setNodes]);
   const reactFlow = useReactFlow();
   const { fitView } = reactFlow;
 
@@ -188,14 +190,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
   const [circularNodeRadiusFactor, setCircularNodeRadiusFactor] = useState(35);
   const [isLayoutPanelOpen, setIsLayoutPanelOpen] = useState(false);
   const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [isImportPickerOpen, setIsImportPickerOpen] = useState(false);
-  const [importPickerLoading, setImportPickerLoading] = useState(false);
-  const [importPickerError, setImportPickerError] = useState<string | null>(null);
-  const [importPickerRoot, setImportPickerRoot] = useState("");
-  const [importPickerCurrentPath, setImportPickerCurrentPath] = useState("");
-  const [importPickerParentPath, setImportPickerParentPath] = useState<string | null>(null);
-  const [importPickerDirectories, setImportPickerDirectories] = useState<ImportDirectoryEntry[]>([]);
   const [fabOpen, setFabOpen] = useState(false);
   const [fabOffset, setFabOffset] = useState({ x: 0, y: 0 });
   const fabDragRef = useRef({ dragging: false, startClientX: 0, startClientY: 0, startOffsetX: 0, startOffsetY: 0, moved: false });
@@ -488,74 +482,46 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
   // 自動レイアウト
   const handleAutoLayout = useCallback(
-    (xGap = layoutXGap, yGap = layoutYGap) => {
+    async (_xGap = layoutXGap, _yGap = layoutYGap) => {
       if (isLayoutAnimatingRef.current) return;
 
-      pushHistorySnapshot();
+      const toastId = toast.loading("整理中...");
+      try {
+        isLayoutAnimatingRef.current = true;
+        pushHistorySnapshot();
 
-      const boardNodes = nodes.map((n) => n.data as unknown as BoardNode);
-      const boardEdges = edges.map((e) => ({
-        id: e.id,
-        from_node_id: e.source,
-        to_node_id: e.target,
-        kind: "call" as const,
-        style: "solid" as const,
-      }));
-      const targetPositions =
-        layoutMode === "circular"
-          ? computeCircularLayout(boardNodes, boardEdges, { baseRadius: circularBaseRadius, layerDistance: circularLayerDistance, nodeRadiusFactor: circularNodeRadiusFactor })
-          : layoutMode === "random"
-            ? computeRandomLayout(boardNodes, boardEdges, { spacing: randomSpacingRef.current })
-            : computeLayout(boardNodes, boardEdges, { xGap, yGap });
-      const startPositions = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
+        const job = await createLayoutJob(variantId, layoutMode);
+        let latestJob = job;
 
-      const durationMs = 700;
-      const startAt = performance.now();
-      isLayoutAnimatingRef.current = true;
-
-      // 開始時に少し引いて全体が動く余地を作る
-      fitView({ padding: 0.35, duration: 220 });
-
-      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-
-      const tick = (now: number) => {
-        const t = Math.min(1, (now - startAt) / durationMs);
-        const p = easeOutCubic(t);
-
-        setNodes((nds) =>
-          nds.map((n) => {
-            const from = startPositions.get(n.id);
-            const to = targetPositions.get(n.id);
-            if (!from || !to) return n;
-            return {
-              ...n,
-              position: {
-                x: from.x + (to.x - from.x) * p,
-                y: from.y + (to.y - from.y) * p,
-              },
-            };
-          }),
-        );
-
-        if (t < 1) {
-          layoutAnimFrameRef.current = requestAnimationFrame(tick);
-          return;
+        while (latestJob.status === "queued" || latestJob.status === "running") {
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          latestJob = await getLayoutJob(job.id);
         }
 
-        isLayoutAnimatingRef.current = false;
-        layoutAnimFrameRef.current = null;
+        if (latestJob.status !== "succeeded") {
+          throw new Error(latestJob.errorMessage || "layout job failed");
+        }
+
+        const workspace = await getVariantWorkspace(variantId);
+        const refreshedNodes = workspace.nodes;
+        const refreshedEdges = workspace.edges;
+        const refreshedSccIds = buildSccEdgeIds(refreshedNodes, refreshedEdges);
+
+        setNodes(toFlowNodes(refreshedNodes));
+        setEdges(toFlowEdges(refreshedEdges, refreshedSccIds));
         fitView({ padding: 0.2, duration: 420 });
-      };
-
-      if (layoutAnimFrameRef.current !== null) {
-        cancelAnimationFrame(layoutAnimFrameRef.current);
+        toast.success("整理が完了しました", { id: toastId });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "レイアウトに失敗しました", { id: toastId });
+      } finally {
+        isLayoutAnimatingRef.current = false;
+        if (layoutAnimFrameRef.current !== null) {
+          cancelAnimationFrame(layoutAnimFrameRef.current);
+          layoutAnimFrameRef.current = null;
+        }
       }
-      layoutAnimFrameRef.current = requestAnimationFrame(tick);
-
-      // TODO: APIが追加されたら以下でDBのx,yを保存する
-      // targetPositions.forEach((pos, nodeId) => updateNodePosition(nodeId, pos.x, pos.y));
     },
-    [nodes, edges, setNodes, fitView, layoutXGap, layoutYGap, layoutMode, pushHistorySnapshot, circularBaseRadius, circularLayerDistance, circularNodeRadiusFactor],
+    [fitView, layoutMode, layoutXGap, layoutYGap, pushHistorySnapshot, setEdges, setNodes, variantId],
   );
 
   useEffect(() => {
@@ -804,120 +770,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       }
     },
     [nodes, fitView],
-  );
-
-  const loadImportDirectories = useCallback(async (targetPath?: string) => {
-    try {
-      setImportPickerLoading(true);
-      setImportPickerError(null);
-      const query = targetPath ? `?path=${encodeURIComponent(targetPath)}` : "";
-      const response = await fetch(`/api/workspace/directories${query}`);
-      const payload = (await response.json()) as ImportDirectoryApiResponse;
-      if (!response.ok) {
-        throw new Error(payload.error || "directory list fetch failed");
-      }
-
-      setImportPickerRoot(payload.root || "");
-      setImportPickerCurrentPath(payload.currentPath || "");
-      setImportPickerParentPath(payload.parentPath ?? null);
-      setImportPickerDirectories(payload.directories || []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "directory list fetch failed";
-      setImportPickerError(message);
-    } finally {
-      setImportPickerLoading(false);
-    }
-  }, []);
-
-  const openImportPicker = useCallback(() => {
-    setIsImportPickerOpen(true);
-    void loadImportDirectories();
-  }, [loadImportDirectories]);
-
-  const handleImportFromFolder = useCallback(
-    async (folderPath: string) => {
-      if (!folderPath) {
-        window.alert("フォルダパスが空です。");
-        return;
-      }
-
-      try {
-        setIsImporting(true);
-
-        const response = await fetch("/api/workspace/import", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ folderPath }),
-        });
-
-        const payload = (await response.json()) as ImportApiResponse;
-        if (!response.ok) {
-          throw new Error(payload.error || payload.details || "import failed");
-        }
-
-        const importedNodes = (payload.nodes || []).map((n) => ({
-          id: n.id,
-          kind: n.kind,
-          title: n.title,
-          file_path: n.file_path,
-          signature: n.signature,
-          receiver: n.receiver,
-          x: Number.isFinite(n.x) ? n.x : 0,
-          y: Number.isFinite(n.y) ? n.y : 0,
-          code_text: n.code_text || "",
-        }));
-
-        const importedEdges = (payload.edges || []).map((e, idx) => ({
-          id: e.id || `edge-${idx + 1}`,
-          from_node_id: e.from_node_id,
-          to_node_id: e.to_node_id,
-          kind: e.kind || "call",
-          style: e.style || "solid",
-        }));
-
-        if (importedNodes.length === 0) {
-          window.alert("解析結果にノードがありませんでした。");
-          return;
-        }
-
-        const layoutPositions = computeLayout(importedNodes, importedEdges, {
-          xGap: layoutXGap,
-          yGap: layoutYGap,
-        });
-        const positionedNodes = importedNodes.map((node) => {
-          const pos = layoutPositions.get(node.id);
-          return pos ? { ...node, x: pos.x, y: pos.y } : node;
-        });
-
-        const sccIds = buildSccEdgeIds(positionedNodes, importedEdges);
-
-        pushHistorySnapshot();
-        setNodes(toFlowNodes(positionedNodes));
-        setEdges(toFlowEdges(importedEdges, sccIds));
-        setCheckpoints([]);
-        setSelectedCheckpointId("");
-        setBoardDrawPaths([]);
-        setLiveBoardDrawPath(null);
-        setIsSelectionMode(false);
-        setIsFreeDrawMode(false);
-        setIsEraseMode(false);
-        setFabOpen(false);
-
-        window.setTimeout(() => {
-          fitView({ padding: 0.2, duration: 450 });
-        }, 40);
-
-        if (payload.warnings) {
-          console.warn("import warnings:\n", payload.warnings);
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "import failed";
-        window.alert(`Importに失敗しました: ${message}`);
-      } finally {
-        setIsImporting(false);
-      }
-    },
-    [layoutXGap, layoutYGap, pushHistorySnapshot, setNodes, setEdges, fitView],
   );
 
   const miniMapNodeColor = useCallback((node: Node) => {
@@ -1336,7 +1188,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {/* 左上：ファイルツリーボタン（パネル閉時のみ表示） */}
       <AnimatePresence>
         {!fileTreeOpen && (
-          <motion.button initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} style={{ transformOrigin: "top left" }} onClick={() => setFileTreeOpen(true)} className="absolute top-4 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
+          <motion.button initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} style={{ transformOrigin: "top left" }} onClick={() => setFileTreeOpen(true)} className="absolute top-16 left-4 z-40 bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors" title="ファイルツリー">
             <FolderTree className="size-5 text-gray-700" />
           </motion.button>
         )}
@@ -1439,18 +1291,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
       {/* 右上コントロール */}
       <div className="absolute top-4 right-4 z-40 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              openImportPicker();
-            }}
-            disabled={isImporting}
-            className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="フォルダを解析してホワイトボードへImport"
-          >
-            <Wand2 className="size-5 text-gray-700" />
-          </button>
-
-          <button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
+<button onClick={undo} disabled={!canUndo} className="bg-white border border-gray-200 rounded-lg p-2 shadow-md hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl/Cmd+Z)">
             <RotateCcw className="size-5 text-gray-700" />
           </button>
 
@@ -1512,7 +1353,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
 
               layoutClickTimeoutRef.current = window.setTimeout(() => {
                 setIsLayoutPanelOpen(false);
-                handleAutoLayout(layoutXGap, layoutYGap);
+                void handleAutoLayout(layoutXGap, layoutYGap);
                 layoutClickTimeoutRef.current = null;
               }, 220);
             }}
@@ -1578,7 +1419,7 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
                 className="mb-3 w-full"
               />
               <button
-                onClick={() => handleAutoLayout()}
+                onClick={() => void handleAutoLayout()}
                 className="w-full rounded-md border border-blue-300 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
               >
                 もう一度ランダム配置
@@ -1686,73 +1527,6 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
         )}
       </div>
 
-      {isImportPickerOpen && (
-        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/30 p-4" onClick={() => setIsImportPickerOpen(false)}>
-          <div className="w-full max-w-xl rounded-xl border border-gray-200 bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-800">解析対象フォルダを選択</h3>
-              <button onClick={() => setIsImportPickerOpen(false)} className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50" type="button">
-                閉じる
-              </button>
-            </div>
-
-            <div className="mb-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 break-all">現在: {importPickerCurrentPath || "(読み込み中)"}</div>
-
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <button onClick={() => void loadImportDirectories(importPickerRoot || undefined)} disabled={importPickerLoading || !importPickerRoot} className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40" type="button">
-                ルートへ
-              </button>
-              <button
-                onClick={() => {
-                  if (importPickerParentPath) void loadImportDirectories(importPickerParentPath);
-                }}
-                disabled={importPickerLoading || !importPickerParentPath}
-                className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                type="button"
-              >
-                1つ上へ
-              </button>
-              <button onClick={() => void loadImportDirectories(importPickerCurrentPath || undefined)} disabled={importPickerLoading} className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40" type="button">
-                再読み込み
-              </button>
-            </div>
-
-            <div className="mb-3 h-64 overflow-y-auto rounded-md border border-gray-200">
-              {importPickerLoading && <div className="px-3 py-2 text-xs text-gray-500">読み込み中...</div>}
-              {!importPickerLoading && importPickerDirectories.length === 0 && <div className="px-3 py-2 text-xs text-gray-500">サブフォルダがありません。</div>}
-              {!importPickerLoading &&
-                importPickerDirectories.map((dir) => (
-                  <button key={dir.fullPath} onClick={() => void loadImportDirectories(dir.fullPath)} className="flex w-full items-center justify-between border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 last:border-b-0" type="button">
-                    <span className="truncate">{dir.name}</span>
-                    <span className="ml-3 shrink-0 text-[11px] text-gray-400">{dir.relativePath}</span>
-                  </button>
-                ))}
-            </div>
-
-            {importPickerError && <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">{importPickerError}</div>}
-
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setIsImportPickerOpen(false)} className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50" type="button">
-                キャンセル
-              </button>
-              <button
-                onClick={() => {
-                  const selectedPath = importPickerCurrentPath;
-                  if (!selectedPath) return;
-                  setIsImportPickerOpen(false);
-                  void handleImportFromFolder(selectedPath);
-                }}
-                disabled={isImporting || importPickerLoading || !importPickerCurrentPath}
-                className="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                type="button"
-              >
-                このフォルダを解析
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={edges}
@@ -1779,7 +1553,9 @@ function WhiteboardInner({ boardNodes, boardEdges }: WhiteboardProps) {
           const allAtOrigin = nodes.every((n) => n.position.x === 0 && n.position.y === 0);
           if (allAtOrigin && nodes.length > 1) {
             hasAutoLayoutedRef.current = true;
-            setTimeout(() => handleAutoLayout(), 150);
+            setTimeout(() => {
+              void handleAutoLayout();
+            }, 150);
           }
         }}
       >

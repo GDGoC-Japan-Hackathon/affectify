@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BookOpen,
@@ -16,7 +16,8 @@ import {
   Clock,
   Folder,
 } from 'lucide-react';
-import { mockDesignGuides } from '@/data/mockDesignGuides';
+import { listDesignGuides, likeDesignGuide, unlikeDesignGuide } from '@/lib/api/design-guides';
+import { getMe } from '@/lib/api/users';
 import { DesignGuide } from '@/types/type';
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 type TabType = 'templates' | 'community' | 'my-guides' | 'liked';
 
@@ -34,48 +36,124 @@ export default function DesignGuides() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showLikedDialog, setShowLikedDialog] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement>(null);
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'likes'>('recent');
   const [sortOpen, setSortOpen] = useState(false);
 
-  const currentUserId = 'user-1';
+  const [guides, setGuides] = useState<DesignGuide[]>([]);
+  const [likedGuides, setLikedGuides] = useState<DesignGuide[]>([]);
+  const [likedGuideIds, setLikedGuideIds] = useState<Set<string>>(new Set());
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // モック: user-1 がいいねしている設計書ID
-  const [likedGuideIds, setLikedGuideIds] = useState<Set<string>>(
-    new Set(['guide-2', 'guide-4'])
-  );
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) {
+        setCreateMenuOpen(false);
+      }
+    };
+    if (createMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [createMenuOpen]);
 
-  const toggleLike = (guideId: string) => {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setIsLoading(true);
+        const listOptions =
+          activeTab === 'templates'
+            ? { query: searchQuery, onlyTemplates: true }
+            : activeTab === 'community'
+              ? { query: searchQuery, visibility: 'public' as const }
+              : activeTab === 'my-guides'
+                ? { query: searchQuery, createdByMe: true }
+                : { query: searchQuery, likedByMe: true };
+
+        const [listed, liked, meResponse] = await Promise.all([
+          listDesignGuides(listOptions),
+          listDesignGuides({ likedByMe: true }),
+          getMe(),
+        ]);
+        if (cancelled) return;
+        setGuides(listed);
+        setLikedGuides(liked);
+        setLikedGuideIds(new Set(liked.map(g => g.id)));
+        setCurrentUserId(meResponse.user?.id?.toString() ?? '');
+      } catch (error) {
+        if (cancelled) return;
+        toast.error(error instanceof Error ? error.message : '設計書の取得に失敗しました');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    void load();
+    return () => { cancelled = true; };
+  }, [activeTab, searchQuery]);
+
+  const toggleLike = async (guideId: string) => {
+    const isLiked = likedGuideIds.has(guideId);
+    const targetGuide = guides.find((guide) => guide.id === guideId);
+    setGuides((prev) =>
+      prev.map((guide) =>
+        guide.id === guideId
+          ? { ...guide, likeCount: guide.likeCount + (isLiked ? -1 : 1) }
+          : guide,
+      ),
+    );
+    setLikedGuides((prev) => {
+      if (!targetGuide) return prev;
+      if (isLiked) {
+        return prev.filter((guide) => guide.id !== guideId);
+      }
+      return [...prev, { ...targetGuide, likeCount: targetGuide.likeCount + 1 }];
+    });
+    // オプティミスティック更新
     setLikedGuideIds(prev => {
       const next = new Set(prev);
-      if (next.has(guideId)) {
-        next.delete(guideId);
-      } else {
-        next.add(guideId);
-      }
+      if (isLiked) next.delete(guideId);
+      else next.add(guideId);
       return next;
     });
+    try {
+      if (isLiked) {
+        await unlikeDesignGuide(guideId);
+      } else {
+        await likeDesignGuide(guideId);
+      }
+    } catch {
+      setGuides((prev) =>
+        prev.map((guide) =>
+          guide.id === guideId
+            ? { ...guide, likeCount: guide.likeCount + (isLiked ? 1 : -1) }
+            : guide,
+        ),
+      );
+      setLikedGuides((prev) => {
+        if (!targetGuide) return prev;
+        if (isLiked) {
+          return [...prev, targetGuide].sort((a, b) => b.likeCount - a.likeCount);
+        }
+        return prev.filter((guide) => guide.id !== guideId);
+      });
+      // 失敗したらロールバック
+      setLikedGuideIds(prev => {
+        const next = new Set(prev);
+        if (isLiked) next.add(guideId);
+        else next.delete(guideId);
+        return next;
+      });
+      toast.error('いいねの更新に失敗しました');
+    }
   };
 
-  // フィルタリング
-  const filteredGuides = mockDesignGuides.filter(guide => {
-    const matchesSearch =
-      guide.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      guide.description.toLowerCase().includes(searchQuery.toLowerCase());
-
-    if (!matchesSearch) return false;
-
-    switch (activeTab) {
-      case 'templates':
-        return guide.isTemplate === true;
-      case 'community':
-        return guide.visibility === 'public' && !guide.isTemplate && guide.createdBy !== currentUserId;
-      case 'my-guides':
-        return guide.createdBy === currentUserId;
-      case 'liked':
-        return likedGuideIds.has(guide.id);
-      default:
-        return true;
+  const filteredGuides = guides.filter((guide) => {
+    if (activeTab === 'community') {
+      return !guide.isTemplate && guide.createdBy !== currentUserId;
     }
+    return true;
   }).sort((a, b) => {
     switch (sortBy) {
       case 'name': return a.name.localeCompare(b.name);
@@ -85,15 +163,9 @@ export default function DesignGuides() {
     }
   });
 
-  const likedGuides = mockDesignGuides
-    .filter(g => likedGuideIds.has(g.id))
-    .sort((a, b) => b.likeCount - a.likeCount);
-
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.name.endsWith('.md')) {
-      // ファイルアップロード処理（実際にはここでファイルを読み込んで新規作成画面に遷移）
-      console.log('Uploading file:', file.name);
       router.push('/design-guides/new');
     }
   };
@@ -104,50 +176,60 @@ export default function DesignGuides() {
         {/* ヘッダー Row 1: タイトル + 新規作成 */}
         <div className="mb-2 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">設計書ライブラリ</h1>
-          <div className="relative">
+          <div className="relative" ref={createMenuRef}>
             <button
               onClick={() => setCreateMenuOpen(!createMenuOpen)}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
             >
               <Plus className="size-4" />
               新規作成
             </button>
             {createMenuOpen && (
-              <div className="absolute right-0 mt-1 z-50 w-64 rounded-lg border border-gray-200 bg-white shadow-lg p-1">
-                <div className="px-2 py-1.5 text-xs font-medium text-gray-500">設計書を作成</div>
-                <button
-                  onClick={() => { setCreateMenuOpen(false); router.push('/design-guides/new'); }}
-                  className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50"
-                >
-                  <FileText className="size-4 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-medium">ゼロから作成</span>
-                    <span className="text-xs text-slate-500">空白の設計書を作成</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => { setCreateMenuOpen(false); setShowLikedDialog(true); }}
-                  className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50"
-                >
-                  <Heart className="size-4 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-medium">お気に入りから作成</span>
-                    <span className="text-xs text-slate-500">いいねした設計書を選択</span>
-                  </div>
-                </button>
-                <label className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm hover:bg-gray-50 cursor-pointer">
-                  <Upload className="size-4 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="font-medium">ファイルをアップロード</span>
-                    <span className="text-xs text-slate-500">Markdownファイル (.md)</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept=".md"
-                    onChange={(e) => { setCreateMenuOpen(false); handleFileUpload(e); }}
-                    className="hidden"
-                  />
-                </label>
+              <div className="absolute right-0 mt-2 z-50 w-72 rounded-xl border border-gray-100 bg-white shadow-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">設計書を作成</p>
+                </div>
+                <div className="p-2 space-y-1">
+                  <button
+                    onClick={() => { setCreateMenuOpen(false); router.push('/design-guides/new'); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-indigo-50 group transition-colors"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200 transition-colors">
+                      <FileText className="size-4" />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium text-gray-900">ゼロから作成</span>
+                      <span className="text-xs text-gray-500">空白の設計書を作成</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setCreateMenuOpen(false); setShowLikedDialog(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-pink-50 group transition-colors"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-pink-100 text-pink-600 group-hover:bg-pink-200 transition-colors">
+                      <Heart className="size-4" />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium text-gray-900">お気に入りから作成</span>
+                      <span className="text-xs text-gray-500">いいねした設計書をベースに作成</span>
+                    </div>
+                  </button>
+                  <label className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-emerald-50 group transition-colors cursor-pointer">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200 transition-colors">
+                      <Upload className="size-4" />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium text-gray-900">ファイルをアップロード</span>
+                      <span className="text-xs text-gray-500">Markdownファイル (.md)</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept=".md"
+                      onChange={(e) => { setCreateMenuOpen(false); handleFileUpload(e); }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
             )}
           </div>
@@ -155,7 +237,9 @@ export default function DesignGuides() {
 
         {/* ヘッダー Row 2: 件数 + ソート */}
         <div className="mb-6 flex items-center justify-between">
-          <p className="text-gray-600">{filteredGuides.length}件の設計書</p>
+          <p className="text-gray-600">
+            {isLoading ? '読み込み中...' : `${filteredGuides.length}件の設計書`}
+          </p>
           <div className="relative">
             <button
               onClick={() => setSortOpen(!sortOpen)}
@@ -183,50 +267,25 @@ export default function DesignGuides() {
 
         {/* タブナビゲーション */}
         <div className="mb-6 flex items-center gap-2 border-b border-slate-200">
-          <button
-            onClick={() => setActiveTab('templates')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 font-medium transition-colors ${
-              activeTab === 'templates'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <TrendingUp className="size-4" />
-            テンプレート
-          </button>
-          <button
-            onClick={() => setActiveTab('community')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 font-medium transition-colors ${
-              activeTab === 'community'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Users className="size-4" />
-            みんなの設計書
-          </button>
-          <button
-            onClick={() => setActiveTab('my-guides')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 font-medium transition-colors ${
-              activeTab === 'my-guides'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <BookOpen className="size-4" />
-            マイ設計書
-          </button>
-          <button
-            onClick={() => setActiveTab('liked')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 font-medium transition-colors ${
-              activeTab === 'liked'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Heart className="size-4" />
-            お気に入り
-          </button>
+          {([
+            ['templates', 'テンプレート', TrendingUp],
+            ['community', 'みんなの設計書', Users],
+            ['my-guides', 'マイ設計書', BookOpen],
+            ['liked', 'お気に入り', Heart],
+          ] as const).map(([tab, label, Icon]) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 font-medium transition-colors ${
+                activeTab === tab
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Icon className="size-4" />
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* 検索バー */}
@@ -244,22 +303,31 @@ export default function DesignGuides() {
         </div>
 
         {/* 設計書グリッド */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredGuides.map((guide) => (
-            <DesignGuideCard
-              key={guide.id}
-              guide={guide}
-              isLiked={likedGuideIds.has(guide.id)}
-              onLikeToggle={(e) => { e.stopPropagation(); toggleLike(guide.id); }}
-            />
-          ))}
-        </div>
-
-        {filteredGuides.length === 0 && (
-          <div className="py-16 text-center">
-            <BookOpen className="mx-auto mb-4 size-12 text-slate-300" />
-            <p className="text-slate-600">設計書が見つかりませんでした</p>
+        {isLoading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-48 rounded-[16px] bg-gray-100 animate-pulse" />
+            ))}
           </div>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredGuides.map((guide) => (
+                <DesignGuideCard
+                  key={guide.id}
+                  guide={guide}
+                  isLiked={likedGuideIds.has(guide.id)}
+                  onLikeToggle={(e) => { e.stopPropagation(); void toggleLike(guide.id); }}
+                />
+              ))}
+            </div>
+            {filteredGuides.length === 0 && (
+              <div className="py-16 text-center">
+                <BookOpen className="mx-auto mb-4 size-12 text-slate-300" />
+                <p className="text-slate-600">設計書が見つかりませんでした</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

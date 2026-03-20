@@ -16,9 +16,9 @@ message UserSummary {
 message ProjectMember {
   int64 project_id = 1;
   int64 user_id = 2;
-  int64 invited_by = 3;
+  int64 added_by = 3;
   string role = 4;
   google.protobuf.Timestamp joined_at = 5;
   UserSummary user = 6;
-  UserSummary inviter = 7;
+  UserSummary added_by_user = 7;
 }
