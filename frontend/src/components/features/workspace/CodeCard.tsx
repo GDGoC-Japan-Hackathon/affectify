@@ -17,6 +17,9 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
   const [code, setCode] = useState(data.code_text ?? "");
   const extra = data as Record<string, unknown>;
   const highlighted = extra.highlighted as boolean | undefined;
+  const focusPinned = extra.focusPinned as boolean | undefined;
+  const focusMode = extra.focusMode as boolean | undefined;
+  const onFocusClick = extra.onFocusClick as ((nodeId: string) => void) | undefined;
   const onCodeChange = extra.onCodeChange as ((nodeId: string, code: string) => void) | undefined;
   const onExpand = extra.onExpand as ((nodeId: string, expanded: boolean) => void) | undefined;
   const edgeCount = (extra.edgeCount as number) ?? 0;
@@ -57,10 +60,11 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
         ${expanded ? "w-[500px]" : "min-w-[220px] max-w-[320px]"}
         rounded-lg border-2 shadow-lg backdrop-blur-sm cursor-pointer
         ${highlighted ? "ring-4 ring-yellow-400 shadow-yellow-400/50" : ""}
+        ${focusPinned ? "ring-4 ring-blue-500 shadow-blue-400/60" : ""}
       `}
       style={{
         backgroundColor: "rgba(255, 255, 255, 0.85)",
-        borderColor: highlighted ? "#facc15" : colors.border,
+        borderColor: highlighted ? "#facc15" : focusPinned ? "#3b82f6" : colors.border,
         transition: "box-shadow 0.2s, border-color 0.2s",
       }}
     >
@@ -71,6 +75,10 @@ function CodeCardInner({ data }: NodeProps<CodeCardNode>) {
         className="p-3.5 flex items-start gap-2 cursor-pointer hover:bg-black/5 rounded-t-lg"
         onClick={(e) => {
           e.stopPropagation();
+          if (focusMode && onFocusClick) {
+            onFocusClick(data.id);
+            return;
+          }
           const next = !expanded;
           setExpanded(next);
           setTimeout(() => onExpand?.(data.id, next), 10);
